@@ -31,3 +31,10 @@ COPY --from=prerelease /usr/src/app/package.json .
 USER bun
 EXPOSE 3000/tcp
 ENTRYPOINT [ "bun", "run", "src/server.ts" ]
+
+Healthcheck:
+  test: ["CMD", "curl", "-f", "http://localhost:3000/api/status"]
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 5s

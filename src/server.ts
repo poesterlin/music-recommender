@@ -11,7 +11,7 @@ Bun.serve({
   routes: {
     "/api/status": new Response("OK"),
 
-    "/track/skip": {
+    "/music/skip": {
       POST: async (req) => {
         const state = await getCurrentTrack();
         if (!state) {
