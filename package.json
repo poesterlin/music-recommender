@@ -1,0 +1,22 @@
+{
+  "name": "recommender",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "dev": "bun --bun --watch ./src/index-library.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "drizzle-kit": "^0.31.1",
+    "drizzle-orm": "^0.43.1",
+    "postgres": "^3.4.5"
+  }
+}

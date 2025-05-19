@@ -1,0 +1,7 @@
+services:
+  processor:
+    build: .
+    environment:
+      - DATABASE_URL=postgres://postgres:password@100.64.0.1:5433/music
+    volumes:
+      - ./srv/music:/music:ro
