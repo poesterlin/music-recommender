@@ -1,0 +1,7 @@
+services:
+  processor:
+    build: .
+    environment:
+      - DATABASE_URL=postgres://postgres:password@100.82.130.136:5433/music
+    volumes:
+      - ./mnt/zfs/music:/music:ro

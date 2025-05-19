@@ -1,0 +1,19 @@
+
+services:
+  recommender: 
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      # set host in DOMAIN env variable
+      - "traefik.http.routers.recommender.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.services.recommender.loadbalancer.server.port=3000"
+    networks:
+      - traefik_web
+
+networks:
+  traefik_web:
+    external: true
+
+    
