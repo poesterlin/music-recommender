@@ -7,7 +7,7 @@ services:
     labels:
       - "traefik.enable=true"
       # set host in DOMAIN env variable
-      - "traefik.http.routers.recommender.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.routers.recommender.rule=Host(`${DOMAIN}`) || PathPrefix(`/music`)"
       - "traefik.http.services.recommender.loadbalancer.server.port=3000"
     networks:
       - traefik_web
