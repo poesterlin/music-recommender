@@ -2,6 +2,11 @@ import { env } from "bun";
 import { authHeaders } from "./auth";
 
 export async function playSongs(ids: string[]) {
+  if (!env.WEBHOOK_URL) {
+    console.error("WEBHOOK_URL is not set");
+    return;
+  }
+
   const resp = await fetch(env.WEBHOOK_URL!, {
     method: "POST",
     body: JSON.stringify({

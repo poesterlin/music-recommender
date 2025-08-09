@@ -21,7 +21,7 @@ const completed = await db
     name: trackTable.name,
     artists: trackTable.artists,
     album: trackTable.album,
-    embedding: trackTable.embedding,
+    // embedding: trackTable.embedding,
   })
   .from(trackTable)
   .where(isNotNull(trackTable.embedding));
