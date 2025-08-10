@@ -46,16 +46,16 @@ Bun.serve({
 
     "/music/play": {
       GET: async (req) => {
-        //   const state = await getCurrentTrack();
-        //   if (!state) {
-        //     return new Response("No track found", { status: 404 });
-        //   }
-        //   return Response.json({
-        //     uri: state.uri,
-        //     artists: state.artists,
-        //   });
-        // },
-        // POST: async (req) => {
+          const state = await getCurrentTrack();
+          if (!state) {
+            return new Response("No track found", { status: 404 });
+          }
+          return Response.json({
+            uri: state.uri,
+            artists: state.artists,
+          });
+        },
+        POST: async (req) => {
         // play cached tracks
         const ids = tracks.map((t) => t.uri);
         await playSongs(ids);
