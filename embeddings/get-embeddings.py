@@ -19,7 +19,7 @@ def get_kv_fields():
             )
             # print(sql)
             out.write(sql)
-            out.flush()
+        out.flush()
 
 @app.local_entrypoint()
 def main():
