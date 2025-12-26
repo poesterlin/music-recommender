@@ -1,13 +1,16 @@
-import { index, vector, pgTable, text } from "drizzle-orm/pg-core";
+import { index, vector, pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const trackTable = pgTable(
   "track",
   {
     uri: text("uri").primaryKey(),
     name: text("name").notNull(),
-    artists: text("artist").array().notNull(),
+    artist: text("artist").array().notNull(),
     album: text("album").notNull(),
     embedding: vector("embedding", { dimensions: 512 }),
+    createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
+    skip: boolean("skip").default(false),
   },
   (table) => [
     index("embeddingIndex").using(
