@@ -24,40 +24,45 @@ export async function playSongs(ids: string[]) {
 }
 
 export async function getCurrentTrack() {
-  const raw = JSON.stringify({
-    entity_id: "media_player.smart_amp_5_19677_2",
-  });
+  try {
+    const raw = JSON.stringify({
+      entity_id: "media_player.smart_amp_5_19677_2",
+    });
 
-  const res = await fetch(
-    env.HOST + "/api/services/music_assistant/get_queue?return_response",
-    {
-      method: "POST",
-      headers: authHeaders,
-      body: raw,
-      redirect: "follow",
+    const res = await fetch(
+      env.HOST + "/api/services/music_assistant/get_queue?return_response",
+      {
+        method: "POST",
+        headers: authHeaders,
+        body: raw,
+        redirect: "follow",
+      }
+    );
+
+    const data = (await res.json()) as QueueApiResponse;
+    const speakers = Object.values(data.service_response);
+
+    for (const speaker of speakers) {
+      if (!speaker.active) {
+        continue;
+      }
+
+      if (!speaker.current_item?.media_item) {
+        continue;
+      }
+
+      const item = speaker.current_item.media_item;
+      const artists = item.artists.map((artist) => artist.name);
+
+      return {
+        uri: item.uri,
+        name: item.name,
+        album: item.album,
+        artists,
+      };
+
     }
-  );
-
-  const data = (await res.json()) as QueueApiResponse;
-  const speakers = Object.values(data.service_response);
-
-  for (const speaker of speakers) {
-    if (!speaker.active) {
-      continue;
-    }
-
-    if (!speaker.current_item?.media_item) {
-      continue;
-    }
-
-    const item = speaker.current_item.media_item;
-    const artists = item.artists.map((artist) => artist.name);
-
-    return {
-      uri: item.uri,
-      name: item.name,
-      album: item.album,
-      artists,
-    };
+  } catch {
+    return null;
   }
 }
