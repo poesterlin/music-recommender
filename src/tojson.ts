@@ -6,7 +6,7 @@ const missing = await db
 .select({
   uri: trackTable.uri,
   name: trackTable.name,
-  artists: trackTable.artists,
+  artists: trackTable.artist,
   album: trackTable.album,
 })
 .from(trackTable)
@@ -19,7 +19,7 @@ const completed = await db
   .select({
     uri: trackTable.uri,
     name: trackTable.name,
-    artists: trackTable.artists,
+    artists: trackTable.artist,
     album: trackTable.album,
     // embedding: trackTable.embedding,
   })

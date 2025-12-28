@@ -1,6 +1,6 @@
 
 services:
-  recommender: 
+  recommender:
     build: .
     env_file: .env
     restart: unless-stopped
@@ -14,8 +14,32 @@ services:
     networks:
       - traefik_web
 
+  embeddings:
+    build:
+      context: embeddings
+    env_file: .env
+    command: python generate-local-embeddings.py
+    volumes:
+      - music:/music:ro
+    profiles:
+      - embedding
+
+  indexer:
+    build:
+      context: embeddings
+    env_file: .env
+    command: python index-library.py
+    profiles:
+      - embedding
+
 networks:
   traefik_web:
     external: true
 
-    
+volumes:
+  music:
+    driver: local
+    driver_opts:
+      type: none
+      device: /mnt/zfs/music
+      o: bind

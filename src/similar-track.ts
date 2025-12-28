@@ -24,7 +24,7 @@ async function fetchRelatedTracks(
       uri: trackTable.uri,
       embedding: trackTable.embedding,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
     })
     .from(trackTable)
     .where(eq(trackTable.uri, uri));
@@ -46,7 +46,7 @@ async function fetchRelatedTracks(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -84,11 +84,11 @@ async function chainSimilarSongs(uri: string, limit = 40, batchSize = 3) {
 async function findArtists(uri: string) {
   const [track] = await db
     .select({
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       embedding: avg(trackTable.embedding),
     })
     .from(trackTable)
-    .groupBy(trackTable.artists)
+    .groupBy(trackTable.artist)
     .where(eq(trackTable.uri, uri));
 
   if (!track) {
@@ -141,7 +141,7 @@ async function findSongsFromSimilarArtists(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -174,7 +174,7 @@ async function findSimilarAlbums(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -196,11 +196,11 @@ async function findRandomSongOfArtist(artist: string, limit: number) {
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity: sql<number>`1`,
     })
     .from(trackTable)
-    .where(eq(trackTable.artists, [artist]))
+    .where(eq(trackTable.artist, [artist]))
     .orderBy(() => sql`random()`)
     .limit(limit);
 

@@ -18,6 +18,7 @@
   "dependencies": {
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.43.1",
+    "ml-kmeans": "^7.0.0",
     "postgres": "^3.4.5"
   }
 }

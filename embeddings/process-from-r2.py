@@ -1,33 +1,29 @@
 import modal
+import os
+import json
+import random
 
-# --- Modal App Definition ---
 app = modal.App("r2-audio-embedding")
 kv = modal.Dict.from_name("kv", create_if_missing=True)
 
-
-# --- Modal Image with Dependencies ---
-image = modal.Image.from_registry(
-    "tensorflow/tensorflow:2.15.0-gpu"
-).pip_install(
+image = modal.Image.from_registry("tensorflow/tensorflow:2.15.0-gpu").pip_install(
     "librosa",
     "openl3",
     "boto3",
     "soundfile",
     "audioread",
     "scipy",
-    "numpy"
+    "numpy",
+    "drizzle-adapter",
+    "postgres",
+    "drizzle-orm",
 )
 
-# --- Helper Functions (unchanged from your script) ---
+
 def sanitize(name_component):
     if not isinstance(name_component, str):
         return ""
-    return (
-        name_component.replace("/", "_")
-        .replace(":", "_")
-        .replace("?", "_")
-        .strip()
-    )
+    return name_component.replace("/", "_").replace(":", "_").replace("?", "_").strip()
 
 
 def process_s3_audio_object(s3_client, bucket_name, s3_object_key, track_uri):
@@ -38,6 +34,7 @@ def process_s3_audio_object(s3_client, bucket_name, s3_object_key, track_uri):
     import io
     import traceback
     from botocore.exceptions import ClientError
+
     try:
         # print(f"Downloading audio from S3: s3://{bucket_name}/{s3_object_key}")
         response = s3_client.get_object(Bucket=bucket_name, Key=s3_object_key)
@@ -112,7 +109,11 @@ def find_s3_audio_object(track_metadata, s3_client, bucket_name):
             if not artist_name:
                 continue
 
-            s3_prefix = f"{artist_name}/{album_name_sanitized}/" if album_name_sanitized else f"{artist_name}/"
+            s3_prefix = (
+                f"{artist_name}/{album_name_sanitized}/"
+                if album_name_sanitized
+                else f"{artist_name}/"
+            )
 
             paginator = s3_client.get_paginator("list_objects_v2")
             for page in paginator.paginate(Bucket=bucket_name, Prefix=s3_prefix):
@@ -134,12 +135,55 @@ def find_s3_audio_object(track_metadata, s3_client, bucket_name):
                         return object_key
         return None
     except Exception:
-        # traceback.print_exc()
+        traceback.print_exc()
         return None
 
 
+def get_tracks_without_embeddings():
+    import json
+
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL not set")
+
+    import psycopg2
+
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("""
+        SELECT uri, name, artist, album
+        FROM track
+        WHERE embedding IS NULL
+          AND skip = false
+    """)
+    tracks = [dict(row) for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+    return tracks
+
+
+def update_track_embedding(uri, embedding):
+    DATABASE_URL = os.getenv("DATABASE_URL")
+    import psycopg2
+
+    vec_lit = "[" + ",".join(f"{x:.6f}" for x in embedding) + "]"
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+    cur.execute(
+        "UPDATE track SET embedding = %s::vector WHERE uri = %s", (vec_lit, uri)
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
 # --- Modal Function ---
-@app.function(image=image, secrets=[modal.Secret.from_name("r2-credentials")], gpu="T4", timeout=36000)
+@app.function(
+    image=image,
+    secrets=[modal.Secret.from_name("r2-credentials")],
+    gpu="T4",
+    timeout=36000,
+)
 def process_tracks():
     import numpy as np
     import boto3
@@ -147,14 +191,13 @@ def process_tracks():
     import json
     import random
     from botocore.config import Config
-    
+
     # import librosa
     # import openl3
     # import io
     # import re
     # import traceback
     # from botocore.exceptions import ClientError
-
 
     s3_endpoint_url = os.getenv("s3_endpoint_url")
     s3_access_key_id = os.getenv("s3_access_key_id")
@@ -191,14 +234,16 @@ def process_tracks():
         out.write("-- Generated embeddings updates\n\n")
         for t in tracks:
             track_uri = t["uri"]
-            
+
             if kv.get(track_uri):
                 continue
 
             # print(f"→ Processing {track_uri}")
             s3_object_key = find_s3_audio_object(t, s3_client, s3_bucket_name)
             if s3_object_key:
-                emb = process_s3_audio_object(s3_client, s3_bucket_name, s3_object_key, track_uri)
+                emb = process_s3_audio_object(
+                    s3_client, s3_bucket_name, s3_object_key, track_uri
+                )
                 if emb is not None:
                     vec_lit = "[" + ",".join(f"{x:.6f}" for x in emb.tolist()) + "]"
                     sql = (

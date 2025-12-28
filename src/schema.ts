@@ -1,4 +1,4 @@
-import { index, vector, pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { index, vector, pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
 
 export const trackTable = pgTable(
   "track",
@@ -11,6 +11,7 @@ export const trackTable = pgTable(
     createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
     skip: boolean("skip").default(false),
+    clusterId: integer("cluster_id").default(-1),
   },
   (table) => [
     index("embeddingIndex").using(
