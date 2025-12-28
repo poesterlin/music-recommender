@@ -1,0 +1,1322 @@
+{
+  "0": {
+    "name": "Cinematic Ambient Textures",
+    "family": "Atmospheric",
+    "size": 185,
+    "top_artists": [
+      {
+        "name": "San Holo",
+        "count": 21
+      },
+      {
+        "name": "Flume",
+        "count": 19
+      },
+      {
+        "name": "David Guetta",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": -2.9588916301727295,
+    "center_y": 8.332562446594238
+  },
+  "1": {
+    "name": "Sunshine Legacy Pop",
+    "family": "Heritage",
+    "size": 153,
+    "top_artists": [
+      {
+        "name": "Lana Del Rey",
+        "count": 22
+      },
+      {
+        "name": "Lord Huron",
+        "count": 7
+      },
+      {
+        "name": "Glass Animals",
+        "count": 6
+      }
+    ],
+    "cohesion": 0.991,
+    "center_x": 2.480064630508423,
+    "center_y": 10.214982986450195
+  },
+  "2": {
+    "name": "Pure Narrative Skits",
+    "family": "Utility",
+    "size": 230,
+    "top_artists": [
+      {
+        "name": "Bill Withers",
+        "count": 22
+      },
+      {
+        "name": "Elton John",
+        "count": 12
+      },
+      {
+        "name": "Kid Rock",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": -1.0419652462005615,
+    "center_y": 9.032169342041016
+  },
+  "3": {
+    "name": "Late Night Dance Pop",
+    "family": "Electronic",
+    "size": 249,
+    "top_artists": [
+      {
+        "name": "Ariana Grande",
+        "count": 23
+      },
+      {
+        "name": "Becky G",
+        "count": 16
+      },
+      {
+        "name": "Ava Max",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -1.5773426294326782,
+    "center_y": 5.2008957862854
+  },
+  "4": {
+    "name": "Raw Alt-Rock & Demos",
+    "family": "Rock",
+    "size": 208,
+    "top_artists": [
+      {
+        "name": "Shakira",
+        "count": 17
+      },
+      {
+        "name": "Justin Timberlake",
+        "count": 10
+      },
+      {
+        "name": "Phillip Phillips",
+        "count": 10
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 1.7750791311264038,
+    "center_y": -0.33371806144714355
+  },
+  "5": {
+    "name": "Intimate Singer-Songwriter",
+    "family": "Heritage",
+    "size": 121,
+    "top_artists": [
+      {
+        "name": "Madonna",
+        "count": 11
+      },
+      {
+        "name": "Prince",
+        "count": 8
+      },
+      {
+        "name": "Elton John",
+        "count": 6
+      }
+    ],
+    "cohesion": 0.992,
+    "center_x": -2.2775614261627197,
+    "center_y": 7.070837497711182
+  },
+  "6": {
+    "name": "Future Bass & Glitch",
+    "family": "Electronic",
+    "size": 233,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 50
+      },
+      {
+        "name": "Queen",
+        "count": 15
+      },
+      {
+        "name": "Green Day",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -1.247316598892212,
+    "center_y": 12.286357879638672
+  },
+  "7": {
+    "name": "Sad-Girl Indie Cinema",
+    "family": "Atmospheric",
+    "size": 235,
+    "top_artists": [
+      {
+        "name": "James Arthur",
+        "count": 20
+      },
+      {
+        "name": "Post Malone",
+        "count": 15
+      },
+      {
+        "name": "AURORA",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": 0.882997989654541,
+    "center_y": 8.045138359069824
+  },
+  "8": {
+    "name": "Ethereal Indie Folk",
+    "family": "Atmospheric",
+    "size": 254,
+    "top_artists": [
+      {
+        "name": "Queen",
+        "count": 35
+      },
+      {
+        "name": "Fall Out Boy",
+        "count": 23
+      },
+      {
+        "name": "Imagine Dragons",
+        "count": 14
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -3.9871931076049805,
+    "center_y": 11.376431465148926
+  },
+  "9": {
+    "name": "Art-Pop Percussion",
+    "family": "Heritage",
+    "size": 239,
+    "top_artists": [
+      {
+        "name": "Eminem",
+        "count": 38
+      },
+      {
+        "name": "OutKast",
+        "count": 32
+      },
+      {
+        "name": "Coolio",
+        "count": 29
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -3.3308615684509277,
+    "center_y": 4.475091934204102
+  },
+  "10": {
+    "name": "Modern Pop Hits",
+    "family": "Pop",
+    "size": 199,
+    "top_artists": [
+      {
+        "name": "Lana Del Rey",
+        "count": 21
+      },
+      {
+        "name": "The Beatles",
+        "count": 12
+      },
+      {
+        "name": "ABBA",
+        "count": 10
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 3.2191615104675293,
+    "center_y": 9.649344444274902
+  },
+  "11": {
+    "name": "60s/70s Acoustic Foundations",
+    "family": "Rock",
+    "size": 151,
+    "top_artists": [
+      {
+        "name": "Snow Patrol",
+        "count": 11
+      },
+      {
+        "name": "a\u2010ha",
+        "count": 10
+      },
+      {
+        "name": "MGMT",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.992,
+    "center_x": -2.25014591217041,
+    "center_y": 10.731376647949219
+  },
+  "12": {
+    "name": "High-Energy Alt-Pop Anthems",
+    "family": "Electronic",
+    "size": 82,
+    "top_artists": [
+      {
+        "name": "Green Day",
+        "count": 13
+      },
+      {
+        "name": "Oasis",
+        "count": 10
+      },
+      {
+        "name": "MIKA",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.988,
+    "center_x": -3.4257946014404297,
+    "center_y": 13.735315322875977
+  },
+  "13": {
+    "name": "Experimental Soundscapes",
+    "family": "Atmospheric",
+    "size": 171,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 97
+      },
+      {
+        "name": "Elton John",
+        "count": 25
+      },
+      {
+        "name": "The Animals",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.993,
+    "center_x": -0.6523317694664001,
+    "center_y": 13.601261138916016
+  },
+  "14": {
+    "name": "Piano Soul & Brit-Pop",
+    "family": "Pop",
+    "size": 248,
+    "top_artists": [
+      {
+        "name": "Justin Timberlake",
+        "count": 14
+      },
+      {
+        "name": "Glass Animals",
+        "count": 13
+      },
+      {
+        "name": "Lorde",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -1.2271103858947754,
+    "center_y": 6.942409515380859
+  },
+  "15": {
+    "name": "Slick Urban Crossover",
+    "family": "Urban",
+    "size": 188,
+    "top_artists": [
+      {
+        "name": "T.I.",
+        "count": 26
+      },
+      {
+        "name": "Jax Jones",
+        "count": 16
+      },
+      {
+        "name": "blackbear",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": 0.7920312881469727,
+    "center_y": 0.25821593403816223
+  },
+  "16": {
+    "name": "Mainstream Radio Hits",
+    "family": "Electronic",
+    "size": 136,
+    "top_artists": [
+      {
+        "name": "GIVEON",
+        "count": 11
+      },
+      {
+        "name": "Charlotte Day Wilson",
+        "count": 8
+      },
+      {
+        "name": "AURORA",
+        "count": 8
+      }
+    ],
+    "cohesion": 0.993,
+    "center_x": 2.922694206237793,
+    "center_y": 1.367817759513855
+  },
+  "17": {
+    "name": "Soft Acoustic Harmony",
+    "family": "Heritage",
+    "size": 44,
+    "top_artists": [
+      {
+        "name": "Lady Gaga",
+        "count": 3
+      },
+      {
+        "name": "Son Lux",
+        "count": 3
+      },
+      {
+        "name": "Muse",
+        "count": 3
+      }
+    ],
+    "cohesion": 0.983,
+    "center_x": 2.899348258972168,
+    "center_y": 13.365617752075195
+  },
+  "18": {
+    "name": "Sophisticated Pop Soul",
+    "family": "Pop",
+    "size": 153,
+    "top_artists": [
+      {
+        "name": "Josh Turner",
+        "count": 30
+      },
+      {
+        "name": "a\u2010ha",
+        "count": 19
+      },
+      {
+        "name": "Phillip Phillips",
+        "count": 18
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 2.8574466705322266,
+    "center_y": -0.4989500939846039
+  },
+  "19": {
+    "name": "Stadium Rock Radio",
+    "family": "Rock",
+    "size": 139,
+    "top_artists": [
+      {
+        "name": "Muse",
+        "count": 19
+      },
+      {
+        "name": "Patrick Watson",
+        "count": 7
+      },
+      {
+        "name": "Flume",
+        "count": 5
+      }
+    ],
+    "cohesion": 0.992,
+    "center_x": 0.27748769521713257,
+    "center_y": 12.44799518585205
+  },
+  "20": {
+    "name": "Melancholic Sophisti-Pop",
+    "family": "Heritage",
+    "size": 10,
+    "top_artists": [
+      {
+        "name": "Sufjan Stevens",
+        "count": 2
+      },
+      {
+        "name": "Snow Patrol",
+        "count": 2
+      },
+      {
+        "name": "Glass Animals",
+        "count": 1
+      }
+    ],
+    "cohesion": 0.987,
+    "center_x": 3.7905220985412598,
+    "center_y": 12.085811614990234
+  },
+  "21": {
+    "name": "Power Ballads & Pop Vocals",
+    "family": "Pop",
+    "size": 91,
+    "top_artists": [
+      {
+        "name": "VIZE",
+        "count": 24
+      },
+      {
+        "name": "ALOTT",
+        "count": 24
+      },
+      {
+        "name": "Hardwell",
+        "count": 15
+      }
+    ],
+    "cohesion": 0.991,
+    "center_x": -5.6419677734375,
+    "center_y": 6.685591697692871
+  },
+  "22": {
+    "name": "Modern Summer R&B",
+    "family": "Urban",
+    "size": 207,
+    "top_artists": [
+      {
+        "name": "Green Day",
+        "count": 55
+      },
+      {
+        "name": "Elton John",
+        "count": 25
+      },
+      {
+        "name": "Muse",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -4.203091621398926,
+    "center_y": 12.05495548248291
+  },
+  "23": {
+    "name": "Electro-Pop Groove",
+    "family": "Electronic",
+    "size": 222,
+    "top_artists": [
+      {
+        "name": "Green Day",
+        "count": 79
+      },
+      {
+        "name": "Rise Against",
+        "count": 26
+      },
+      {
+        "name": "Fall Out Boy",
+        "count": 22
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -5.081387519836426,
+    "center_y": 12.638629913330078
+  },
+  "24": {
+    "name": "Funk-Infused Hip-Hop",
+    "family": "Urban",
+    "size": 60,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 7
+      },
+      {
+        "name": "Bill Withers",
+        "count": 6
+      },
+      {
+        "name": "The Beatles",
+        "count": 4
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 3.9424350261688232,
+    "center_y": 10.967111587524414
+  },
+  "25": {
+    "name": "Quiet Indie Folk",
+    "family": "Atmospheric",
+    "size": 272,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 19
+      },
+      {
+        "name": "Post Malone",
+        "count": 18
+      },
+      {
+        "name": "Harry Styles",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -2.3570950031280518,
+    "center_y": 10.038779258728027
+  },
+  "26": {
+    "name": "Mainstage EDM Instrumentals",
+    "family": "Electronic",
+    "size": 212,
+    "top_artists": [
+      {
+        "name": "Taylor Swift",
+        "count": 18
+      },
+      {
+        "name": "Demi Lovato",
+        "count": 9
+      },
+      {
+        "name": "Justin Bieber",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": 2.7515883445739746,
+    "center_y": 8.254587173461914
+  },
+  "27": {
+    "name": "Mid-Tempo Modern Ballads",
+    "family": "Atmospheric",
+    "size": 214,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 40
+      },
+      {
+        "name": "Paul McCartney",
+        "count": 17
+      },
+      {
+        "name": "The Beatles",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 1.5760586261749268,
+    "center_y": 11.604940414428711
+  },
+  "28": {
+    "name": "Theatrical Arena Rock",
+    "family": "Rock",
+    "size": 97,
+    "top_artists": [
+      {
+        "name": "AURORA",
+        "count": 15
+      },
+      {
+        "name": "Lana Del Rey",
+        "count": 10
+      },
+      {
+        "name": "Taylor Swift",
+        "count": 7
+      }
+    ],
+    "cohesion": 0.992,
+    "center_x": 3.8200109004974365,
+    "center_y": 10.527900695800781
+  },
+  "29": {
+    "name": "80s Adult Contemporary",
+    "family": "Pop",
+    "size": 55,
+    "top_artists": [
+      {
+        "name": "Eminem",
+        "count": 13
+      },
+      {
+        "name": "OutKast",
+        "count": 12
+      },
+      {
+        "name": "Sufjan Stevens",
+        "count": 3
+      }
+    ],
+    "cohesion": 0.986,
+    "center_x": -2.0953474044799805,
+    "center_y": 2.5944366455078125
+  },
+  "30": {
+    "name": "Roots Rock Strumming",
+    "family": "Pop",
+    "size": 100,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 13
+      },
+      {
+        "name": "Elton John",
+        "count": 9
+      },
+      {
+        "name": "ABBA",
+        "count": 7
+      }
+    ],
+    "cohesion": 0.989,
+    "center_x": 3.1837334632873535,
+    "center_y": 12.230031967163086
+  },
+  "31": {
+    "name": "Punk-Pop Energizers",
+    "family": "Rock",
+    "size": 275,
+    "top_artists": [
+      {
+        "name": "Eminem",
+        "count": 72
+      },
+      {
+        "name": "OutKast",
+        "count": 22
+      },
+      {
+        "name": "Chamillionaire",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -3.5366179943084717,
+    "center_y": 4.367183208465576
+  },
+  "32": {
+    "name": "Early British Invasion",
+    "family": "Rock",
+    "size": 84,
+    "top_artists": [
+      {
+        "name": "Adele",
+        "count": 5
+      },
+      {
+        "name": "Alessia Cara",
+        "count": 5
+      },
+      {
+        "name": "Sia",
+        "count": 3
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 3.9728431701660156,
+    "center_y": 9.275615692138672
+  },
+  "33": {
+    "name": "Neo-Soul & Downtempo",
+    "family": "Heritage",
+    "size": 191,
+    "top_artists": [
+      {
+        "name": "T.I.",
+        "count": 21
+      },
+      {
+        "name": "Mustard",
+        "count": 19
+      },
+      {
+        "name": "blackbear",
+        "count": 15
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 1.7261791229248047,
+    "center_y": 0.9927250742912292
+  },
+  "34": {
+    "name": "Space Rock & Shoegaze",
+    "family": "Rock",
+    "size": 132,
+    "top_artists": [
+      {
+        "name": "Son Lux",
+        "count": 15
+      },
+      {
+        "name": "Cigarettes After Sex",
+        "count": 14
+      },
+      {
+        "name": "The xx",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.99,
+    "center_x": 1.8775134086608887,
+    "center_y": 10.546329498291016
+  },
+  "35": {
+    "name": "Grunge & 90s Alternative",
+    "family": "Rock",
+    "size": 134,
+    "top_artists": [
+      {
+        "name": "Ace of Base",
+        "count": 30
+      },
+      {
+        "name": "Mr. President",
+        "count": 10
+      },
+      {
+        "name": "Tiesto",
+        "count": 7
+      }
+    ],
+    "cohesion": 0.993,
+    "center_x": -4.7718000411987305,
+    "center_y": 6.2684125900268555
+  },
+  "36": {
+    "name": "Dark Rhythmic Flow",
+    "family": "Urban",
+    "size": 257,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 55
+      },
+      {
+        "name": "Keane",
+        "count": 22
+      },
+      {
+        "name": "Paul McCartney",
+        "count": 20
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -0.4249364137649536,
+    "center_y": 11.471099853515625
+  },
+  "37": {
+    "name": "Moody Indie Noir",
+    "family": "Atmospheric",
+    "size": 272,
+    "top_artists": [
+      {
+        "name": "Ariana Grande",
+        "count": 25
+      },
+      {
+        "name": "Sia",
+        "count": 23
+      },
+      {
+        "name": "Demi Lovato",
+        "count": 23
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -2.2423791885375977,
+    "center_y": 7.367291450500488
+  },
+  "38": {
+    "name": "Dark Dream Pop",
+    "family": "Atmospheric",
+    "size": 111,
+    "top_artists": [
+      {
+        "name": "Fall Out Boy",
+        "count": 24
+      },
+      {
+        "name": "Phillip Phillips",
+        "count": 15
+      },
+      {
+        "name": "The Beatles",
+        "count": 11
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 3.7591001987457275,
+    "center_y": -1.379248857498169
+  },
+  "39": {
+    "name": "Funk, Soul & Classic Groove",
+    "family": "Heritage",
+    "size": 221,
+    "top_artists": [
+      {
+        "name": "Tate McRae",
+        "count": 11
+      },
+      {
+        "name": "Tiesto",
+        "count": 9
+      },
+      {
+        "name": "Alan Walker",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -2.703781843185425,
+    "center_y": 6.443262577056885
+  },
+  "40": {
+    "name": "High-Intensity Pop-Punk",
+    "family": "Rock",
+    "size": 209,
+    "top_artists": [
+      {
+        "name": "Green Day",
+        "count": 67
+      },
+      {
+        "name": "Oasis",
+        "count": 47
+      },
+      {
+        "name": "Ghost",
+        "count": 19
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -5.070316314697266,
+    "center_y": 13.511820793151855
+  },
+  "41": {
+    "name": "The New Atlanta Sound",
+    "family": "Urban",
+    "size": 259,
+    "top_artists": [
+      {
+        "name": "Calvin Harris",
+        "count": 25
+      },
+      {
+        "name": "Lady Gaga",
+        "count": 23
+      },
+      {
+        "name": "Rihanna",
+        "count": 18
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -3.980685234069824,
+    "center_y": 6.860167026519775
+  },
+  "42": {
+    "name": "Aggressive Lyricism",
+    "family": "Urban",
+    "size": 212,
+    "top_artists": [
+      {
+        "name": "Tyga",
+        "count": 58
+      },
+      {
+        "name": "Eminem",
+        "count": 33
+      },
+      {
+        "name": "Roddy Ricch",
+        "count": 19
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -1.4806809425354004,
+    "center_y": 3.693258762359619
+  },
+  "43": {
+    "name": "Moody Trap Anthems",
+    "family": "Urban",
+    "size": 278,
+    "top_artists": [
+      {
+        "name": "G\u2010Eazy",
+        "count": 15
+      },
+      {
+        "name": "Anne-Marie",
+        "count": 15
+      },
+      {
+        "name": "Post Malone",
+        "count": 14
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -1.1477429866790771,
+    "center_y": 5.860293388366699
+  },
+  "44": {
+    "name": "Fragile Chamber Pop",
+    "family": "Atmospheric",
+    "size": 186,
+    "top_artists": [
+      {
+        "name": "Taylor Swift",
+        "count": 12
+      },
+      {
+        "name": "Paul McCartney",
+        "count": 11
+      },
+      {
+        "name": "Bill Withers",
+        "count": 10
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 1.5322563648223877,
+    "center_y": 9.982662200927734
+  },
+  "45": {
+    "name": "British Rock & Roll Foundations",
+    "family": "Rock",
+    "size": 152,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 72
+      },
+      {
+        "name": "The Animals",
+        "count": 17
+      },
+      {
+        "name": "Queen",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": -1.8180937767028809,
+    "center_y": 13.382976531982422
+  },
+  "46": {
+    "name": "Upbeat Synth-Pop",
+    "family": "Electronic",
+    "size": 255,
+    "top_artists": [
+      {
+        "name": "Lady Gaga",
+        "count": 17
+      },
+      {
+        "name": "Demi Lovato",
+        "count": 17
+      },
+      {
+        "name": "Ellie Goulding",
+        "count": 16
+      }
+    ],
+    "cohesion": 0.996,
+    "center_x": -4.5317840576171875,
+    "center_y": 8.590633392333984
+  },
+  "47": {
+    "name": "Ethereal Modern Pop",
+    "family": "Pop",
+    "size": 243,
+    "top_artists": [
+      {
+        "name": "Lana Del Rey",
+        "count": 59
+      },
+      {
+        "name": "AURORA",
+        "count": 21
+      },
+      {
+        "name": "Taylor Swift",
+        "count": 19
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": 0.4627140164375305,
+    "center_y": 9.207797050476074
+  },
+  "48": {
+    "name": "Avant-Garde Fragments",
+    "family": "Atmospheric",
+    "size": 58,
+    "top_artists": [
+      {
+        "name": "Linkin Park",
+        "count": 4
+      },
+      {
+        "name": "Future Islands",
+        "count": 4
+      },
+      {
+        "name": "Snow Patrol",
+        "count": 3
+      }
+    ],
+    "cohesion": 0.985,
+    "center_x": -0.3828110694885254,
+    "center_y": 11.13100814819336
+  },
+  "49": {
+    "name": "Modern Adult Contemporary",
+    "family": "Pop",
+    "size": 215,
+    "top_artists": [
+      {
+        "name": "Becky G",
+        "count": 17
+      },
+      {
+        "name": "Shakira",
+        "count": 15
+      },
+      {
+        "name": "Sia",
+        "count": 11
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": 1.2960739135742188,
+    "center_y": 7.3260650634765625
+  },
+  "50": {
+    "name": "Acoustic Rock Anthems",
+    "family": "Rock",
+    "size": 178,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 20
+      },
+      {
+        "name": "James Arthur",
+        "count": 15
+      },
+      {
+        "name": "Elton John",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.993,
+    "center_x": 1.8622876405715942,
+    "center_y": 11.197203636169434
+  },
+  "51": {
+    "name": "Indie-Pop Synth Crossover",
+    "family": "Electronic",
+    "size": 250,
+    "top_artists": [
+      {
+        "name": "Justin Bieber",
+        "count": 17
+      },
+      {
+        "name": "Tyga",
+        "count": 13
+      },
+      {
+        "name": "Khalid",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -0.3409236669540405,
+    "center_y": 5.878530025482178
+  },
+  "52": {
+    "name": "Modern Minimalist Electronic",
+    "family": "Electronic",
+    "size": 96,
+    "top_artists": [
+      {
+        "name": "Son Lux",
+        "count": 12
+      },
+      {
+        "name": "Fred again..",
+        "count": 9
+      },
+      {
+        "name": "Brian Eno",
+        "count": 9
+      }
+    ],
+    "cohesion": 0.986,
+    "center_x": 3.729006767272949,
+    "center_y": 12.728052139282227
+  },
+  "53": {
+    "name": "Folk-Soul Storytelling",
+    "family": "Atmospheric",
+    "size": 12,
+    "top_artists": [
+      {
+        "name": "Paul McCartney",
+        "count": 2
+      },
+      {
+        "name": "Vance Joy",
+        "count": 1
+      },
+      {
+        "name": "Ben Howard",
+        "count": 1
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": 3.5247373580932617,
+    "center_y": 10.89093017578125
+  },
+  "54": {
+    "name": "Hard Rock & Post-Grunge",
+    "family": "Rock",
+    "size": 183,
+    "top_artists": [
+      {
+        "name": "Nickelback",
+        "count": 43
+      },
+      {
+        "name": "Charli xcx",
+        "count": 12
+      },
+      {
+        "name": "Rise Against",
+        "count": 12
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -5.82084321975708,
+    "center_y": 11.750228881835938
+  },
+  "55": {
+    "name": "Funky Dance-Pop",
+    "family": "Urban",
+    "size": 276,
+    "top_artists": [
+      {
+        "name": "Elton John",
+        "count": 43
+      },
+      {
+        "name": "Corey Hart",
+        "count": 17
+      },
+      {
+        "name": "Take That",
+        "count": 14
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -3.019984722137451,
+    "center_y": 10.189992904663086
+  },
+  "56": {
+    "name": "Monophonic Vintage Rock",
+    "family": "Rock",
+    "size": 73,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 68
+      },
+      {
+        "name": "The Animals",
+        "count": 3
+      },
+      {
+        "name": "Green Day",
+        "count": 2
+      }
+    ],
+    "cohesion": 0.994,
+    "center_x": -1.2913283109664917,
+    "center_y": 15.3778715133667
+  },
+  "57": {
+    "name": "Cinematic Rap & Storytelling",
+    "family": "Urban",
+    "size": 191,
+    "top_artists": [
+      {
+        "name": "NF",
+        "count": 27
+      },
+      {
+        "name": "Travis Scott",
+        "count": 13
+      },
+      {
+        "name": "Tyga",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -0.24055877327919006,
+    "center_y": 5.45215368270874
+  },
+  "58": {
+    "name": "Modern Americana & Pop",
+    "family": "Pop",
+    "size": 269,
+    "top_artists": [
+      {
+        "name": "The Beatles",
+        "count": 32
+      },
+      {
+        "name": "Elton John",
+        "count": 31
+      },
+      {
+        "name": "Paul McCartney",
+        "count": 13
+      }
+    ],
+    "cohesion": 0.995,
+    "center_x": -0.8766473531723022,
+    "center_y": 10.92541217803955
+  },
+  "59": {
+    "name": "Lengthy Electronic Experiments",
+    "family": "Urban",
+    "size": 134,
+    "top_artists": [
+      {
+        "name": "Sade",
+        "count": 14
+      },
+      {
+        "name": "Daft Punk",
+        "count": 9
+      },
+      {
+        "name": "Sia",
+        "count": 7
+      }
+    ],
+    "cohesion": 0.99,
+    "center_x": -0.6501787900924683,
+    "center_y": 8.45926570892334
+  }
+}
