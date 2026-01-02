@@ -12,7 +12,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "./db";
-import { skippedArtistsTable, skippedSongsTable, trackTable } from "./schema";
+import { likedSongsTable, skippedArtistsTable, skippedSongsTable, trackTable } from "./schema";
 
 async function fetchRelatedTracks(
   uri: string,
@@ -295,6 +295,21 @@ export async function skipArtists(artists: string[]) {
     .onConflictDoNothing();
 
   console.log("Artists skipped", artists);
+}
+
+export async function likeTrack(uri: string) {
+  const [track] = await db
+    .select()
+    .from(likedSongsTable)
+    .where(eq(likedSongsTable.uri, uri));
+
+  if (track) {
+    console.log("Track already liked", uri);
+    return;
+  }
+
+  await db.insert(likedSongsTable).values({ uri });
+  console.log("Track liked", uri);
 }
 
 export async function getRandomTrack() {

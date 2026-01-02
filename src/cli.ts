@@ -10,7 +10,6 @@ const tracks = await recommend({
     limit: 60,
     annPool: 800,
     alphaNow: 0.7, // bias toward the seeds over liked profile
-    lambda: 0.8, // more relevance, less aggressive diversity
     maxPerArtist: 1, // avoid clustering by same artist
 });
 

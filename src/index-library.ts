@@ -9,12 +9,14 @@ authHeaders.append("Content-Type", "application/json");
 authHeaders.append("Authorization", "Bearer " + env.TOKEN);
 
 const raw = JSON.stringify({
-  limit: "100000",
-  library_only: "true",
+  limit: "100000", // has to be a string for some reason
+  library_only: "false",
   config_entry_id: env.CONFIG_ID,
   name: "",
   media_type: "track",
 });
+
+console.log("Fetching library tracks from external service...");
 
 const res = await fetch(
   env.HOST + "/api/services/music_assistant/search?return_response",
@@ -25,6 +27,8 @@ const res = await fetch(
     redirect: "follow",
   }
 );
+
+console.log("Processing library response...");
 
 const data = (await res.json()) as LibraryResponse;
 
@@ -63,17 +67,32 @@ const tracks = response.tracks.map((track) => {
   } satisfies typeof trackTable.$inferInsert;
 });
 
-const result = await db.insert(trackTable).values(tracks).onConflictDoUpdate({
-  target: trackTable.uri,
-  set: {
-    // name: sql`EXCLUDED.name`,
-    artist: sql`EXCLUDED.artist`,
-    // album: sql`EXCLUDED.album`,
-    updatedAt: sql`CURRENT_TIMESTAMP`,
-  },
-});
+console.log(`Preparing to insert/update ${tracks.length} tracks into the database...`);
 
-console.log(result, `Inserted new tracks into the database.`);
+const CHUNK_SIZE = 150;
+console.log(`Starting batch insert/update for ${tracks.length} tracks...`);
+
+for (let i = 0; i < tracks.length; i += CHUNK_SIZE) {
+  const chunk = tracks.slice(i, i + CHUNK_SIZE);
+  try {
+    await db.insert(trackTable).values(chunk).onConflictDoUpdate({
+      target: trackTable.uri,
+      set: {
+        artist: sql`EXCLUDED.artist`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      },
+    });
+    console.log(
+      `Success: Chunk ${i / CHUNK_SIZE + 1} / ${Math.ceil(
+        tracks.length / CHUNK_SIZE
+      )}`
+    );
+  } catch (error) {
+    console.error(`Error in chunk starting at ${i}:`, error);
+  }
+}
+
+console.log(`Finished processing tracks into the database.`);
 
 type LibraryResponse = {
   service_response: ServiceResponse;
