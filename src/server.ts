@@ -257,8 +257,8 @@ Bun.serve({
           // Vibe matching based on time of day
           if (hour >= 6 && hour < 10) {
             clusterIds.push(17, 11, 25); // Morning: Soft Acoustic, Acoustic Foundations, Quiet Indie Folk
-          } else if (hour >= 10 && hour < 18) {
-            clusterIds.push(1, 10, 16, 18, 22, 58, 49); // Day: Pop, R&B, Americana
+          // } else if (hour >= 10 && hour < 18) {
+          //   clusterIds.push(1, 10, 16, 18, 22, 58, 49); // Day: Pop, R&B, Americana
           } else if (hour >= 18 && hour < 22) {
             clusterIds.push(5, 14, 33, 53, 21, 27); // Evening: Singer-Songwriter, Piano Soul, Neo-Soul, Folk-Soul
           } else {
@@ -273,25 +273,13 @@ Bun.serve({
             .orderBy(sql`random()`)
             .limit(5);
 
-          const seedUris = seeds.map(s => s.uri);
-          
-          // Fallback if no tracks found in specific clusters
-          if (seedUris.length === 0) {
-            const fallback = await db
-              .select({ uri: trackTable.uri })
-              .from(trackTable)
-              .orderBy(sql`random()`)
-              .limit(5);
-            seedUris.push(...fallback.map(s => s.uri));
-          }
-
           const recommendations = await recommend({
-            seedUris: seedUris,
-            limit: 40,
+            seedUris: seeds.map(s => s.uri),
+            limit: 50,
             annPool: 800,
             alphaNow: 0.8,
-            maxPerArtist: 2,
-            clusterIds: clusterIds,
+            maxPerArtist: 4,
+            clusterIds,
           });
 
           if (recommendations.length > 0) {
@@ -328,7 +316,7 @@ Bun.serve({
         const hour = new Date().getHours();
         let currentFamily: number[] = [2];
         if (hour >= 6 && hour < 10) currentFamily.push(17, 11, 25);
-        else if (hour >= 10 && hour < 18) currentFamily.push(1, 10, 16, 18, 22, 58, 49);
+        // else if (hour >= 10 && hour < 18) currentFamily.push(1, 10, 16, 18, 22, 58, 49);
         else if (hour >= 18 && hour < 22) currentFamily.push(5, 14, 33, 53, 21, 27);
         else currentFamily.push(0, 7, 8, 37, 38, 44, 13);
 

@@ -88,8 +88,6 @@ export async function recommend(opts: RecommendOpts = {}) {
     clusterIds = [],
   } = opts;
 
-  // ... rest of logic
-
   // 1. SESSION RESET: Keep tracking internal to the function call
   const artistCounts = new Map<string, number>();
   let lastArtists: string[] = [];
