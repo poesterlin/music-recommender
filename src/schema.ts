@@ -27,6 +27,9 @@ export const skippedSongsTable = pgTable("skipped_songs", {
 
 export const likedSongsTable = pgTable("liked_songs", {
   uri: text("uri").primaryKey(),
+  likedAt: timestamp("liked_at", { mode: "string" }).defaultNow(),
+  hour: integer("hour"), // Hour of the day (0-23)
+  source: text("source"), // e.g. "vibe", "manual", "debug"
 });
 
 export const skippedArtistsTable = pgTable("skipped_artists", {

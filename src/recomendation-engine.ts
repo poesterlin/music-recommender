@@ -12,6 +12,7 @@ import { db } from "./db";
 import {
   likedSongsTable,
   skippedArtistsTable,
+  skippedSongsTable,
   trackTable,
 } from "./schema";
 
@@ -71,6 +72,11 @@ type RecommendOpts = {
 let cachedLikedCentroid: number[] | null = null;
 let lastCentroidUpdate = 0;
 
+export function invalidateLikedCache() {
+  cachedLikedCentroid = null;
+  lastCentroidUpdate = 0;
+}
+
 export async function recommend(opts: RecommendOpts = {}) {
   const {
     seedUris = [],
@@ -101,8 +107,12 @@ export async function recommend(opts: RecommendOpts = {}) {
   await db.execute(sql`SELECT setseed(${Math.random()})`);
 
   // 2. Efficiently fetch Skip Lists
-  const skippedArtists = await db.select({ name: skippedArtistsTable.name }).from(skippedArtistsTable);
+  const [skippedArtists, skippedSongs] = await Promise.all([
+    db.select({ name: skippedArtistsTable.name }).from(skippedArtistsTable),
+    db.select({ uri: skippedSongsTable.uri }).from(skippedSongsTable)
+  ]);
   const skipArtistSet = new Set(skippedArtists.map(x => x.name));
+  const skipTrackSet = new Set(skippedSongs.map(x => x.uri));
 
   // 3. Build Query Vector (q)
   if (!cachedLikedCentroid || Date.now() - lastCentroidUpdate > 1000 * 60 * 5) {
@@ -157,6 +167,8 @@ export async function recommend(opts: RecommendOpts = {}) {
   const poolN = pool
     .filter((p) => {
       if (!Array.isArray(p.embedding)) return false;
+      // Filter out skipped artists and tracks
+      if (skipTrackSet.has(p.uri)) return false;
       return !p.artists.some(a => skipArtistSet.has(a));
     })
     .map((p) => ({

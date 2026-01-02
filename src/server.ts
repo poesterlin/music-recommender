@@ -198,14 +198,15 @@ Bun.serve({
 
     "/track/like": {
       POST: async (req) => {
+        const body = await req.json().catch(() => ({}));
         const state = await getCurrentTrack();
         if (!state) {
           return new Response("No track found", { status: 404 });
         }
 
-        await likeTrack(state.uri);
+        await likeTrack(state.uri, (body as any).source || "manual");
 
-        return Response.json({ success: true });
+        return Response.json({ success: true, name: state.name });
       },
     },
 
@@ -370,7 +371,7 @@ Bun.serve({
       ${(currentTrack as any).clusterId !== undefined ? `<div style="font-size: 12px; margin-top: 8px; font-weight: bold; color: #fff; background: rgba(255,255,255,0.2); display: inline-block; padding: 2px 8px; border-radius: 4px;">Vibe: ${CLUSTER_NAMES[(currentTrack as any).clusterId] || 'Cluster ' + (currentTrack as any).clusterId}</div>` : ''}
     </div>
     <div style="margin-top: 15px;">
-      <button onclick="fetch('/track/like', {method: 'POST'}).then(() => alert('Liked!'))" style="background: #28a745;">Like Song</button>
+      <button onclick="fetch('/track/like', {method: 'POST', body: JSON.stringify({source: 'debug'}), headers: {'Content-Type': 'application/json'}}).then(() => alert('Liked!'))" style="background: #28a745;">Like Song</button>
       <button onclick="fetch('/track/skip', {method: 'POST'}).then(() => location.reload())" class="danger">Skip</button>
     </div>
   </div>
