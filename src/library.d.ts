@@ -73,7 +73,20 @@ interface QueueApiResponse {
  * The keys are dynamic player IDs (e.g., "media_player.smart_amp_5_19677_2").
  */
 interface ServiceResponseData {
-  [playerId: string]: MediaPlayerQueue;
+  [playerId: string]: MediaPlayerQueue | MassQueueItem[];
+}
+
+/**
+ * Represents an item in the Mass Queue.
+ */
+interface MassQueueItem {
+  queue_item_id: string;
+  media_title: string;
+  media_album_name: string;
+  media_artist: string;
+  media_content_id: string;
+  media_image: string;
+  favorite: boolean;
 }
 
 /**

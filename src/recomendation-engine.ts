@@ -63,19 +63,26 @@ type RecommendOpts = {
   maxPerArtist?: number;
   excludeUris?: string[];
   alphaNow?: number; // Weight for seed vs liked
+  clusterIds?: number[]; // Pre-filter by cluster
 };
 
 // ---------- Main Logic ----------
+
+let cachedLikedCentroid: number[] | null = null;
+let lastCentroidUpdate = 0;
 
 export async function recommend(opts: RecommendOpts = {}) {
   const {
     seedUris = [],
     limit = 30,
-    annPool = 1000, // Increased default pool size
+    annPool = 1000,
     maxPerArtist = 2,
     excludeUris = [],
-    alphaNow = 0.85, // Favor the "current seed" vibe more strongly
+    alphaNow = 0.85,
+    clusterIds = [],
   } = opts;
+
+  // ... rest of logic
 
   // 1. SESSION RESET: Keep tracking internal to the function call
   const artistCounts = new Map<string, number>();
@@ -98,8 +105,12 @@ export async function recommend(opts: RecommendOpts = {}) {
   const skipArtistSet = new Set(skippedArtists.map(x => x.name));
 
   // 3. Build Query Vector (q)
-  const likedVecs = await getLikedEmbeddings();
-  const c = centroidNormalized(likedVecs);
+  if (!cachedLikedCentroid || Date.now() - lastCentroidUpdate > 1000 * 60 * 5) {
+    const likedVecs = await getLikedEmbeddings();
+    cachedLikedCentroid = centroidNormalized(likedVecs);
+    lastCentroidUpdate = Date.now();
+  }
+  const c = cachedLikedCentroid;
 
   let s: number[] | null = null;
   if (seedUris.length) {
@@ -118,8 +129,7 @@ export async function recommend(opts: RecommendOpts = {}) {
   if (!q) return [];
 
   // 4. Fetch Candidates (ANN Pool)
-  // We filter simple exclusions in SQL, but handle complex artist skips in JS for speed
-  const simFloor = 0.45; // Lowered to ensure we have enough candidates
+  const simFloor = 0.45;
   const similarity = sql<number>`1 - (${cosineDistance(trackTable.embedding, q)})`;
   
   const pool = await db
@@ -136,7 +146,8 @@ export async function recommend(opts: RecommendOpts = {}) {
       and(
         isNotNull(trackTable.embedding),
         notInArray(trackTable.uri, [...excludeUris, ""]),
-        sql<boolean>`${similarity} > ${simFloor}`
+        sql<boolean>`${similarity} > ${simFloor}`,
+        clusterIds.length > 0 ? inArray(trackTable.clusterId, clusterIds) : sql`TRUE`
       )
     )
     .orderBy(sql`(${similarity} + random() * 0.02) DESC`)
@@ -146,17 +157,17 @@ export async function recommend(opts: RecommendOpts = {}) {
   const poolN = pool
     .filter((p) => {
       if (!Array.isArray(p.embedding)) return false;
-      // Hard skip if artist is in blocklist
       return !p.artists.some(a => skipArtistSet.has(a));
     })
     .map((p) => ({
       ...p,
-      normVec: l2norm(p.embedding as number[])
+      normVec: l2norm(p.embedding as number[]),
+      maxSimToSelected: -1 // Track max similarity to any selected song for MMR
     }));
 
   const selected: typeof poolN = [];
 
-  // 6. MMR Selection Loop
+  // 6. MMR Selection Loop (Optimized to O(N * K))
   while (selected.length < limit && poolN.length) {
     const scores: number[] = [];
     const validIndices: number[] = [];
@@ -164,28 +175,15 @@ export async function recommend(opts: RecommendOpts = {}) {
     for (let i = 0; i < poolN.length; i++) {
       const cand = poolN[i];
 
-      // HARD PENALTY: Max per artist
       const currentArtistCount = cand.artists.reduce((max, a) => 
         Math.max(max, artistCounts.get(a) ?? 0), 0);
       
       if (currentArtistCount >= maxPerArtist) continue;
 
-      // Cosine Similarity (Relevance)
       let rel = 0;
       for (let k = 0; k < q.length; k++) rel += cand.normVec[k] * q[k];
 
-      // MMR (Diversity)
-      let div = 0;
-      if (selected.length) {
-        let maxSim = -1;
-        for (const s of selected) {
-          let sim = 0;
-          for (let k = 0; k < q.length; k++) sim += cand.normVec[k] * s.normVec[k];
-          if (sim > maxSim) maxSim = sim;
-        }
-        div = maxSim;
-      }
-
+      const div = selected.length === 0 ? 0 : cand.maxSimToSelected;
       const mmrScore = lambda * rel - (1 - lambda) * div;
       const penalty = softArtistPenalty(cand.artists);
       
@@ -195,13 +193,19 @@ export async function recommend(opts: RecommendOpts = {}) {
 
     if (validIndices.length === 0) break;
 
-    // Softmax Selection
     const selectedIdx = softmaxSample(scores, temperature);
     const poolIdx = validIndices[selectedIdx];
     const chosen = poolN.splice(poolIdx, 1)[0];
 
-    // Update session state
     selected.push(chosen);
+    
+    // Update maxSimToSelected for all remaining candidates in O(N)
+    for (const cand of poolN) {
+      let sim = 0;
+      for (let k = 0; k < q.length; k++) sim += cand.normVec[k] * chosen.normVec[k];
+      if (sim > cand.maxSimToSelected) cand.maxSimToSelected = sim;
+    }
+
     for (const a of chosen.artists) {
       artistCounts.set(a, (artistCounts.get(a) ?? 0) + 1);
     }
