@@ -6,6 +6,7 @@
   "scripts": {
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
+    "db:consolidate-plex": "bun src/consolidate-plex.ts",
     "dev": "bun --bun --watch ./src/index-library.ts",
     "server": "bun --bun ./src/server.ts"
   },

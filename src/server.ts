@@ -3,79 +3,80 @@ import { db } from "./db";
 import { recommend } from "./recomendation-engine";
 import { trackTable } from "./schema";
 import {
-  skipArtists,
   skipTrack,
   likeTrack
 } from "./similar-track";
 import { getCurrentTrack, playSongs } from "./webhook";
+import { startWLEDVisualization } from "./wled-visualizer";
+import { env } from "bun";
 
 let tracks: Array<{ uri: string; name: string; album: string; artists: string[] }> = [];
 
 // Cluster Names based on our analysis
-const CLUSTER_NAMES: Record<number, string> = 
-	{
-	  [-1]: "Wildcards",
-	  0: "Cinematic Ambient Textures",
-	  1: "Sunshine Legacy Pop",
-	  2: "Vocal Heavy, Slow Songs",
-	  3: "Late Night Dance Pop",
-	  4: "Raw Alt-Rock & Demos",
-	  5: "Intimate Singer-Songwriter",
-	  6: "Future Bass & Glitch",
-	  7: "Sad-Girl Indie Cinema",
-	  8: "Ethereal Indie Folk",
-	  9: "Art-Pop Percussion",
-	  10: "Modern Pop Hits",
-	  11: "60s/70s Acoustic Foundations",
-	  12: "High-Energy Alt-Pop Anthems",
-	  13: "Experimental Soundscapes",
-	  14: "Piano Soul & Brit-Pop",
-	  15: "Slick Urban Crossover",
-	  16: "Mainstream Radio Hits",
-	  17: "Soft Acoustic Harmony",
-	  18: "Sophisticated Pop Soul",
-	  19: "Stadium Rock Radio",
-	  20: "Melancholic Sophisti-Pop",
-	  21: "Power Ballads & Pop Vocals",
-	  22: "Modern Summer R&B",
-	  23: "Electro-Pop Groove",
-	  24: "Funk-Infused Hip-Hop",
-	  25: "Quiet Indie Folk",
-	  26: "Mainstage EDM Instrumentals",
-	  27: "Mid-Tempo Modern Ballads",
-	  28: "Theatrical Arena Rock",
-	  29: "80s Adult Contemporary",
-	  30: "Roots Rock Strumming",
-	  31: "Punk-Pop Energizers",
-	  32: "Early British Invasion",
-	  33: "Neo-Soul & Downtempo",
-	  34: "Space Rock & Shoegaze",
-	  35: "Grunge & 90s Alternative",
-	  36: "Dark Rhythmic Flow",
-	  37: "Moody Indie Noir",
-	  38: "Dark Dream Pop",
-	  39: "Funk, Soul & Classic Groove",
-	  40: "High-Intensity Pop-Punk",
-	  41: "The New Atlanta Sound",
-	  42: "Aggressive Lyricism",
-	  43: "Moody Trap Anthems",
-	  44: "Fragile Chamber Pop",
-	  45: "British Rock & Roll Foundations",
-	  46: "Upbeat Synth-Pop",
-	  47: "Ethereal Modern Pop",
-	  48: "Avant-Garde Fragments",
-	  49: "Modern Adult Contemporary",
-	  50: "Acoustic Rock Anthems",
-	  51: "Indie-Pop Synth Crossover",
-	  52: "Modern Minimalist Electronic",
-	  53: "Folk-Soul Storytelling",
-	  54: "Hard Rock & Post-Grunge",
-	  55: "Funky Dance-Pop",
-	  56: "Monophonic Vintage Rock",
-	  57: "Cinematic Rap & Storytelling",
-	  58: "Modern Americana & Pop",
-	  59: "Lengthy Electronic Experiments",
-	};
+const CLUSTER_NAMES: Record<number, string> =
+{
+  [-1]: "Wildcards",
+  0: "German Hip-Hop & Rap",
+  1: "Indie Rock Anthems",
+  2: "Modern R&B & Pop",
+  3: "Emotional Indie Ballads",
+  4: "Pop Rap Hits",
+  5: "Modern Singer-Songwriter",
+  6: "Pop Rock & Synth",
+  7: "Britpop & Rock Classics",
+  8: "Eclectic Pop & Rap",
+  9: "Dance Pop Anthems",
+  10: "Acoustic Pop & Soul",
+  11: "Classic Rock & Pop",
+  12: "Upbeat Modern Pop",
+  13: "Pop & Rock Variety",
+  14: "Piano Rock Classics",
+  15: "Energy Rap & Rock",
+  16: "Indie Folk & Acoustic",
+  17: "German Pop & Classics",
+  18: "Soulful Ballads",
+  19: "Soul & Motown Classics",
+  20: "Atmospheric Indie Folk",
+  21: "Pop & Indie Mix",
+  22: "Modern Pop & Rap Flow",
+  23: "Dance & Pop Rock",
+  24: "Funk & Disco Grooves",
+  25: "Hip-Hop Legends",
+  26: "Soft Pop Ballads",
+  27: "Punk & Rock Live",
+  28: "Rap & Hip-Hop Mix",
+  29: "Classic Pop & Rock",
+  30: "Indie & Alt Rock",
+  31: "Soft Rock & Pop",
+  32: "Electronic & Indie Pop",
+  33: "Dance & Electronic Hits",
+  34: "Pop & Dance Mix",
+  35: "Country & Pop Rock",
+  36: "Alt Rock & Punk",
+  37: "Pop Rock Ballads",
+  38: "Folk & Pop Rock",
+  39: "Pop Punk & Rock",
+  40: "Pop, Dance & Rock",
+  41: "Dream Pop & Indie",
+  42: "Rap Skits & Interludes",
+  43: "Pop & R&B Hits",
+  44: "Modern Rap & Pop",
+  45: "EDM & House Anthems",
+  46: "Electronic Experiments",
+  47: "Emotional Indie Pop",
+  48: "Hip-Hop & Rap Hits",
+  49: "Pop & Rock Variety II",
+  50: "Atmospheric Indie",
+  51: "Rock Legends",
+  52: "Pop, R&B & Funk",
+  53: "Alt & Indie Pop",
+  54: "The Beatles Classics",
+  55: "Piano Ballads & Rock",
+  56: "Experimental & Ambient",
+  57: "Classic Rock & Pop II",
+  58: "Oasis Anthems",
+  59: "Global Pop & Rap",
+};
 
 recommend({
   seedUris: [
@@ -256,13 +257,13 @@ Bun.serve({
 
           // Vibe matching based on time of day
           if (hour >= 6 && hour < 10) {
-            clusterIds.push(17, 11, 25); // Morning: Soft Acoustic, Acoustic Foundations, Quiet Indie Folk
-          // } else if (hour >= 10 && hour < 18) {
-          //   clusterIds.push(1, 10, 16, 18, 22, 58, 49); // Day: Pop, R&B, Americana
+            clusterIds.push(10, 16, 26, 38, 54); // Morning: Acoustic Pop, Indie Folk, Soft Pop, Folk & Pop, Beatles
+            // } else if (hour >= 10 && hour < 18) {
+            //   clusterIds.push(1, 10, 16, 18, 22, 58, 49); // Day: Pop, R&B, Americana
           } else if (hour >= 18 && hour < 22) {
-            clusterIds.push(5, 14, 33, 53, 21, 27); // Evening: Singer-Songwriter, Piano Soul, Neo-Soul, Folk-Soul
+            clusterIds.push(2, 20, 18, 47); // Evening: Modern R&B, Atmospheric, Soulful, Emotional Indie
           } else {
-            clusterIds.push(0, 7, 8, 37, 38, 44, 13); // Night: Ambient, Cinematic, Melancholic, Noir
+            clusterIds.push(41, 46, 50, 56); // Night: Dream Pop, Electronic Exp, Atmospheric Indie, Ambient
           }
 
           // Select 5 random tracks from these clusters as seeds
@@ -315,10 +316,10 @@ Bun.serve({
 
         const hour = new Date().getHours();
         let currentFamily: number[] = [2];
-        if (hour >= 6 && hour < 10) currentFamily.push(17, 11, 25);
+        if (hour >= 6 && hour < 10) currentFamily.push(10, 16, 26, 38, 54);
         // else if (hour >= 10 && hour < 18) currentFamily.push(1, 10, 16, 18, 22, 58, 49);
-        else if (hour >= 18 && hour < 22) currentFamily.push(5, 14, 33, 53, 21, 27);
-        else currentFamily.push(0, 7, 8, 37, 38, 44, 13);
+        else if (hour >= 18 && hour < 22) currentFamily.push(2, 20, 18, 47);
+        else currentFamily.push(41, 46, 50, 56);
 
         return new Response(`<!DOCTYPE html>
 <html>
@@ -512,3 +513,17 @@ Bun.serve({
 });
 
 console.log("Server running on http://localhost:3000/debug");
+
+
+// Check environment variable
+const wledIp = env.WLED_IP;
+if (!wledIp) {
+  console.error("WLED_IP environment variable is not set!");
+  console.log("Set it with: export WLED_IP=192.168.1.100");
+  process.exit(1);
+}
+
+console.log(`Using WLED IP: ${wledIp}`);
+
+// Wait a bit then start continuous visualization
+await startWLEDVisualization(wledIp);
