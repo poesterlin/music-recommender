@@ -8,31 +8,66 @@ const authHeaders = new Headers();
 authHeaders.append("Content-Type", "application/json");
 authHeaders.append("Authorization", "Bearer " + env.TOKEN);
 
-const raw = JSON.stringify({
-  limit: "100000", // has to be a string for some reason
-  library_only: "false",
-  config_entry_id: env.CONFIG_ID,
-  name: "",
-  media_type: "track",
-});
+const BATCH_SIZE = 500;
+let offset = 0;
+let allTracks: Track[] = [];
 
-console.log("Fetching library tracks from external service...");
+console.log("Fetching library tracks from external service using pagination...");
 
-const res = await fetch(
-  env.HOST + "/api/services/music_assistant/search?return_response",
-  {
-    method: "POST",
-    headers: authHeaders,
-    body: raw,
-    redirect: "follow",
+while (true) {
+  const raw = JSON.stringify({
+    config_entry_id: env.CONFIG_ID,
+    media_type: "track",
+    limit: BATCH_SIZE,
+    offset: offset,
+    order_by: "sort_name",
+  });
+
+  console.log(`Fetching tracks batch: offset ${offset}, limit ${BATCH_SIZE}`);
+
+  const res = await fetch(
+    env.HOST + "/api/services/music_assistant/get_library?return_response",
+    {
+      method: "POST",
+      headers: authHeaders,
+      body: raw,
+      redirect: "follow",
+    }
+  );
+
+  const text = await res.text();
+  
+  if (res.status !== 200) {
+    console.error("Response text:", text);
+    throw new Error(`HTTP ${res.status}: ${text}`);
   }
-);
+  
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    console.error("Failed to parse JSON response:", error);
+    console.error("Response text:", text);
+    throw error;
+  }
 
-console.log("Processing library response...");
+  const batch = data.service_response.items;
+  
+  if (!batch || batch.length === 0) {
+    console.log("No more tracks to fetch.");
+    break;
+  }
 
-const data = (await res.json()) as LibraryResponse;
+  allTracks.push(...batch);
+  console.log(`Fetched ${batch.length} tracks. Total: ${allTracks.length}`);
 
-const response = data.service_response;
+  if (batch.length < BATCH_SIZE) {
+    console.log("Reached end of library tracks.");
+    break;
+  }
+
+  offset += BATCH_SIZE;
+}
 
 function normalizeArtistName(name: string): string {
   return name
@@ -56,8 +91,8 @@ function splitArtists(artistName: string): string[] {
   return parts.map(p => p.trim()).filter(p => p.length > 0);
 }
 
-const tracks = response.tracks.map((track) => {
-  const artistNames = track.artists.flatMap((artist) => splitArtists(artist.name));
+const tracks = allTracks.map((track: Track) => {
+  const artistNames = track.artists.flatMap((artist: Artist) => splitArtists(artist.name));
   
   return {
     name: track.name,
@@ -94,20 +129,6 @@ for (let i = 0; i < tracks.length; i += CHUNK_SIZE) {
 
 console.log(`Finished processing tracks into the database.`);
 
-type LibraryResponse = {
-  service_response: ServiceResponse;
-};
-
-interface ServiceResponse {
-  artists: Artist[];
-  albums: Album[];
-  tracks: Track[];
-  playlists: Playlist[];
-  radio: Radio[];
-  audiobooks: any[];
-  podcasts: any[];
-}
-
 interface Artist {
   media_type: string;
   uri: string;
@@ -133,20 +154,4 @@ interface Track {
   image: string;
   artists: Artist[];
   album: Album;
-}
-
-interface Playlist {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image?: string;
-}
-
-interface Radio {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image: string;
 }

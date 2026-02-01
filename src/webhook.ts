@@ -29,7 +29,7 @@ export async function playSongs(ids: string[]) {
 export async function getCurrentTrack() {
   try {
     const raw = JSON.stringify({
-      entity_id: "media_player.gruppe_dynamic"
+      entity_id: "media_player.living_room"
     });
 
     const res = await fetch(
@@ -43,7 +43,15 @@ export async function getCurrentTrack() {
     );
 
     const text = await res.text();
-    const data = JSON.parse(text) as QueueApiResponse;
+    let data: QueueApiResponse;
+    try {
+      data = JSON.parse(text) as QueueApiResponse;
+    } catch (error) {
+      console.error("Failed to parse JSON response:", error);
+      console.error("Response text:", text);
+      throw error;
+    }
+
     const serviceResponse = data.service_response;
     const entries = Object.entries(serviceResponse);
 
@@ -54,7 +62,7 @@ export async function getCurrentTrack() {
       if (!speaker.active || !speaker.current_item?.media_item) continue;
 
       const uri = speaker.current_item.media_item.uri;
-      
+
       const [dbTrack] = await db
         .select()
         .from(trackTable)
