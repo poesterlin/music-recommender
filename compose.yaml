@@ -42,6 +42,42 @@ services:
         sleep 3600;
       done"
 
+  # Periodic analyzer: index new tracks + assign them to frozen clusters.
+  # Existing cluster_ids are never touched (see src/clustering.ts).
+  analyzer:
+    image: curlimages/curl:latest
+    restart: unless-stopped
+    depends_on:
+      recommender:
+        condition: service_healthy
+    networks:
+      - music
+    entrypoint: >
+      sh -c "while true; do
+        echo \"[analyzer] $$(date): analyzing...\";
+        curl -sf -X POST http://recommender:3000/api/analyze && echo ok || echo failed;
+        sleep 21600;
+      done"
+
+  # Periodic audio embedding generation (OpenL3, CPU). Idempotent: only
+  # processes tracks with embedding IS NULL. First run has a backlog
+  # (~6k tracks) and will take a while; tune/disable via sleep interval.
+  embeddings-loop:
+    build:
+      context: embeddings
+    env_file: .env
+    restart: unless-stopped
+    volumes:
+      - music:/music:ro
+    networks:
+      - music
+    entrypoint: >
+      sh -c "while true; do
+        echo \"[embeddings-loop] $$(date): generating...\";
+        python generate-local-embeddings.py || echo failed;
+        sleep 43200;
+      done"
+
   # index-library:
   #   image: curlimages/curl:latest
   #   restart: unless-stopped
