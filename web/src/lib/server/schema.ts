@@ -55,6 +55,17 @@ export const vibeStateTable = pgTable("vibe_state", {
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
 
+// Run history for library jobs (index / sync-favorites / analyze) so results
+// survive toasts and navigation — Manage shows the last run per job.
+export const jobRunTable = pgTable("job_run", {
+  id: serial("id").primaryKey(),
+  job: text("job").notNull(),
+  startedAt: timestamp("started_at", { mode: "string" }).defaultNow(),
+  finishedAt: timestamp("finished_at", { mode: "string" }),
+  ok: boolean("ok"),
+  detail: text("detail"),
+});
+
 // Hour-range schedules mapping time-of-day -> cluster picks.
 // startHour inclusive, endHour exclusive, 0-24. Wraps overnight when startHour > endHour.
 export const vibeScheduleTable = pgTable("vibe_schedule", {
