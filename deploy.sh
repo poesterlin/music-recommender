@@ -1,38 +1,34 @@
 #!/usr/bin/env bash
-# Deploy music-recommender to homelab.
+# Git-based deploy of music-recommender to homelab.
 #
-# What it does:
-#   1. Applies DB migrations (the DB is shared - local .env and homelab .env
-#      point at the same postgres, so migrating from here is enough).
-#   2. Rsyncs the working tree to lab@homelab:projects/services/music-recommender.
-#      The remote .env is NEVER touched (excluded from rsync).
-#   3. Rebuilds and restarts via docker compose, then polls /api/status.
+# Flow: push main to origin -> pull on homelab -> rebuild -> health check.
+# Requires a clean working tree (commit first). Remote .env is untouched
+# because it is git-ignored and never committed.
 #
 # Usage: ./deploy.sh
 set -euo pipefail
 
 REMOTE="lab@homelab"
 REMOTE_DIR="projects/services/music-recommender"
+BRANCH="main"
 REMOTE_HEALTH_URL="http://127.0.0.1:4932/api/status"
 
 cd "$(dirname "$0")"
 
+if [ -n "$(git status --porcelain)" ]; then
+  echo "ABORT: working tree is dirty - commit first." >&2
+  git status --short >&2
+  exit 1
+fi
+
 echo "==> 1/4 DB migrations (drizzle push, uses local .env DATABASE_URL)"
 bunx drizzle-kit push --force
 
-echo "==> 2/4 remote state before sync (informational - rsync wins)"
-ssh "$REMOTE" "cd $REMOTE_DIR && git status --short | head -20 || true"
+echo "==> 2/4 pushing $BRANCH to origin"
+git push origin "$BRANCH"
 
-echo "==> 3/4 rsync to $REMOTE:$REMOTE_DIR (remote .env excluded)"
-rsync -avz --delete \
-  --exclude='.git/' \
-  --exclude='node_modules/' \
-  --exclude='.env*' \
-  --exclude='output/' \
-  --exclude='.ruff_cache/' \
-  --exclude='nohup.out' \
-  --exclude='*.csv' \
-  ./ "$REMOTE:$REMOTE_DIR/"
+echo "==> 3/4 pulling on homelab"
+ssh "$REMOTE" "set -e; cd $REMOTE_DIR && git fetch origin && git checkout $BRANCH --quiet && git pull --ff-only origin $BRANCH && git status --short"
 
 echo "==> 4/4 rebuild + restart on homelab"
 ssh "$REMOTE" "cd $REMOTE_DIR && docker compose up -d --build"
