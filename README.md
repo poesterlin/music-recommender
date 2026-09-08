@@ -1,5 +1,13 @@
 # Music Recommender
 
+## Steps:
+
+1. update music libary in [Plex](https://plex.example.com)
+1. press sync library in [Music Assistant](https://musicassistant.example.com/#/settings/providers) 
+1. update index `bun src/index-library.ts`
+2. analyze using ai 
+3. cluster
+
 ## High-Level Steps
 
 1. Get the data from the database
