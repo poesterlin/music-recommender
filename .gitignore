@@ -6,6 +6,12 @@ out
 dist
 *.tgz
 
+# local data dumps, db backups, runtime logs (never commit)
+data-*.csv
+backups_*.sql
+backups_*.dump
+nohup.out
+
 # code coverage
 coverage
 *.lcov
