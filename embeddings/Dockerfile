@@ -1,16 +1,12 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Install system dependencies
 RUN apt-get update && \
     apt-get install -y libsndfile1 ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir openl3 librosa soundfile psycopg2-binary
+RUN pip install --no-cache-dir openl3 librosa psycopg2-binary numpy requests
 
 WORKDIR /workspace
 
-# Copy your processing script into the container
-COPY process_mp3s.py /workspace/process_mp3s.py
-
-ENTRYPOINT ["python", "process_mp3s.py"]
+COPY index-library.py /workspace/index-library.py
+COPY generate-local-embeddings.py /workspace/generate-local-embeddings.py
