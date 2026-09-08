@@ -11,13 +11,35 @@
 	} from '@tabler/icons-svelte';
 	import { page } from '$app/state';
 	import { toastStore } from '$lib/client/toast.svelte';
+	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
 	import { slide } from 'svelte/transition';
+	import { onMount, onDestroy } from 'svelte';
 	import { onNavigate } from '$app/navigation';
 	import { post } from '$lib/api';
-	import { CLUSTER_NAMES } from '$lib/clusters';
 	import '../app.css';
 
 	let { children, data } = $props();
+
+	// Header shows the LIVE track (same store the booth Player updates),
+	// never a stale server snapshot — so Like/Skip hit the displayed song.
+	// SSR first paint falls back to the server snapshot until the store hydrates.
+	$effect(() => {
+		nowPlayingStore.seed(data.nowPlaying);
+	});
+
+	const shown = $derived(
+		nowPlayingStore.track ?? data.nowPlaying
+	);
+
+	let poller: ReturnType<typeof setInterval> | null = null;
+	onMount(() => {
+		// Backstop for pages without the booth Player (which polls faster).
+		void nowPlayingStore.refresh();
+		poller = setInterval(() => nowPlayingStore.refresh(), 15000);
+	});
+	onDestroy(() => {
+		if (poller) clearInterval(poller);
+	});
 
 	const links = [
 		{ href: '/', label: 'Home', icon: IconHome },
@@ -40,12 +62,22 @@
 	});
 
 	async function like() {
-		const { ok } = await post('/track/like', { source: 'web' });
-		if (ok) toastStore.show('Liked — spun into future mixes');
+		const uri = nowPlayingStore.track?.uri ?? data.nowPlaying?.uri;
+		if (!uri) {
+			toastStore.show('Nothing playing to like');
+			return;
+		}
+		const { ok, data: json } = await post<{ name?: string }>('/track/like', { uri, source: 'web' });
+		if (ok) toastStore.show(`Liked ${json.name ?? 'track'} — spun into future mixes`);
 	}
 
 	async function skip() {
-		const { ok } = await post('/track/skip');
+		const uri = nowPlayingStore.track?.uri ?? data.nowPlaying?.uri;
+		if (!uri) {
+			toastStore.show('Nothing playing to skip');
+			return;
+		}
+		const { ok } = await post('/track/skip', { uri });
 		if (ok) toastStore.show('Skipped');
 	}
 </script>
@@ -66,20 +98,16 @@
 						The listening bar
 					</span>
 				</a>
-				{#if data.nowPlaying}
+				{#if shown}
 					<div class="flex max-w-full items-center gap-3 text-sm">
 						<span class="relative flex size-2 shrink-0">
 							<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60"></span>
 							<span class="relative inline-flex size-2 rounded-full bg-accent"></span>
 						</span>
 						<div class="min-w-0 text-right">
-							<p class="max-w-56 truncate font-bold">{data.nowPlaying.name}</p>
+							<p class="max-w-56 truncate font-bold">{shown.name}</p>
 							<p class="max-w-56 truncate text-xs text-ink-soft">
-								{data.nowPlaying.artists.join(', ')}
-								{#if data.nowPlaying.clusterId !== undefined && data.nowPlaying.clusterId !== null}
-									· {CLUSTER_NAMES[data.nowPlaying.clusterId] ??
-										'Cluster ' + data.nowPlaying.clusterId}
-								{/if}
+								{shown.artists.join(', ')}
 							</p>
 						</div>
 						<button
