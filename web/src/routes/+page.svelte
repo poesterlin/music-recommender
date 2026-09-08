@@ -1,5 +1,4 @@
 <script lang="ts">
-	import PageHeader from '$lib/components/PageHeader.svelte';
 	import Player from '$lib/components/Player.svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
@@ -7,6 +6,16 @@
 	import { CLUSTER_NAMES, clusterLabel } from '$lib/clusters';
 
 	let { data } = $props();
+
+	const vibeNames = $derived(
+		data.vibeClusterIds.map((id: number) => CLUSTER_NAMES[id] ?? `Cluster ${id}`)
+	);
+
+	const slotLine = $derived(
+		data.activeSchedule
+			? `${data.activeSchedule.name} · ${data.activeSchedule.startHour}–${data.activeSchedule.endHour}h`
+			: 'Open deck · your hand-picked clusters'
+	);
 
 	async function playVibe() {
 		const { ok, data: json } = await post<{ tracks?: unknown[] }>('/api/play-vibe', {
@@ -26,42 +35,144 @@
 	}
 </script>
 
-<PageHeader
-	title="Home"
-	description="Your music at a glance: what's playing, which vibe is active, and one-tap playback."
-/>
+<!-- HERO -->
+<section class="relative overflow-hidden">
+	<p class="ghost-type pointer-events-none absolute -top-6 right-0 hidden font-display text-[11rem] leading-none font-black tracking-tight select-none lg:block" aria-hidden="true">
+		A-side
+	</p>
 
-<div class="grid gap-6 lg:grid-cols-2">
-	<Player initial={data.player} />
+	<div class="relative grid items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
+		<div class="animate-rise">
+			<p class="mb-4 flex items-center gap-2 text-[11px] font-bold tracking-[0.28em] text-accent-deep uppercase">
+				<span class="inline-block h-px w-8 bg-accent"></span>
+				Tonight at the listening bar
+			</p>
+			<h1 class="font-display text-5xl leading-[0.98] font-black tracking-tight text-balance sm:text-7xl">
+				Put the needle<br />
+				on <em class="font-light text-accent-deep italic">your mood.</em>
+			</h1>
+			<p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
+				{slotLine}. {data.vibeClusterIds.length} clusters in rotation, {data.queue.length} tracks
+				cued — one tap and the room wakes up.
+			</p>
+			<div class="mt-7 flex flex-wrap gap-2.5">
+				<button
+					class="rounded-full bg-accent px-7 py-3 font-bold text-cream shadow-lg shadow-accent/30 transition hover:-translate-y-0.5 hover:bg-accent-deep"
+					onclick={playVibe}>▶ Play the vibe</button
+				>
+				<button
+					class="rounded-full bg-ink px-6 py-3 font-bold text-cream transition hover:-translate-y-0.5 hover:bg-ink-soft"
+					onclick={playScheduled}>Play scheduled slot</button
+				>
+				<button
+					class="rounded-full border-2 border-ink/15 px-6 py-3 font-bold text-ink transition hover:-translate-y-0.5 hover:border-ink"
+					onclick={playQueue}>Play queue</button
+				>
+			</div>
+			<dl class="mt-8 flex flex-wrap gap-x-10 gap-y-3">
+				<div>
+					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">In rotation</dt>
+					<dd class="font-display text-3xl font-black">{data.vibeClusterIds.length} <span class="text-base font-light italic text-faded">clusters</span></dd>
+				</div>
+				<div>
+					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">Cued up</dt>
+					<dd class="font-display text-3xl font-black">{data.queue.length} <span class="text-base font-light italic text-faded">tracks</span></dd>
+				</div>
+				<div>
+					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">On the slate</dt>
+					<dd class="font-display text-3xl font-black">
+						{data.activeSchedule ? `${data.activeSchedule.startHour}–${data.activeSchedule.endHour}h` : '∞'}
+					</dd>
+				</div>
+			</dl>
+		</div>
 
-	<section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-		<h2 class="text-sm font-semibold tracking-wide text-gray-400 uppercase">Active vibe</h2>
+		<div class="relative mx-auto hidden w-full max-w-sm animate-rise lg:block" style="animation-delay: 120ms">
+			<div class="vinyl animate-spin-slow aspect-square w-full rounded-full shadow-2xl ring-1 ring-ink/30">
+				<div class="flex h-full w-full items-center justify-center">
+					<div class="vinyl-label flex size-32 items-center justify-center rounded-full shadow-inner">
+						<div class="flex size-28 flex-col items-center justify-center rounded-full bg-paper text-center">
+							<p class="px-4 font-display text-sm leading-tight font-black text-ink">
+								{data.activeSchedule?.name ?? 'Open Deck'}
+							</p>
+							<p class="mt-1 text-[10px] font-bold tracking-[0.2em] text-faded uppercase">
+								33⅓ rpm
+							</p>
+							<div class="mt-1 size-2.5 rounded-full bg-ink"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<p class="mt-4 text-center font-display text-sm italic text-faded">
+				{data.nowPlaying ? `spinning now: ${data.nowPlaying.name}` : 'the deck is quiet — for now'}
+			</p>
+		</div>
+	</div>
+</section>
+
+<!-- MARQUEE -->
+{#if vibeNames.length}
+	<div class="relative -mx-6 mt-10 overflow-hidden" aria-hidden="true">
+		<div class="-rotate-1 border-y-2 border-ink bg-ink py-2.5 text-cream">
+			<div class="animate-marquee flex w-max gap-0 whitespace-nowrap">
+				{#each [0, 1] as copy (copy)}
+					<span class="font-display text-lg font-bold tracking-wide">
+						{#each vibeNames as n, i (i)}
+							<span class="mx-4">{n}</span><span class="text-accent">✦</span>
+						{/each}
+					</span>
+				{/each}
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- BOOTH + SLATE -->
+<div class="mt-10 grid items-start gap-6 lg:grid-cols-2">
+	<div class="animate-rise" style="animation-delay: 180ms">
+		<Player initial={data.player} />
+	</div>
+
+	<section class="animate-rise rounded-3xl border border-ink/15 bg-cream p-6 shadow-sm sm:p-7" style="animation-delay: 240ms">
+		<h2 class="text-[11px] font-bold tracking-[0.28em] text-faded uppercase">On the slate</h2>
 		{#if data.activeSchedule}
-			<p class="mt-2 text-2xl font-bold text-gray-900">{data.activeSchedule.name}</p>
-			<p class="mt-1 text-sm text-gray-500">
+			<p class="mt-2 font-display text-3xl font-black">{data.activeSchedule.name}</p>
+			<p class="mt-1 text-sm font-bold text-ink-soft">
 				{data.activeSchedule.startHour}–{data.activeSchedule.endHour}h · {data.activeSchedule
 					.clusterIds.length} clusters
 			</p>
-			<p class="mt-3 text-sm leading-relaxed text-gray-600">
-				{data.activeSchedule.clusterIds.map(clusterLabel).join(', ')}
+			<p class="mt-3 text-sm leading-relaxed text-ink-soft">
+				{data.activeSchedule.clusterIds.map(clusterLabel).join(' · ')}
 			</p>
 		{:else}
-			<p class="mt-2 text-2xl font-bold text-gray-900">{data.vibeClusterIds.length} clusters picked</p>
-			<p class="mt-1 text-sm text-gray-500">No schedule slot matches the current hour — manual picks apply.</p>
-			<p class="mt-3 text-sm leading-relaxed text-gray-600">
-				{data.vibeClusterIds.map(clusterLabel).join(', ')}
+			<p class="mt-2 font-display text-3xl font-black">Hand-picked</p>
+			<p class="mt-1 text-sm font-bold text-ink-soft">
+				No schedule slot matches this hour — your manual picks run the room.
 			</p>
+			<div class="mt-3 flex flex-wrap gap-1.5">
+				{#each data.vibeClusterIds as id (id)}
+					<a
+						href="/vibe"
+						class="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-ink hover:text-cream"
+					>
+						{clusterLabel(id)}
+					</a>
+				{/each}
+			</div>
 		{/if}
-		<div class="mt-5 flex flex-wrap gap-2">
-			<button class="rounded-xl bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700" onclick={playVibe}>Play vibe</button>
-			<button class="rounded-xl bg-cyan-600 px-5 py-2.5 font-semibold text-white hover:bg-cyan-700" onclick={playScheduled}>Play scheduled slot</button>
-			<button class="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700" onclick={playQueue}>Play queue</button>
+		<div class="mt-5 border-t border-ink/10 pt-4">
+			<a href="/vibe" class="text-sm font-bold text-accent-deep underline-offset-4 hover:underline">
+				Retune the vibe mixer →
+			</a>
 		</div>
 	</section>
 </div>
 
-<section class="mt-6 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-	<h2 class="text-lg font-bold text-gray-900">Up next</h2>
-	<p class="mb-4 text-sm text-gray-500">Tracks queued by the last recommendation run.</p>
-	<TrackList tracks={data.queue} emptyText="Queue is empty — play a vibe to fill it." />
+<!-- SETLIST -->
+<section class="mt-6 animate-rise rounded-3xl border border-ink/15 bg-cream p-6 shadow-sm sm:p-7" style="animation-delay: 300ms">
+	<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+		<h2 class="font-display text-3xl font-black">Up next <span class="font-light text-faded italic">— the setlist</span></h2>
+		<p class="text-xs font-bold tracking-[0.2em] text-faded uppercase">from the last recommendation run</p>
+	</div>
+	<TrackList tracks={data.queue} emptyText="The setlist is blank — play a vibe to fill it." />
 </section>
