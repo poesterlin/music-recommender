@@ -37,6 +37,17 @@ export const skippedArtistsTable = pgTable("skipped_artists", {
   name: text("name").primaryKey(),
 });
 
+// Frozen centroids for stable incremental clustering.
+// Computed once from current assignments (see backfill), then only
+// new tracks are assigned to the nearest centroid - existing
+// cluster_ids never move, so names/schedules stay valid.
+export const clusterCentroidTable = pgTable("cluster_centroid", {
+  clusterId: integer("cluster_id").primaryKey(),
+  embedding: vector("embedding", { dimensions: 512 }),
+  trackCount: integer("track_count").default(0),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
+});
+
 // Singleton key-value store for persisted UI state (e.g. vibe picks)
 export const vibeStateTable = pgTable("vibe_state", {
   key: text("key").primaryKey(),
