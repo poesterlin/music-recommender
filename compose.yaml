@@ -13,6 +13,49 @@ services:
       - "traefik.http.services.recommender.loadbalancer.server.port=3000"
     networks:
       - traefik_web
+      - music
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch('http://127.0.0.1:3000/api/status'); if (!r.ok) throw new Error('status ' + r.status)",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  sync-favorites:
+    image: curlimages/curl:latest
+    restart: unless-stopped
+    depends_on:
+      recommender:
+        condition: service_healthy
+    networks:
+      - music
+    entrypoint: >
+      sh -c "while true; do
+        echo \"[sync-favorites] $$(date): syncing...\";
+        curl -sf -X POST http://recommender:3000/api/sync-favorites && echo ok || echo failed;
+        sleep 3600;
+      done"
+
+  # index-library:
+  #   image: curlimages/curl:latest
+  #   restart: unless-stopped
+  #   depends_on:
+  #     recommender:
+  #       condition: service_healthy
+  #   networks:
+  #     - music
+  #   entrypoint: >
+  #     sh -c "while true; do
+  #       echo \"[index-library] $$(date): indexing...\";
+  #       curl -sf -X POST http://recommender:3000/api/index-library && echo ok || echo failed;
+  #       sleep 86400;
+  #     done"
 
   embeddings:
     build:
@@ -24,17 +67,18 @@ services:
     profiles:
       - embedding
 
-  indexer:
-    build:
-      context: embeddings
-    env_file: .env
-    command: python index-library.py
-    profiles:
-      - embedding
+  # indexer:
+  #   build:
+  #     context: embeddings
+  #   env_file: .env
+  #   command: python index-library.py
+  #   profiles:
+  #     - embedding
 
 networks:
   traefik_web:
     external: true
+  music:
 
 volumes:
   music:

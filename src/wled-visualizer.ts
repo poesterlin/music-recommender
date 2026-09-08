@@ -245,9 +245,11 @@ class EmbeddingVisualizer {
   }
 
   // Continuous visualization that updates with track changes
-  public async startContinuousVisualization(checkInterval: number = 5000): Promise<void> {
+  public async startContinuousVisualization(checkInterval: number = 15000): Promise<void> {
     console.log("Starting continuous WLED visualization...");
     
+    console.log("WLED polling Home Assistant every 15s for track changes...");
+
     const checkAndUpdate = async () => {
       try {
         const currentTrack = await getCurrentTrack();
