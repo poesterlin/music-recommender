@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { authHeaders } from "./auth";
 import { db } from "./db";
 import { trackTable } from "./schema";
+import { withMa } from "./ma-client";
 
 const QUEUE_ERROR_LOG_INTERVAL_MS = 60_000;
 let lastQueueErrorLogAt = 0;
@@ -51,7 +52,68 @@ export async function playSongs(ids: string[]) {
   console.log("Webhook sent successfully", await resp.text());
 }
 
-export async function getCurrentTrack() {
+export type CurrentTrack = {
+  uri: string;
+  name: string;
+  album: string;
+  artists: string[];
+  clusterId?: number | null;
+  speaker?: string;
+};
+
+async function enrichWithCluster(track: Omit<CurrentTrack, "clusterId">): Promise<CurrentTrack> {
+  const [dbTrack] = await db
+    .select()
+    .from(trackTable)
+    .where(eq(trackTable.uri, track.uri));
+
+  if (dbTrack) {
+    return {
+      uri: dbTrack.uri,
+      name: dbTrack.name,
+      album: dbTrack.album,
+      artists: dbTrack.artist,
+      clusterId: dbTrack.clusterId,
+      speaker: track.speaker,
+    };
+  }
+  return track;
+}
+
+/** Now-playing straight from Music Assistant (players/all -> current_media). */
+async function getCurrentTrackFromMA(): Promise<CurrentTrack | null> {
+  const preferred = process.env.MA_PLAYER_NAME ?? "Wohnzimmer";
+  return withMa(async (call) => {
+    const players: any[] = await call("players/all");
+    const withMedia = players.filter((p) => p?.current_media?.uri);
+    if (!withMedia.length) return null;
+    const pick =
+      withMedia.find((p) => p.name === preferred && (p.state === "playing" || p.state === "paused")) ??
+      withMedia.find((p) => p.state === "playing") ??
+      withMedia.find((p) => p.state === "paused") ??
+      withMedia[0];
+    const cm = pick.current_media;
+    if (cm.media_type && cm.media_type !== "track") return null;
+    return enrichWithCluster({
+      uri: String(cm.uri),
+      name: String(cm.title ?? "Unknown"),
+      album: String(cm.album ?? ""),
+      artists: typeof cm.artist === "string" && cm.artist ? [cm.artist] : [],
+      speaker: String(pick.name ?? pick.player_id),
+    });
+  });
+}
+
+export async function getCurrentTrack(): Promise<CurrentTrack | null> {
+  try {
+    return await getCurrentTrackFromMA();
+  } catch (e) {
+    logQueueError("MA now-playing failed, falling back to Home Assistant: " + String(e));
+    return getCurrentTrackFromHA();
+  }
+}
+
+async function getCurrentTrackFromHA(): Promise<CurrentTrack | null> {
   try {
     const raw = JSON.stringify({
       entity_id: "media_player.living_room"
