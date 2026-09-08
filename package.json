@@ -10,8 +10,7 @@
     "debug:validate-uris": "bun src/debug-validate-uris.ts",
     "debug:analyze-shift": "bun src/debug-analyze-id-shift.ts",
     "task": "bun src/task-runner.ts",
-    "dev": "bun --bun --watch ./src/index-library.ts",
-    "server": "bun --bun ./src/server.ts"
+    "dev": "bun --bun --watch ./src/index-library.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
-import { db } from "./db";
-import { trackTable } from "./schema";
+import { db } from "../web/src/lib/server/db";
+import { trackTable } from "../web/src/lib/server/schema";
 
 const BATCH_SIZE = 500;
 const GENERATE_SQL = process.argv.includes("--generate-sql");

@@ -1,0 +1,24 @@
+{
+	"SvelteKit Form Action": {
+		"prefix": "server",
+		"body": [
+			"import { validateAuth, validateForm } from '$lib/server/util';",
+			"import { z } from 'zod';",
+			"import type { Actions, PageServerLoad } from './\\$types';",
+			"",
+			"export const load: PageServerLoad = async (event) => {",
+			"\tconst locals = validateAuth(event);",
+			"",
+			"\treturn {};",
+			"};",
+			"",
+			"export const actions: Actions = {",
+			"//\tdefault: validateForm(z.object({}), async (event, form) => {",
+			"//\t\tconst locals = validateAuth(event);",
+			"//\t})",
+			"};",
+			"$0"
+		],
+		"description": "SvelteKit form action snippet"
+	}
+}
