@@ -1,81 +1,95 @@
-import { sql, inArray } from "drizzle-orm";
+import { sql, inArray, and, eq } from "drizzle-orm";
 import { db } from "./db";
-import { recommend } from "./recomendation-engine";
-import { trackTable } from "./schema";
+import { recommend, validateTrackUris } from "./recomendation-engine";
+import { likedSongsTable, trackTable } from "./schema";
 import {
   skipTrack,
   likeTrack
 } from "./similar-track";
 import { getCurrentTrack, playSongs } from "./webhook";
+import { syncFavorites } from "./sync-favourites";
+import { indexLibrary } from "./index-library";
 import { startWLEDVisualization } from "./wled-visualizer";
+import { addArtistByNameToLidarr, ARTISTS_TO_ADD, importArtistsToLidarr } from "./add-artists";
 import { env } from "bun";
+import {
+  createSchedule,
+  deleteSchedule,
+  ensureVibeSeeded,
+  getActiveSchedule,
+  getVibeClusterIds,
+  listSchedules,
+  setVibeClusterIds,
+  updateSchedule,
+} from "./vibe-store";
 
 let tracks: Array<{ uri: string; name: string; album: string; artists: string[] }> = [];
 
+await ensureVibeSeeded();
+
 // Cluster Names based on our analysis
-const CLUSTER_NAMES: Record<number, string> =
-{
+const CLUSTER_NAMES: Record<number, string> = {
   [-1]: "Wildcards",
-  0: "German Hip-Hop & Rap",
-  1: "Indie Rock Anthems",
-  2: "Modern R&B & Pop",
-  3: "Emotional Indie Ballads",
-  4: "Pop Rap Hits",
-  5: "Modern Singer-Songwriter",
-  6: "Pop Rock & Synth",
-  7: "Britpop & Rock Classics",
-  8: "Eclectic Pop & Rap",
-  9: "Dance Pop Anthems",
-  10: "Acoustic Pop & Soul",
-  11: "Classic Rock & Pop",
-  12: "Upbeat Modern Pop",
-  13: "Pop & Rock Variety",
-  14: "Piano Rock Classics",
-  15: "Energy Rap & Rock",
-  16: "Indie Folk & Acoustic",
-  17: "German Pop & Classics",
-  18: "Soulful Ballads",
-  19: "Soul & Motown Classics",
-  20: "Atmospheric Indie Folk",
-  21: "Pop & Indie Mix",
-  22: "Modern Pop & Rap Flow",
-  23: "Dance & Pop Rock",
-  24: "Funk & Disco Grooves",
-  25: "Hip-Hop Legends",
-  26: "Soft Pop Ballads",
-  27: "Punk & Rock Live",
-  28: "Rap & Hip-Hop Mix",
-  29: "Classic Pop & Rock",
-  30: "Indie & Alt Rock",
-  31: "Soft Rock & Pop",
-  32: "Electronic & Indie Pop",
-  33: "Dance & Electronic Hits",
-  34: "Pop & Dance Mix",
-  35: "Country & Pop Rock",
-  36: "Alt Rock & Punk",
-  37: "Pop Rock Ballads",
-  38: "Folk & Pop Rock",
-  39: "Pop Punk & Rock",
-  40: "Pop, Dance & Rock",
-  41: "Dream Pop & Indie",
-  42: "Rap Skits & Interludes",
-  43: "Pop & R&B Hits",
-  44: "Modern Rap & Pop",
-  45: "EDM & House Anthems",
-  46: "Electronic Experiments",
-  47: "Emotional Indie Pop",
-  48: "Hip-Hop & Rap Hits",
-  49: "Pop & Rock Variety II",
-  50: "Atmospheric Indie",
-  51: "Rock Legends",
-  52: "Pop, R&B & Funk",
-  53: "Alt & Indie Pop",
-  54: "The Beatles Classics",
-  55: "Piano Ballads & Rock",
-  56: "Experimental & Ambient",
-  57: "Classic Rock & Pop II",
-  58: "Oasis Anthems",
-  59: "Global Pop & Rap",
+  0: "Skits, Interludes & Hip-Hop Bits",
+  1: "Emotive Pop & Classic Anthems",
+  2: "Smooth Grooves & Global Pop",
+  3: "Cinematic & Atmospheric Pop",
+  4: "German Pop & Boy Band Classics",
+  5: "Eclectic Rock & Instrumental Textures",
+  6: "Sophisticated Pop & Easy Listening",
+  7: "Energetic Rock & Post-Grunge",
+  8: "Classic Legends & Introspective Folk",
+  9: "Modern R&B & Contemporary Pop",
+  10: "Emotional Ballads & Indie Folk",
+  11: "Moody Alternative & R&B",
+  12: "2000s Radio Rock & Pop-Rap",
+  13: "Britpop, Punk & Energetic Alt",
+  14: "High-Energy Dance & Club Pop",
+  15: "Uplifting Pop-Rock & Catchy Hits",
+  16: "Atmospheric Hip-Hop & Ethereal Pop",
+  17: "Vintage Rock & Psychedelic 60s/70s",
+  18: "Mainstream Pop & Big Radio Hits",
+  19: "80s Pop-Rock & Melodic Legends",
+  20: "Modern Pop & Chill Trap-Pop",
+  21: "Quirky Pop & Modern Synth-Pop",
+  22: "Funky Hip-Hop & Rap-Pop",
+  23: "Melodic R&B & Contemporary Breezy Pop",
+  24: "Hard-Hitting Hip-Hop & Urban Dance",
+  25: "Vintage Pop & Clean Melodic Hits",
+  26: "Intense Rock-Rap & Dramatic Vibe",
+  27: "Whimsical Indie-Pop & Soft Acoustic",
+  28: "Modern Eclectic Pop & Smooth Vocals",
+  29: "Aggressive Rock & Punk Energy",
+  30: "Sophisticated Electronic & New Wave",
+  31: "Stripped-Back Vocals & Piano Ballads",
+  32: "High-Octane Rock & Stadium Anthems",
+  33: "Graceful & Orchestral Pop",
+  34: "Deep House & Groovy Club Beats",
+  35: "Gentle Indie-Folk & Soft Vintage Rock",
+  36: "Moody Dream Pop & Atmospheric Indie",
+  37: "Artistic & Cinematic Pop-R&B",
+  38: "Upbeat Pop-Rock & Classic Hooks",
+  39: "Raw Acoustic & Bluesy Folk",
+  40: "Dark R&B & Ethereal Soul",
+  41: "Symphonic Pop & Dramatic Ballads",
+  42: "Hard EDM & Aggressive Techno-Pop",
+  43: "Indie Rock & Modern Driving Pop",
+  44: "Fast-Flow Hip-Hop & Trap Energy",
+  45: "Modern Pop-R&B Fusion",
+  46: "Singer-Songwriter & Modern Emotional Pop",
+  47: "Progressive & Complex Rock",
+  48: "Polished 90s/00s Melodic Rock",
+  49: "Theatrical Rock & Arena Anthems",
+  50: "Charismatic Pop & Timeless Grooves",
+  51: "Party EDM & Hands-Up Dance",
+  52: "Orchestral & Grandiose Arrangements",
+  53: "Acoustic Rock & Vulnerable Pop",
+  54: "Psychedelic Pop & Experimental Indie",
+  55: "Art-Pop & Funky New Wave",
+  56: "Radio-Friendly Pop-Rock Hits",
+  57: "Urban Classics & Funky Rap",
+  58: "Emotive Modern Pop & Cinematic Beats",
+  59: "Garage Rock & Upbeat Indie",
 };
 
 recommend({
@@ -89,8 +103,8 @@ recommend({
   alphaNow: 0.7, // bias toward seeds over liked profile
   // lambda: 0.8, // more relevance, less aggressive diversity
   maxPerArtist: 1, // avoid clustering by same artist
-}).then((result) => {
-  tracks = result;
+}).then(async (result) => {
+  tracks = await validateTrackUris(result);
   console.log("Tracks ready for playback:", tracks.length);
 }).catch((error) => {
   console.error("Error generating tracks:", error);
@@ -111,8 +125,8 @@ Bun.serve({
           alphaNow: 0.7,
           maxPerArtist: 3,
         });
-        tracks = recommendations;
-        return Response.json({ success: true, tracks: recommendations });
+        tracks = await validateTrackUris(recommendations);
+        return Response.json({ success: true, tracks });
       },
     },
 
@@ -223,8 +237,9 @@ Bun.serve({
         });
       },
       POST: async (req) => {
-        // play cached tracks
-        const ids = tracks.map((t) => t.uri);
+        // validate and play cached tracks
+        const validated = await validateTrackUris(tracks);
+        const ids = validated.map((t) => t.uri);
         await playSongs(ids);
 
         // prepare next tracks
@@ -238,39 +253,73 @@ Bun.serve({
           annPool: 800,
           alphaNow: 0.7, // bias toward seeds over liked profile
           maxPerArtist: 1, // avoid clustering by same artist
-        }).then((result) => {
-          tracks = result;
+        }).then(async (result) => {
+          tracks = await validateTrackUris(result);
           console.log("Tracks ready for playback:", tracks.length);
         }).catch((error) => {
           console.error("Error generating tracks:", error);
         });
 
-        return Response.json({ success: true, tracks });
+        return Response.json({ success: true, tracks: validated });
+      },
+    },
+
+    "/api/index-library": {
+      POST: async () => {
+        try {
+          const count = await indexLibrary();
+          return Response.json({ success: true, count });
+        } catch (error) {
+          console.error("Index library failed:", error);
+          return Response.json({ success: false, error: String(error) }, { status: 500 });
+        }
+      },
+    },
+
+    "/api/sync-favorites": {
+      POST: async () => {
+        try {
+          const count = await syncFavorites();
+          return Response.json({ success: true, count });
+        } catch (error) {
+          console.error("Sync favorites failed:", error);
+          return Response.json({ success: false, error: String(error) }, { status: 500 });
+        }
       },
     },
 
     "/api/play-vibe": {
+      GET: async () => {
+        const [clusterIds, schedules, active] = await Promise.all([
+          getVibeClusterIds(),
+          listSchedules(),
+          getActiveSchedule(),
+        ]);
+        return Response.json({ success: true, clusterIds, names: CLUSTER_NAMES, schedules, activeSchedule: active });
+      },
       POST: async (req) => {
         try {
-          const hour = new Date().getHours();
-          let clusterIds: number[] = [2]; // Always include 2 as it's the main one (Vocal Heavy, Slow Songs)
-
-          // Vibe matching based on time of day
-          if (hour >= 6 && hour < 10) {
-            clusterIds.push(10, 16, 26, 38, 54); // Morning: Acoustic Pop, Indie Folk, Soft Pop, Folk & Pop, Beatles
-            // } else if (hour >= 10 && hour < 18) {
-            //   clusterIds.push(1, 10, 16, 18, 22, 58, 49); // Day: Pop, R&B, Americana
-          } else if (hour >= 18 && hour < 22) {
-            clusterIds.push(2, 20, 18, 47); // Evening: Modern R&B, Atmospheric, Soulful, Emotional Indie
+          const body = await req.json().catch(() => ({})) as { clusterIds?: number[]; useSchedule?: boolean; saveOnly?: boolean };
+          let clusterIds: number[];
+          let activeSchedule = null;
+          if (body.useSchedule) {
+            activeSchedule = await getActiveSchedule();
+            clusterIds = activeSchedule?.clusterIds?.length ? [...activeSchedule.clusterIds] : await getVibeClusterIds();
+          } else if (Array.isArray(body.clusterIds) && body.clusterIds.length > 0) {
+            clusterIds = await setVibeClusterIds(body.clusterIds);
           } else {
-            clusterIds.push(41, 46, 50, 56); // Night: Dream Pop, Electronic Exp, Atmospheric Indie, Ambient
+            clusterIds = await getVibeClusterIds();
+          }
+          if (body.saveOnly) {
+            return Response.json({ success: true, clusterIds, saved: true });
           }
 
           // Select 5 random tracks from these clusters as seeds
           const seeds = await db
             .select({ uri: trackTable.uri })
             .from(trackTable)
-            .where(inArray(trackTable.clusterId, clusterIds))
+            .innerJoin(likedSongsTable, eq(trackTable.uri, likedSongsTable.uri))
+            .where(and(inArray(trackTable.clusterId, clusterIds), eq(trackTable.skip, false)))
             .orderBy(sql`random()`)
             .limit(5);
 
@@ -284,15 +333,103 @@ Bun.serve({
           });
 
           if (recommendations.length > 0) {
-            tracks = recommendations;
-            await playSongs(recommendations.map(t => t.uri));
-            return Response.json({ success: true, tracks: recommendations });
+            tracks = await validateTrackUris(recommendations);
+            await playSongs(tracks.map(t => t.uri));
+            return Response.json({ success: true, tracks });
           } else {
             return Response.json({ success: false, error: "No recommendations generated" }, { status: 500 });
           }
         } catch (error) {
           console.error("Vibe playback failed:", error);
           return Response.json({ success: false, error: String(error) }, { status: 500 });
+        }
+      },
+    },
+
+    "/api/vibe-schedules": {
+      GET: async () => {
+        const [schedules, active] = await Promise.all([listSchedules(), getActiveSchedule()]);
+        return Response.json({ success: true, schedules, activeSchedule: active });
+      },
+      POST: async (req) => {
+        try {
+          const body = await req.json() as { name?: string; startHour?: number; endHour?: number; clusterIds?: number[]; enabled?: boolean };
+          const row = await createSchedule({
+            name: body.name ?? "",
+            startHour: Number(body.startHour),
+            endHour: Number(body.endHour),
+            clusterIds: body.clusterIds ?? [],
+            enabled: body.enabled,
+          });
+          return Response.json({ success: true, schedule: row });
+        } catch (error) {
+          return Response.json({ success: false, error: String(error) }, { status: 400 });
+        }
+      },
+      PUT: async (req) => {
+        try {
+          const body = await req.json() as { id?: number; name?: string; startHour?: number; endHour?: number; clusterIds?: number[]; enabled?: boolean };
+          if (!Number.isInteger(body.id)) return Response.json({ success: false, error: "id is required" }, { status: 400 });
+          const row = await updateSchedule(body.id as number, {
+            name: body.name,
+            startHour: body.startHour !== undefined ? Number(body.startHour) : undefined,
+            endHour: body.endHour !== undefined ? Number(body.endHour) : undefined,
+            clusterIds: body.clusterIds,
+            enabled: body.enabled,
+          });
+          if (!row) return Response.json({ success: false, error: "Not found" }, { status: 404 });
+          return Response.json({ success: true, schedule: row });
+        } catch (error) {
+          return Response.json({ success: false, error: String(error) }, { status: 400 });
+        }
+      },
+      DELETE: async (req) => {
+        const id = Number(new URL(req.url).searchParams.get("id"));
+        if (!Number.isInteger(id)) return Response.json({ success: false, error: "id is required" }, { status: 400 });
+        await deleteSchedule(id);
+        return Response.json({ success: true });
+      },
+    },
+
+    "/api/lidarr/add-artist": {
+      POST: async (req) => {
+        try {
+          const body = await req.json() as { name?: string };
+          const artistName = body.name?.trim();
+
+          if (!artistName) {
+            return Response.json(
+              { success: false, message: "Artist name is required" },
+              { status: 400 },
+            );
+          }
+
+          const result = await addArtistByNameToLidarr(artistName);
+          return Response.json(result, { status: result.success ? 200 : 500 });
+        } catch (error) {
+          return Response.json(
+            { success: false, message: "Invalid request body", error: String(error) },
+            { status: 400 },
+          );
+        }
+      },
+    },
+
+    "/api/lidarr/import-default-artists": {
+      POST: async () => {
+        try {
+          const result = await importArtistsToLidarr(ARTISTS_TO_ADD);
+          return Response.json({
+            success: true,
+            imported: result.success,
+            failed: result.failed,
+            results: result.results,
+          });
+        } catch (error) {
+          return Response.json(
+            { success: false, message: "Failed to import artists", error: String(error) },
+            { status: 500 },
+          );
         }
       },
     },
@@ -382,6 +519,40 @@ Bun.serve({
 
   <!-- Cluster Section -->
   <div class="section">
+    <h2>Vibe Mix — Picked Clusters</h2>
+    <p><small>Persists to DB on Save/Play. Survives restarts.</small></p>
+    <div id="active-slot" style="margin-bottom: 10px; font-size: 13px; color: #28a745;"></div>
+    <div style="margin-bottom: 10px;">
+      <button onclick="setAllVibe(true)" style="background: #6c757d; padding: 6px 12px;">Select all</button>
+      <button onclick="setAllVibe(false)" style="background: #6c757d; padding: 6px 12px;">Clear</button>
+      <button onclick="loadActiveSlot()" style="background: #6c757d; padding: 6px 12px;">Load current slot</button>
+      <span id="vibe-count" style="margin-left: 10px; color: #666; font-size: 13px;"></span>
+    </div>
+    <div id="vibe-picker" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; max-height: 300px; overflow-y: auto; border: 1px solid #eee; padding: 10px; border-radius: 4px;"></div>
+    <div style="margin-top: 12px;">
+      <button onclick="saveVibeSelection()" style="background: #6c757d;">Save picks</button>
+      <button onclick="playVibeWithSelection()" style="background: #28a745;">Play Vibe with selection</button>
+      <button onclick="playScheduledVibe()" style="background: #17a2b8;">Play scheduled slot</button>
+    </div>
+    <div id="vibe-save-status" style="margin-top: 8px; font-size: 13px; color: #666;"></div>
+  </div>
+
+  <div class="section">
+    <h2>Vibe Schedule</h2>
+    <p><small>Hour ranges (0-24, wraps overnight e.g. 22-6). The active slot is highlighted in the picker above.</small></p>
+    <div id="schedule-list">Loading schedules...</div>
+    <h3 style="margin-top: 16px;">Add slot</h3>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+      <input type="text" id="schedName" placeholder="Name (e.g. Morning)" style="width: 140px;" />
+      <label style="font-size: 13px;">From <input type="number" id="schedStart" min="0" max="24" value="6" style="width: 60px;" /></label>
+      <label style="font-size: 13px;">To <input type="number" id="schedEnd" min="0" max="24" value="10" style="width: 60px;" /></label>
+      <input type="text" id="schedClusters" placeholder="clusters e.g. 2,10,16" style="width: 180px;" />
+      <button onclick="createSchedule()" style="padding: 6px 12px;">Add</button>
+    </div>
+    <p><small>Tip: clusters = current picker selection if left blank.</small></p>
+  </div>
+
+  <div class="section">
     <h2>Cluster Explorer</h2>
     <p><small>Click a cluster to generate a 30-song playlist based on that vibe.</small></p>
     <div id="cluster-grid" class="cluster-grid">Loading clusters...</div>
@@ -397,6 +568,14 @@ Bun.serve({
   <div id="recommendation-results" class="section" style="display:none">
     <h2 id="results-title">Results</h2>
     <div id="recommendations"></div>
+  </div>
+
+  <div class="section">
+    <h2>Lidarr Artist Tools</h2>
+    <p><small>Add one artist by name, or import the default curated list (${ARTISTS_TO_ADD.length} artists).</small></p>
+    <input type="text" id="artistName" placeholder="Artist name (e.g. Sampha)" />
+    <button onclick="addArtistToLidarrFromDebug()" style="background: #6c757d;">Add Artist</button>
+    <div id="lidarr-results" style="margin-top: 12px; color: #444;"></div>
   </div>
 
   <!-- Queue Section -->
@@ -415,7 +594,7 @@ Bun.serve({
 
   <div class="section">
     <h2>Actions</h2>
-    <button onclick="fetch('/api/play-vibe', {method: 'POST'}).then(() => location.reload())" style="background: #28a745;">Play Vibe</button>
+    <button onclick="playVibeWithSelection()" style="background: #28a745;">Play Vibe</button>
     <button onclick="fetch('/music/play', {method: 'POST'}).then(() => location.reload())">Play Queue</button>
     <button onclick="fetch('/track/skip', {method: 'POST'}).then(() => location.reload())" class="danger">Skip Current</button>
   </div>
@@ -423,6 +602,178 @@ Bun.serve({
   <script>
     const CLUSTER_NAMES = ${JSON.stringify(CLUSTER_NAMES)};
     const CURRENT_FAMILY = ${JSON.stringify(currentFamily)};
+
+    let vibeSelection = new Set();
+    let vibeSchedules = [];
+    let activeSchedule = null;
+
+    function updateVibeCount() {
+      const el = document.getElementById('vibe-count');
+      if (el) el.innerText = vibeSelection.size + ' picked';
+    }
+
+    function clusterLabel(id) {
+      return '#' + id + ' ' + (CLUSTER_NAMES[id] || 'Cluster ' + id);
+    }
+
+    function renderVibePicker(ids) {
+      vibeSelection = new Set(ids);
+      const picker = document.getElementById('vibe-picker');
+      picker.innerHTML = Object.keys(CLUSTER_NAMES).map(k => {
+        const id = Number(k);
+        const checked = vibeSelection.has(id) ? 'checked' : '';
+        return '<label style="font-size: 13px; display: flex; gap: 6px; align-items: center; background: #f8f9fa; padding: 4px 8px; border-radius: 4px; cursor: pointer;">' +
+          '<input type="checkbox" data-vibe-id="' + id + '" ' + checked + ' onchange="toggleVibe(' + id + ', this.checked)" />' +
+          '<span><b>#' + id + '</b> ' + CLUSTER_NAMES[k] + '</span></label>';
+      }).join('');
+      updateVibeCount();
+    }
+
+    function toggleVibe(id, on) {
+      if (on) vibeSelection.add(id);
+      else vibeSelection.delete(id);
+      updateVibeCount();
+    }
+
+    function setAllVibe(on) {
+      vibeSelection = on ? new Set(Object.keys(CLUSTER_NAMES).map(Number)) : new Set();
+      document.querySelectorAll('[data-vibe-id]').forEach(cb => { cb.checked = on; });
+      updateVibeCount();
+    }
+
+    function getVibeSelection() {
+      return Array.from(vibeSelection).sort((a, b) => a - b);
+    }
+
+    async function playVibeWithSelection() {
+      const clusterIds = getVibeSelection();
+      if (!clusterIds.length) { alert('Pick at least one cluster'); return; }
+      await fetch('/api/play-vibe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clusterIds }),
+      });
+      location.reload();
+    }
+
+    async function saveVibeSelection() {
+      const clusterIds = getVibeSelection();
+      if (!clusterIds.length) { alert('Pick at least one cluster'); return; }
+      const status = document.getElementById('vibe-save-status');
+      status.innerText = 'Saving...';
+      const res = await fetch('/api/play-vibe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clusterIds, saveOnly: true }),
+      });
+      const data = await res.json();
+      status.innerText = data.success ? 'Saved ' + data.clusterIds.length + ' picks to DB.' : 'Save failed: ' + (data.error || 'unknown');
+    }
+
+    async function playScheduledVibe() {
+      await fetch('/api/play-vibe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useSchedule: true }),
+      });
+      location.reload();
+    }
+
+    function loadActiveSlot() {
+      if (!activeSchedule) { alert('No schedule slot matches the current hour'); return; }
+      renderVibePicker(activeSchedule.clusterIds);
+    }
+
+    function renderActiveSlot() {
+      const el = document.getElementById('active-slot');
+      if (!el) return;
+      el.innerText = activeSchedule
+        ? 'Current slot: ' + activeSchedule.name + ' (' + activeSchedule.startHour + '-' + activeSchedule.endHour + 'h): ' + activeSchedule.clusterIds.map(clusterLabel).join(', ')
+        : 'No schedule slot matches the current hour — manual picks apply.';
+    }
+
+    function renderSchedules() {
+      const el = document.getElementById('schedule-list');
+      if (!vibeSchedules.length) { el.innerHTML = '<p style="color:#999">No slots yet.</p>'; return; }
+      el.innerHTML = '<table style="width:100%; font-size: 13px; border-collapse: collapse;">' +
+        '<tr style="text-align:left; color:#666;"><th>Name</th><th>Hours</th><th>Clusters</th><th>On</th><th></th></tr>' +
+        vibeSchedules.map(s => {
+          const isActive = activeSchedule && s.id === activeSchedule.id;
+          return '<tr style="border-top: 1px solid #eee; ' + (isActive ? 'background:#f0fff4;' : '') + '">' +
+            '<td><b>' + s.name + '</b>' + (isActive ? ' <span style="color:#28a745; font-size:11px;">● now</span>' : '') + '</td>' +
+            '<td>' + s.startHour + '-' + s.endHour + 'h</td>' +
+            '<td>' + s.clusterIds.map(clusterLabel).join(', ') + '</td>' +
+            '<td><input type="checkbox" ' + (s.enabled !== false ? 'checked' : '') + ' onchange="toggleSchedule(' + s.id + ', this.checked)" /></td>' +
+            '<td style="white-space: nowrap;">' +
+              '<button onclick="applySchedule(' + s.id + ')" style="padding: 4px 10px; background:#6c757d;">Load</button> ' +
+              '<button onclick="removeSchedule(' + s.id + ')" style="padding: 4px 10px;" class="danger">Del</button>' +
+            '</td></tr>';
+        }).join('') + '</table>';
+    }
+
+    async function refreshSchedules() {
+      const res = await fetch('/api/vibe-schedules');
+      const data = await res.json();
+      if (data.success) {
+        vibeSchedules = data.schedules;
+        activeSchedule = data.activeSchedule;
+        renderSchedules();
+        renderActiveSlot();
+      }
+    }
+
+    async function createSchedule() {
+      const name = document.getElementById('schedName').value;
+      const startHour = parseInt(document.getElementById('schedStart').value);
+      const endHour = parseInt(document.getElementById('schedEnd').value);
+      const raw = document.getElementById('schedClusters').value.trim();
+      const clusterIds = raw ? raw.split(',').map(x => parseInt(x.trim())).filter(x => Number.isInteger(x)) : getVibeSelection();
+      const res = await fetch('/api/vibe-schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, startHour, endHour, clusterIds }),
+      });
+      const data = await res.json();
+      if (!data.success) { alert('Failed: ' + data.error); return; }
+      document.getElementById('schedName').value = '';
+      document.getElementById('schedClusters').value = '';
+      await refreshSchedules();
+    }
+
+    async function toggleSchedule(id, enabled) {
+      await fetch('/api/vibe-schedules', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, enabled }),
+      });
+      await refreshSchedules();
+    }
+
+    function applySchedule(id) {
+      const s = vibeSchedules.find(x => x.id === id);
+      if (s) renderVibePicker(s.clusterIds);
+    }
+
+    async function removeSchedule(id) {
+      if (!confirm('Delete this slot?')) return;
+      await fetch('/api/vibe-schedules?id=' + id, { method: 'DELETE' });
+      await refreshSchedules();
+    }
+
+    // Load saved vibe selection, fallback to all CLUSTER_NAMES keys checked per server defaults
+    fetch('/api/play-vibe')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.clusterIds)) renderVibePicker(data.clusterIds);
+        else renderVibePicker([]);
+        if (data.success) {
+          vibeSchedules = data.schedules || [];
+          activeSchedule = data.activeSchedule || null;
+          renderSchedules();
+          renderActiveSlot();
+        }
+      })
+      .catch(() => renderVibePicker([]));
 
     // Load Clusters on Page Load
     fetch('/api/clusters')
@@ -503,6 +854,36 @@ Bun.serve({
         recDiv.innerHTML = '<p style="color:red">Error: ' + err.message + '</p>';
       }
     }
+
+    async function addArtistToLidarrFromDebug() {
+      const artistInput = document.getElementById('artistName');
+      const resultsDiv = document.getElementById('lidarr-results');
+      const artistName = artistInput?.value?.trim();
+
+      if (!artistName) {
+        resultsDiv.innerHTML = '<p style="color:#dc3545">Please enter an artist name.</p>';
+        return;
+      }
+
+      resultsDiv.innerHTML = '<p>Adding artist to Lidarr...</p>';
+
+      try {
+        const response = await fetch('/api/lidarr/add-artist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: artistName }),
+        });
+        const data = await response.json();
+
+        if (data.success) {
+          resultsDiv.innerHTML = '<p style="color:#28a745">' + data.message + '</p>';
+        } else {
+          resultsDiv.innerHTML = '<p style="color:#dc3545">' + (data.message || 'Failed to add artist') + '</p>';
+        }
+      } catch (err) {
+        resultsDiv.innerHTML = '<p style="color:#dc3545">Error: ' + err.message + '</p>';
+      }
+    }
   </script>
 </body>
 </html>`, { headers: { 'Content-Type': 'text/html' } });
@@ -518,12 +899,10 @@ console.log("Server running on http://localhost:3000/debug");
 // Check environment variable
 const wledIp = env.WLED_IP;
 if (!wledIp) {
-  console.error("WLED_IP environment variable is not set!");
-  console.log("Set it with: export WLED_IP=192.168.1.100");
-  process.exit(1);
+  console.warn("WLED_IP environment variable is not set; WLED visualization disabled.");
+} else {
+  console.log(`Using WLED IP: ${wledIp}`);
+
+  // Wait a bit then start continuous visualization
+  await startWLEDVisualization(wledIp);
 }
-
-console.log(`Using WLED IP: ${wledIp}`);
-
-// Wait a bit then start continuous visualization
-await startWLEDVisualization(wledIp);

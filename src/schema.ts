@@ -1,4 +1,4 @@
-import { index, vector, pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { index, vector, pgTable, text, timestamp, boolean, integer, serial } from "drizzle-orm/pg-core";
 
 export const trackTable = pgTable(
   "track",
@@ -23,6 +23,7 @@ export const trackTable = pgTable(
 
 export const skippedSongsTable = pgTable("skipped_songs", {
   uri: text("uri").primaryKey(),
+  source: text("source").default("default"),
 });
 
 export const likedSongsTable = pgTable("liked_songs", {
@@ -34,4 +35,24 @@ export const likedSongsTable = pgTable("liked_songs", {
 
 export const skippedArtistsTable = pgTable("skipped_artists", {
   name: text("name").primaryKey(),
+});
+
+// Singleton key-value store for persisted UI state (e.g. vibe picks)
+export const vibeStateTable = pgTable("vibe_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(), // JSON-encoded
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
+});
+
+// Hour-range schedules mapping time-of-day -> cluster picks.
+// startHour inclusive, endHour exclusive, 0-24. Wraps overnight when startHour > endHour.
+export const vibeScheduleTable = pgTable("vibe_schedule", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  startHour: integer("start_hour").notNull(),
+  endHour: integer("end_hour").notNull(),
+  clusterIds: integer("cluster_ids").array().notNull(),
+  enabled: boolean("enabled").default(true),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+  updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
