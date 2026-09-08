@@ -8,8 +8,17 @@
 
 	let vibeSelection = $state(new Set<number>(data.vibeClusterIds));
 	let saveStatus = $state('');
+	let filter = $state('');
 
 	const clusterIds = Object.keys(CLUSTER_NAMES).map(Number).sort((a, b) => a - b);
+
+	const visibleIds = $derived(
+		filter.trim()
+			? clusterIds.filter((id) =>
+					`${id} ${CLUSTER_NAMES[id] ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase())
+				)
+			: clusterIds
+	);
 
 	function toggle(id: number, on: boolean) {
 		const next = new Set(vibeSelection);
@@ -78,11 +87,16 @@
 	<button class="rounded-lg bg-gray-500 px-3 py-1.5 text-sm text-white hover:bg-gray-600" onclick={() => setAll(true)}>Select all</button>
 	<button class="rounded-lg bg-gray-500 px-3 py-1.5 text-sm text-white hover:bg-gray-600" onclick={() => setAll(false)}>Clear</button>
 	<button class="rounded-lg bg-gray-500 px-3 py-1.5 text-sm text-white hover:bg-gray-600" onclick={loadSlot}>Load current slot</button>
+	<input
+		class="min-w-48 flex-1 rounded-lg border border-gray-300 px-3 py-1.5 text-sm sm:max-w-64"
+		placeholder="Filter vibes… (e.g. rock, 41)"
+		bind:value={filter}
+	/>
 	<span class="ml-1 text-sm text-gray-500">{vibeSelection.size} picked</span>
 </div>
 
 <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-	{#each clusterIds as id (id)}
+	{#each visibleIds as id (id)}
 		<label
 			class="flex cursor-pointer items-center gap-3 rounded-2xl border bg-white px-4 py-3 shadow-sm transition-colors {vibeSelection.has(id)
 				? 'border-green-400 bg-green-50'
@@ -94,7 +108,7 @@
 	{/each}
 </div>
 
-<div class="mt-6 flex flex-wrap items-center gap-2">
+<div class="sticky bottom-4 mt-6 flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white/95 p-3 shadow-lg backdrop-blur">
 	<button class="rounded-xl bg-gray-600 px-5 py-2.5 font-semibold text-white hover:bg-gray-700" onclick={save}>Save picks</button>
 	<button class="rounded-xl bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700" onclick={play}>Play vibe with selection</button>
 	<button class="rounded-xl bg-cyan-600 px-5 py-2.5 font-semibold text-white hover:bg-cyan-700" onclick={playScheduled}>Play scheduled slot</button>
