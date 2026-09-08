@@ -4,7 +4,6 @@ import { likedSongsTable, trackTable } from '$lib/server/schema';
 import { CLUSTER_NAMES } from '$lib/clusters';
 import { recommend, validateTrackUris } from '$lib/server/recomendation-engine';
 import { getActiveSchedule, getVibeClusterIds, listSchedules, setVibeClusterIds } from '$lib/server/vibe-store';
-import { setQueue } from '$lib/server/queue';
 import { playSongs } from '$lib/server/webhook';
 import type { RequestHandler } from './$types';
 
@@ -66,7 +65,6 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (recommendations.length > 0) {
 			const tracks = await validateTrackUris(recommendations);
-			setQueue(tracks);
 			await playSongs(tracks.map((t) => t.uri));
 			return Response.json({ success: true, tracks });
 		} else {
