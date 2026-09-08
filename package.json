@@ -6,7 +6,9 @@
   "scripts": {
     "db:push": "drizzle-kit push",
     "db:generate": "drizzle-kit generate",
-    "dev": "bun --bun --watch ./src/index-library.ts"
+    "db:consolidate-plex": "bun src/consolidate-plex.ts",
+    "dev": "bun --bun --watch ./src/index-library.ts",
+    "server": "bun --bun ./src/server.ts"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -17,6 +19,7 @@
   "dependencies": {
     "drizzle-kit": "^0.31.1",
     "drizzle-orm": "^0.43.1",
+    "ml-kmeans": "^7.0.0",
     "postgres": "^3.4.5"
   }
 }
