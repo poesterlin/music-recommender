@@ -4,6 +4,31 @@ import { authHeaders } from "./auth";
 import { db } from "./db";
 import { trackTable } from "./schema";
 
+const QUEUE_ERROR_LOG_INTERVAL_MS = 60_000;
+let lastQueueErrorLogAt = 0;
+let suppressedQueueErrorCount = 0;
+
+function logQueueError(message: string, details?: string) {
+  const now = Date.now();
+  const shouldLogNow = now - lastQueueErrorLogAt >= QUEUE_ERROR_LOG_INTERVAL_MS;
+
+  if (!shouldLogNow) {
+    suppressedQueueErrorCount += 1;
+    return;
+  }
+
+  if (suppressedQueueErrorCount > 0) {
+    console.warn(`Suppressed ${suppressedQueueErrorCount} repeated queue errors`);
+    suppressedQueueErrorCount = 0;
+  }
+
+  console.error(message);
+  if (details) {
+    console.error(details);
+  }
+  lastQueueErrorLogAt = now;
+}
+
 export async function playSongs(ids: string[]) {
   if (!env.WEBHOOK_URL) {
     console.error("WEBHOOK_URL is not set");
@@ -42,14 +67,25 @@ export async function getCurrentTrack() {
       }
     );
 
+    if (!res.ok) {
+          const errorText = await res.text();
+          logQueueError(
+            `Failed to fetch queue: ${res.status}`,
+            errorText.includes("Server got itself") ? undefined : errorText,
+          );
+      return null;
+    }
+
     const text = await res.text();
     let data: QueueApiResponse;
     try {
       data = JSON.parse(text) as QueueApiResponse;
     } catch (error) {
-      console.error("Failed to parse JSON response:", error);
-      console.error("Response text:", text);
-      throw error;
+      logQueueError(
+        "Failed to parse JSON response: " + String(error),
+        "Response text: " + text,
+      );
+      return null;
     }
 
     const serviceResponse = data.service_response;
@@ -89,7 +125,7 @@ export async function getCurrentTrack() {
     }
     return null;
   } catch (e) {
-    console.error("Error fetching current track:", e);
+    logQueueError("Error fetching current track: " + String(e));
     return null;
   }
 }

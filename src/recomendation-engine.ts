@@ -16,6 +16,31 @@ import {
   trackTable,
 } from "./schema";
 
+// ---------- Christmas Filtering Helpers ----------
+
+const christmasKeywords = [
+  "christmas", "xmas", "santa", "noel", "mistletoe", "jingle", "sleigh", 
+  "silent night", "deck the halls", "feliz navidad", "holiday jam", 
+  "winter wonderland", "holly jolly", "drummer boy", "christmastime"
+];
+
+const falsePositiveSongs = ["carolina", "merrymaking at my place"];
+const falsePositiveAlbums = ["breezy - it’s giving christmas"];
+
+function isChristmasText(name: string, album: string): boolean {
+  const nameLower = name.toLowerCase();
+  const albumLower = album.toLowerCase();
+
+  if (falsePositiveSongs.some(fp => nameLower.includes(fp)) || falsePositiveAlbums.some(fp => albumLower.includes(fp))) {
+    return false;
+  }
+
+  return (
+    christmasKeywords.some(kw => nameLower.includes(kw)) ||
+    christmasKeywords.some(kw => albumLower.includes(kw))
+  );
+}
+
 // ---------- Updated Constants (Tuned for better flow) ----------
 
 const penaltyGlobal = 0.05; // Slightly increased
@@ -65,6 +90,7 @@ type RecommendOpts = {
   excludeUris?: string[];
   alphaNow?: number; // Weight for seed vs liked
   clusterIds?: number[]; // Pre-filter by cluster
+  excludeChristmas?: boolean; // Exclude Christmas tracks (defaults to true)
 };
 
 // ---------- Main Logic ----------
@@ -86,6 +112,7 @@ export async function recommend(opts: RecommendOpts = {}) {
     excludeUris = [],
     alphaNow = 0.85,
     clusterIds = [],
+    excludeChristmas = true,
   } = opts;
 
   // 1. SESSION RESET: Keep tracking internal to the function call
@@ -167,7 +194,17 @@ export async function recommend(opts: RecommendOpts = {}) {
       if (!Array.isArray(p.embedding)) return false;
       // Filter out skipped artists and tracks
       if (skipTrackSet.has(p.uri)) return false;
-      return !p.artists.some(a => skipArtistSet.has(a));
+      if (p.artists.some(a => skipArtistSet.has(a))) return false;
+
+      // Filter out Christmas tracks if requested
+      if (excludeChristmas) {
+        const isExplicit = isChristmasText(p.name, p.album);
+        if (isExplicit) {
+          return false;
+        }
+      }
+
+      return true;
     })
     .map((p) => ({
       ...p,
@@ -238,6 +275,149 @@ export async function recommend(opts: RecommendOpts = {}) {
     album: t.album,
     similarity: t.similarity,
   }));
+}
+
+// ---------- URI Validation ----------
+
+type TrackResult = {
+  uri: string;
+  name: string;
+  artists: string[];
+  album: string;
+  similarity?: number;
+};
+
+function getMatchKey(name: string, artists: string[], album: string): string {
+  const n = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^\w\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const nName = n(name);
+  const nAlbum = n(album);
+  const nArtists = artists.map((a) => n(a)).sort().join("|");
+  return `${nName}#${nArtists}#${nAlbum}`;
+}
+
+interface MATrack {
+  uri: string;
+  name: string;
+  artists: { name: string }[];
+  album: { name: string };
+}
+
+let cachedMAUris: Set<string> | null = null;
+let cachedMANameMap: Map<string, string> | null = null; // matchKey → uri
+let lastMAFetch = 0;
+const MA_CACHE_MS = 5 * 60 * 1000;
+
+async function fetchMALibrary(): Promise<{ uriSet: Set<string>; nameMap: Map<string, string> }> {
+  const env = process.env;
+  const authHeaders = new Headers();
+  authHeaders.append("Content-Type", "application/json");
+  authHeaders.append("Authorization", "Bearer " + env.TOKEN);
+
+  const uriSet = new Set<string>();
+  const nameMap = new Map<string, string>();
+  let offset = 0;
+  const BATCH = 500;
+
+  while (true) {
+    const raw = JSON.stringify({
+      config_entry_id: env.CONFIG_ID,
+      media_type: "track",
+      limit: BATCH,
+      offset,
+      order_by: "sort_name",
+    });
+
+    const res = await fetch(
+      env.HOST + "/api/services/music_assistant/get_library?return_response",
+      { method: "POST", headers: authHeaders, body: raw, redirect: "follow" }
+    );
+
+    if (res.status !== 200) break;
+
+    const data = await res.json();
+    const items = data.service_response?.items;
+    if (!items || items.length === 0) break;
+
+    for (const t of items) {
+      uriSet.add(t.uri);
+      const key = getMatchKey(
+        t.name,
+        t.artists.map((a: any) => a.name),
+        t.album.name
+      );
+      if (!nameMap.has(key)) {
+        nameMap.set(key, t.uri);
+      }
+    }
+
+    if (items.length < BATCH) break;
+    offset += BATCH;
+  }
+
+  return { uriSet, nameMap };
+}
+
+async function getMALibrary(): Promise<{ uriSet: Set<string>; nameMap: Map<string, string> }> {
+  if (!cachedMAUris || !cachedMANameMap || Date.now() - lastMAFetch > MA_CACHE_MS) {
+    const lib = await fetchMALibrary();
+    cachedMAUris = lib.uriSet;
+    cachedMANameMap = lib.nameMap;
+    lastMAFetch = Date.now();
+    console.log(`[validate] MA library cache refreshed: ${lib.uriSet.size} tracks`);
+  }
+  return { uriSet: cachedMAUris, nameMap: cachedMANameMap };
+}
+
+export function invalidateMACache() {
+  cachedMAUris = null;
+  cachedMANameMap = null;
+  lastMAFetch = 0;
+}
+
+export async function validateTrackUris(
+  results: TrackResult[]
+): Promise<TrackResult[]> {
+  if (!results.length) return results;
+
+  const { uriSet, nameMap } = await getMALibrary();
+
+  const validated: TrackResult[] = [];
+  let repaired = 0;
+  let removed = 0;
+
+  for (const t of results) {
+    if (uriSet.has(t.uri)) {
+      validated.push(t);
+      continue;
+    }
+
+    const key = getMatchKey(t.name, t.artists, t.album);
+    const maUri = nameMap.get(key);
+    if (maUri) {
+      console.log(`[validate] REPAIRED: ${t.uri} → ${maUri}  (${t.name})`);
+      // Update DB to fix this URI permanently for next time
+      db.update(trackTable).set({ uri: maUri }).where(eq(trackTable.uri, t.uri))
+        .catch(() => {});
+      validated.push({ ...t, uri: maUri });
+      repaired++;
+      continue;
+    }
+
+    console.log(`[validate] ORPHAN (not in MA library): ${t.uri}  (${t.name})`);
+    removed++;
+  }
+
+  if (repaired > 0) console.log(`[validate] Repaired ${repaired} URIs`);
+  if (removed > 0) console.log(`[validate] Removed ${removed} orphan tracks (not playable)`);
+
+  return validated;
 }
 
 // ---------- Helper implementation details ----------
