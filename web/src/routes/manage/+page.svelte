@@ -10,7 +10,15 @@
 	let lidarrOk = $state<boolean | null>(null);
 	let running = $state<string | null>(null);
 
-	async function runJob(label: string, path: string) {
+	function lastRunLine(job: string): string {
+		const run = data.lastRuns[job];
+		if (!run) return 'Never run from here yet.';
+		const status = run.ok ? '✓' : '✗';
+		return `${status} Last run ${run.when}${run.detail ? ` — ${run.detail}` : ''}`;
+	}
+
+	async function runJob(label: string, path: string, confirmText?: string) {
+		if (confirmText && !confirm(confirmText)) return;
 		running = label;
 		const { ok, data: json } = await post<{ count?: number; indexed?: number; assigned?: number }>(path);
 		running = null;
@@ -38,6 +46,7 @@
 	}
 
 	async function importDefaults() {
+		if (!confirm(`Add all ${data.defaultArtistCount} default artists to Lidarr?`)) return;
 		running = 'Importing default artists';
 		const { ok, data: json } = await post<{ imported?: string[]; failed?: string[] }>(
 			'/api/lidarr/import-default-artists'
@@ -49,45 +58,48 @@
 
 <PageHeader
 	title="Manage"
-	description="Keep the library fresh and feed Lidarr new artists. Indexing pulls new tracks from Music Assistant; Analyze also assigns them to clusters."
+	description="Housekeeping: pull in new music, refresh your likes, and tell Lidarr which artists to watch. Run a job when something's missing — each one remembers its last result below."
 />
 
 <div class="grid gap-6 lg:grid-cols-2">
 	<section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-		<h2 class="text-lg font-bold text-gray-900">Library jobs</h2>
-		<p class="mb-4 text-sm text-gray-500">These can take a while — results appear as toasts.</p>
+		<h2 class="text-lg font-bold text-gray-900">New music</h2>
+		<p class="mb-4 text-sm text-gray-500">These can take a while — you can leave this page, the result is saved here.</p>
 		<div class="grid gap-2">
 			<button
 				class="rounded-xl bg-blue-600 px-5 py-2.5 text-left font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
 				disabled={running !== null}
-				onclick={() => runJob('Index library', '/api/index-library')}
+				onclick={() => runJob('Check for new music', '/api/index-library')}
 			>
-				Index library
-				<span class="block text-xs font-normal opacity-80">Pull new tracks from Music Assistant</span>
+				Check for new music
+				<span class="block text-xs font-normal opacity-80">Finds songs added to Music Assistant since last time</span>
 			</button>
+			<p class="px-1 text-xs text-gray-400">{lastRunLine('index-library')}</p>
 			<button
 				class="rounded-xl bg-blue-600 px-5 py-2.5 text-left font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
 				disabled={running !== null}
-				onclick={() => runJob('Sync favorites', '/api/sync-favorites')}
+				onclick={() => runJob('Refresh liked songs', '/api/sync-favorites')}
 			>
-				Sync favorites
-				<span class="block text-xs font-normal opacity-80">Import liked songs for recommendations</span>
+				Refresh liked songs
+				<span class="block text-xs font-normal opacity-80">Re-imports your ♥ likes so mixes learn your taste</span>
 			</button>
+			<p class="px-1 text-xs text-gray-400">{lastRunLine('sync-favorites')}</p>
 			<button
 				class="rounded-xl bg-blue-600 px-5 py-2.5 text-left font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
 				disabled={running !== null}
-				onclick={() => runJob('Analyze', '/api/analyze')}
+				onclick={() => runJob('Full tidy-up', '/api/analyze', 'The full tidy-up syncs Music Assistant (can take 10+ min), then finds and sorts new songs. Start it?')}
 			>
-				Analyze
-				<span class="block text-xs font-normal opacity-80">Index + assign new tracks to clusters</span>
+				Full tidy-up
+				<span class="block text-xs font-normal opacity-80">Syncs everything, finds new songs and sorts them into vibes</span>
 			</button>
+			<p class="px-1 text-xs text-gray-400">{lastRunLine('analyze')}</p>
 		</div>
 		{#if running}<p class="mt-3 text-sm text-gray-500">{running}… this may take a few minutes.</p>{/if}
 	</section>
 
 	<section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-		<h2 class="text-lg font-bold text-gray-900">Lidarr artists</h2>
-		<p class="mb-4 text-sm text-gray-500">Add artists to Lidarr so new music flows in automatically.</p>
+		<h2 class="text-lg font-bold text-gray-900">Artists to watch</h2>
+		<p class="mb-4 text-sm text-gray-500">Lidarr watches these artists and their new releases show up in your library automatically.</p>
 		<div class="flex flex-wrap gap-2">
 			<input
 				class="min-w-52 flex-1 rounded-xl border border-gray-300 px-3 py-2"

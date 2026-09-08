@@ -1,4 +1,5 @@
 import { indexLibrary } from '$lib/server/index-library';
+import { recordJobRun } from '$lib/server/job-log';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async () => {
@@ -19,9 +20,11 @@ export const POST: RequestHandler = async () => {
 		// generation itself runs in the embeddings-loop container.
 		const { assignNewTracksToClusters } = await import('$lib/server/clustering');
 		const assigned = await assignNewTracksToClusters();
+		await recordJobRun('analyze', true, `${indexed} indexed, ${assigned} sorted into vibes`);
 		return Response.json({ success: true, maSync, indexed, assigned });
 	} catch (error) {
 		console.error('Analyze failed:', error);
+		await recordJobRun('analyze', false, String(error).slice(0, 200));
 		return Response.json({ success: false, error: String(error) }, { status: 500 });
 	}
 };
