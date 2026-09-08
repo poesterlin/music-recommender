@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { post } from '$lib/api';
+	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
 
 	type Track = {
 		uri: string;
@@ -18,6 +19,7 @@
 		volumeLevel: number | null;
 		muted: boolean | null;
 		elapsed: number | null;
+		shuffle: boolean | null;
 		track: Track | null;
 	};
 
@@ -26,6 +28,7 @@
 	let player = $state<State | null>(initial);
 	let busy = $state<string | null>(null);
 	let volume = $state<number | null>(initial?.volumeLevel ?? null);
+	let lastVolume = $state<number>(initial?.volumeLevel ?? 25);
 	let tick = $state(0);
 
 	const playing = $derived(player?.state === 'playing');
@@ -45,6 +48,7 @@
 			const json = await res.json();
 			if (json.success === false) return;
 			player = json;
+			nowPlayingStore.setPlayer(json);
 			volume = json.volumeLevel ?? volume;
 			tick = 0;
 		} catch {
@@ -58,6 +62,7 @@
 			const { ok, data } = await post<State & { success: boolean }>('/api/player', { action: a });
 			if (ok && data && 'state' in data) {
 				player = data;
+				nowPlayingStore.setPlayer(data);
 				tick = 0;
 			} else {
 				await refresh();
@@ -70,17 +75,45 @@
 	let volumeTimer: ReturnType<typeof setTimeout> | null = null;
 	function onVolume() {
 		if (volume === null) return;
+		if (volume > 0) lastVolume = volume;
 		if (volumeTimer) clearTimeout(volumeTimer);
 		volumeTimer = setTimeout(async () => {
-			await post('/api/player', { volume });
+			const { ok, data } = await post<State & { success: boolean }>('/api/player', { volume });
+			if (ok && data && 'volumeLevel' in data) volume = data.volumeLevel;
 		}, 400);
+	}
+
+	async function toggleMute() {
+		if (volume === null) return;
+		const target = volume > 0 ? 0 : lastVolume;
+		volume = target;
+		await post('/api/player', { volume: target });
+	}
+
+	async function toggleShuffle() {
+		if (player?.shuffle === null || player?.shuffle === undefined) return;
+		const next = !player.shuffle;
+		player = { ...player, shuffle: next };
+		const { ok, data } = await post<State & { success: boolean }>('/api/player', { shuffle: next });
+		if (ok && data && 'shuffle' in data) player = data;
+	}
+
+	async function seek(e: MouseEvent) {
+		if (!duration) return;
+		const bar = e.currentTarget as HTMLElement;
+		const rect = bar.getBoundingClientRect();
+		const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+		const position = Math.round(ratio * duration);
+		tick = position - (player?.elapsed ?? 0);
+		await post('/api/player', { seek: position });
 	}
 
 	let poller: ReturnType<typeof setInterval> | null = null;
 	let ticker: ReturnType<typeof setInterval> | null = null;
 
 	onMount(() => {
-		poller = setInterval(refresh, 10000);
+		nowPlayingStore.setPlayer(initial);
+		poller = setInterval(refresh, 5000);
 		ticker = setInterval(() => {
 			if (player?.state === 'playing') tick += 1;
 			else tick = 0;
@@ -134,14 +167,16 @@
 				</div>
 			</div>
 
-			<!-- progress -->
+			<!-- progress (click to seek) -->
 			<div class="mt-5">
-				<div class="h-1.5 overflow-hidden rounded-full bg-cream/15">
-					<div
-						class="h-full rounded-full bg-accent transition-all"
-						style="width: {duration ? Math.min(100, (elapsed / duration) * 100) : 0}%"
-					></div>
-				</div>
+				<button class="block h-4 w-full cursor-pointer" onclick={seek} title="Seek" aria-label="Seek in track">
+					<span class="block h-1.5 overflow-hidden rounded-full bg-cream/15">
+						<span
+							class="block h-full rounded-full bg-accent transition-all"
+							style="width: {duration ? Math.min(100, (elapsed / duration) * 100) : 0}%"
+						></span>
+					</span>
+				</button>
 				<div class="mt-1.5 flex justify-between text-xs font-bold text-cream/50 tabular-nums">
 					<span>{fmt(elapsed)}</span>
 					<span>{fmt(duration)}</span>
@@ -183,9 +218,24 @@
 					⏹
 				</button>
 
+				{#if player.shuffle !== null && player.shuffle !== undefined}
+					<button
+						class="rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40 {player.shuffle
+							? 'bg-accent/25 text-accent'
+							: 'bg-cream/10 text-cream/60 hover:bg-cream/20'}"
+						disabled={busy !== null}
+						onclick={toggleShuffle}
+						title="Toggle shuffle"
+					>
+						🔀
+					</button>
+				{/if}
+
 				{#if volume !== null}
 					<label class="ml-auto flex items-center gap-2 text-sm font-bold text-cream/60">
-						🔈
+						<button class="transition hover:text-cream" onclick={toggleMute} title={volume > 0 ? 'Mute' : 'Unmute'}>
+							{volume > 0 ? '🔈' : '🔇'}
+						</button>
 						<input
 							type="range"
 							min="0"

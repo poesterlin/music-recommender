@@ -1,4 +1,12 @@
-import { getPlayerState, playerControl, setVolume, type PlayerAction } from '$lib/server/player';
+import {
+	getPlayerState,
+	playUris,
+	playerControl,
+	seekTo,
+	setShuffle,
+	setVolume,
+	type PlayerAction
+} from '$lib/server/player';
 import type { RequestHandler } from './$types';
 
 const ACTIONS: PlayerAction[] = ['play', 'pause', 'play_pause', 'stop', 'next', 'previous'];
@@ -19,16 +27,25 @@ export const POST: RequestHandler = async ({ request }) => {
 		const body = (await request.json().catch(() => ({}))) as {
 			action?: string;
 			volume?: number;
+			seek?: number;
+			shuffle?: boolean;
+			uris?: string[];
 		};
-		if (body.volume !== undefined) {
+		if (Array.isArray(body.uris) && body.uris.length > 0) {
+			await playUris(body.uris.map(String));
+		} else if (body.volume !== undefined) {
 			await setVolume(Number(body.volume));
+		} else if (body.seek !== undefined) {
+			await seekTo(Number(body.seek));
+		} else if (body.shuffle !== undefined) {
+			await setShuffle(Boolean(body.shuffle));
 		} else if (body.action && ACTIONS.includes(body.action as PlayerAction)) {
 			await playerControl(body.action as PlayerAction);
 			// give MA a beat to update state before the client re-fetches
 			await new Promise((r) => setTimeout(r, 600));
 		} else {
 			return Response.json(
-				{ success: false, error: `action must be one of: ${ACTIONS.join(', ')} (or pass volume)` },
+				{ success: false, error: `pass uris[], volume, seek, shuffle, or action (${ACTIONS.join(', ')})` },
 				{ status: 400 }
 			);
 		}

@@ -124,6 +124,59 @@ export type PlayerAction =
 	| 'next'
 	| 'previous';
 
+export type UpNextTrack = {
+	uri: string | null;
+	name: string;
+	artists: string[];
+	album: string;
+	duration: number | null;
+};
+
+/** The live MA queue: tracks after the current index. This is THE queue —
+ * what you see here is what the room will hear. */
+export async function getUpNext(limit = 30): Promise<UpNextTrack[]> {
+	return withMa(async (call) => {
+		const { queueId } = await resolveTarget(call);
+		const queue: any = await call('player_queues/get', { queue_id: queueId }).catch(() => null);
+		const currentIndex: number = typeof queue?.current_index === 'number' ? queue.current_index : -1;
+		const items: any[] = await call('player_queues/items', {
+			queue_id: queueId,
+			limit,
+			offset: currentIndex + 1
+		}).catch(() => []);
+		return items.map((it) => {
+			const mi = it?.media_item ?? {};
+			const artists: string[] = Array.isArray(mi.artists)
+				? mi.artists.map((a: any) => String(a?.name ?? '')).filter(Boolean)
+				: [];
+			return {
+				uri: typeof mi.uri === 'string' ? mi.uri : null,
+				name: String(mi.name ?? it?.name ?? 'Unknown'),
+				artists,
+				album: typeof mi.album === 'string' ? mi.album : String(mi.album?.name ?? ''),
+				duration: typeof it?.duration === 'number' ? it.duration : null
+			};
+		});
+	});
+}
+
+export async function seekTo(positionSeconds: number): Promise<void> {
+	return withMa(async (call) => {
+		const { player } = await resolveTarget(call);
+		await call('players/cmd/seek', {
+			player_id: player.player_id,
+			position: Math.max(0, Math.round(positionSeconds))
+		});
+	});
+}
+
+export async function setShuffle(enabled: boolean): Promise<void> {
+	return withMa(async (call) => {
+		const { queueId } = await resolveTarget(call);
+		await call('player_queues/shuffle', { queue_id: queueId, shuffle_enabled: enabled });
+	});
+}
+
 /** Transport control on the active queue. */
 export async function playerControl(action: PlayerAction): Promise<void> {
 	const cmd =

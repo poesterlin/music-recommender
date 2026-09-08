@@ -1,5 +1,4 @@
 import { recommend, validateTrackUris } from '$lib/server/recomendation-engine';
-import { setQueue } from '$lib/server/queue';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -12,6 +11,5 @@ export const POST: RequestHandler = async ({ request }) => {
 		maxPerArtist: 3
 	});
 	const tracks = await validateTrackUris(recommendations);
-	setQueue(tracks);
 	return Response.json({ success: true, tracks });
 };

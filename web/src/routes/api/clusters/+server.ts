@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { trackTable } from '$lib/server/schema';
-import { setQueue } from '$lib/server/queue';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
@@ -19,8 +18,6 @@ export const GET: RequestHandler = async () => {
 		.where(sql`${trackTable.clusterId} IS NOT NULL`)
 		.orderBy(sql`random()`)
 		.limit(200);
-
-	setQueue(samples);
 
 	// Group by clusterId and take the first one found for each
 	const uniqueClusters = Array.from(new Set(samples.map((s) => s.clusterId)))

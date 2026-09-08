@@ -3,13 +3,9 @@
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { post } from '$lib/api';
-	import { CLUSTER_NAMES, clusterLabel } from '$lib/clusters';
+	import { clusterLabel } from '$lib/clusters';
 
 	let { data } = $props();
-
-	const vibeNames = $derived(
-		data.vibeClusterIds.map((id: number) => CLUSTER_NAMES[id] ?? `Cluster ${id}`)
-	);
 
 	const slotLine = $derived(
 		data.activeSchedule
@@ -27,11 +23,6 @@
 	async function playScheduled() {
 		const { ok } = await post('/api/play-vibe', { useSchedule: true });
 		if (ok) toastStore.show('Playing scheduled slot');
-	}
-
-	async function playQueue() {
-		const { ok } = await post('/music/play');
-		if (ok) toastStore.show('Queue playing');
 	}
 </script>
 
@@ -52,8 +43,8 @@
 				on <em class="font-light text-accent-deep italic">your mood.</em>
 			</h1>
 			<p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
-				{slotLine}. {data.vibeClusterIds.length} clusters in rotation, {data.queue.length} tracks
-				cued — one tap and the room wakes up.
+				{slotLine}. {data.vibeClusterIds.length} clusters in rotation, {data.upNext.length} tracks
+				coming up — one tap and the room wakes up.
 			</p>
 			<div class="mt-7 flex flex-wrap gap-2.5">
 				<button
@@ -64,10 +55,6 @@
 					class="rounded-full bg-ink px-6 py-3 font-bold text-cream transition hover:-translate-y-0.5 hover:bg-ink-soft"
 					onclick={playScheduled}>Play scheduled slot</button
 				>
-				<button
-					class="rounded-full border-2 border-ink/15 px-6 py-3 font-bold text-ink transition hover:-translate-y-0.5 hover:border-ink"
-					onclick={playQueue}>Play queue</button
-				>
 			</div>
 			<dl class="mt-8 flex flex-wrap gap-x-10 gap-y-3">
 				<div>
@@ -75,13 +62,13 @@
 					<dd class="font-display text-3xl font-black">{data.vibeClusterIds.length} <span class="text-base font-light italic text-faded">clusters</span></dd>
 				</div>
 				<div>
-					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">Cued up</dt>
-					<dd class="font-display text-3xl font-black">{data.queue.length} <span class="text-base font-light italic text-faded">tracks</span></dd>
+					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">Coming up</dt>
+					<dd class="font-display text-3xl font-black">{data.upNext.length} <span class="text-base font-light italic text-faded">tracks</span></dd>
 				</div>
 				<div>
 					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">On the slate</dt>
 					<dd class="font-display text-3xl font-black">
-						{data.activeSchedule ? `${data.activeSchedule.startHour}–${data.activeSchedule.endHour}h` : '∞'}
+						{data.activeSchedule ? data.activeSchedule.name : '∞'}
 					</dd>
 				</div>
 			</dl>
@@ -109,23 +96,6 @@
 		</div>
 	</div>
 </section>
-
-<!-- MARQUEE -->
-{#if vibeNames.length}
-	<div class="relative -mx-6 mt-10 overflow-hidden" aria-hidden="true">
-		<div class="-rotate-1 border-y-2 border-ink bg-ink py-2.5 text-cream">
-			<div class="animate-marquee flex w-max gap-0 whitespace-nowrap">
-				{#each [0, 1] as copy (copy)}
-					<span class="font-display text-lg font-bold tracking-wide">
-						{#each vibeNames as n, i (i)}
-							<span class="mx-4">{n}</span><span class="text-accent">✦</span>
-						{/each}
-					</span>
-				{/each}
-			</div>
-		</div>
-	</div>
-{/if}
 
 <!-- BOOTH + SLATE -->
 <div class="mt-10 grid items-start gap-6 lg:grid-cols-2">
@@ -168,11 +138,21 @@
 	</section>
 </div>
 
-<!-- SETLIST -->
+<!-- SETLIST — the live booth queue, straight from Music Assistant -->
 <section class="mt-6 animate-rise rounded-3xl border border-ink/15 bg-cream p-6 shadow-sm sm:p-7" style="animation-delay: 300ms">
 	<div class="mb-2 flex flex-wrap items-baseline justify-between gap-2">
 		<h2 class="font-display text-3xl font-black">Up next <span class="font-light text-faded italic">— the setlist</span></h2>
-		<p class="text-xs font-bold tracking-[0.2em] text-faded uppercase">from the last recommendation run</p>
+		<p class="text-xs font-bold tracking-[0.2em] text-faded uppercase">live from the booth</p>
 	</div>
-	<TrackList tracks={data.queue} emptyText="The setlist is blank — play a vibe to fill it." />
+	{#if data.upNext.length === 0}
+		<div class="rounded-2xl border border-dashed border-ink/20 bg-cream/60 px-6 py-8 text-center">
+			<p class="text-sm text-faded">The booth queue is empty — nothing lined up after this track.</p>
+			<button
+				class="mt-4 rounded-full bg-accent px-6 py-2.5 font-bold text-cream shadow-lg shadow-accent/30 transition hover:-translate-y-0.5 hover:bg-accent-deep"
+				onclick={playVibe}>▶ Play the vibe</button
+			>
+		</div>
+	{:else}
+		<TrackList tracks={data.upNext} />
+	{/if}
 </section>
