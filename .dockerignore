@@ -1,0 +1,13 @@
+# ---> This .dockerignore keeps secrets and junk out of the build context.
+# The release image only needs src/ + package.json (see Dockerfile),
+# but `COPY . .` in the prerelease stage would otherwise ship everything,
+# including .env secrets, into an intermediate layer.
+.git/
+node_modules/
+.env*
+output/
+.ruff_cache/
+*.log
+nohup.out
+*.csv
+embeddings/__pycache__/
