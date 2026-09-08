@@ -12,7 +12,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "./db";
-import { skippedArtistsTable, skippedSongsTable, trackTable } from "./schema";
+import { likedSongsTable, skippedArtistsTable, skippedSongsTable, trackTable } from "./schema";
+import { invalidateLikedCache } from "./recomendation-engine";
 
 async function fetchRelatedTracks(
   uri: string,
@@ -24,7 +25,7 @@ async function fetchRelatedTracks(
       uri: trackTable.uri,
       embedding: trackTable.embedding,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
     })
     .from(trackTable)
     .where(eq(trackTable.uri, uri));
@@ -46,7 +47,7 @@ async function fetchRelatedTracks(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -84,11 +85,11 @@ async function chainSimilarSongs(uri: string, limit = 40, batchSize = 3) {
 async function findArtists(uri: string) {
   const [track] = await db
     .select({
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       embedding: avg(trackTable.embedding),
     })
     .from(trackTable)
-    .groupBy(trackTable.artists)
+    .groupBy(trackTable.artist)
     .where(eq(trackTable.uri, uri));
 
   if (!track) {
@@ -141,7 +142,7 @@ async function findSongsFromSimilarArtists(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -174,7 +175,7 @@ async function findSimilarAlbums(
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity,
     })
     .from(trackTable)
@@ -196,11 +197,11 @@ async function findRandomSongOfArtist(artist: string, limit: number) {
     .select({
       uri: trackTable.uri,
       name: trackTable.name,
-      artists: trackTable.artists,
+      artists: trackTable.artist,
       similarity: sql<number>`1`,
     })
     .from(trackTable)
-    .where(eq(trackTable.artists, [artist]))
+    .where(eq(trackTable.artist, [artist]))
     .orderBy(() => sql`random()`)
     .limit(limit);
 
@@ -295,6 +296,39 @@ export async function skipArtists(artists: string[]) {
     .onConflictDoNothing();
 
   console.log("Artists skipped", artists);
+}
+
+export async function likeTrack(uri: string, source?: string) {
+  // 1. Verify the track exists and has an embedding
+  const [dbTrack] = await db
+    .select({ uri: trackTable.uri, embedding: trackTable.embedding })
+    .from(trackTable)
+    .where(eq(trackTable.uri, uri));
+
+  if (!dbTrack || !dbTrack.embedding) {
+    console.warn(`Cannot like track ${uri}: not found in database or missing embedding.`);
+  }
+
+  const [existing] = await db
+    .select()
+    .from(likedSongsTable)
+    .where(eq(likedSongsTable.uri, uri));
+
+  if (existing) {
+    console.log("Track already liked", uri);
+    return;
+  }
+
+  const hour = new Date().getHours();
+  await db.insert(likedSongsTable).values({ 
+    uri, 
+    hour,
+    source: source || "unknown"
+  });
+  console.log(`Track liked (${source || "unknown"}):`, uri);
+  
+  // 2. Invalidate the recommendation engine cache so the new like is picked up immediately
+  invalidateLikedCache();
 }
 
 export async function getRandomTrack() {
