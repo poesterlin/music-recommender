@@ -1,5 +1,5 @@
 import { env } from "bun";
-import { startWLEDVisualization, testVisualization } from "./wled-visualizer";
+import { startWLEDVisualization, testVisualization } from "../web/src/lib/server/wled-visualizer";
 
 console.log("Starting WLED visualization test...");
 

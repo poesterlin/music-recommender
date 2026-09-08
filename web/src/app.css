@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+@theme {
+	--font-display: 'Fraunces', 'Georgia', serif;
+	--font-body: 'Karla', 'Avenir Next', 'Segoe UI', sans-serif;
+
+	--color-paper: #f4eee1;
+	--color-cream: #fffdf5;
+	--color-ink: #1d150e;
+	--color-ink-soft: #4c4237;
+	--color-faded: #97887a;
+	--color-line: #e0d4bd;
+	--color-accent: #e8490f;
+	--color-accent-deep: #b23407;
+	--color-moss: #5f6633;
+	--color-gold: #c99b2f;
+
+	--animate-marquee: marquee 42s linear infinite;
+	--animate-spin-slow: spin 16s linear infinite;
+	--animate-rise: rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+	@keyframes marquee {
+		from {
+			transform: translateX(0);
+		}
+		to {
+			transform: translateX(-50%);
+		}
+	}
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(18px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+}
+
+html {
+	scroll-behavior: smooth;
+}
+
+body {
+	font-family: var(--font-body);
+	background: var(--color-paper);
+	color: var(--color-ink);
+	-webkit-font-smoothing: antialiased;
+}
+
+::selection {
+	background: var(--color-accent);
+	color: #fff;
+}
+
+/* film-grain overlay for the whole shell */
+.grain::after {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: 60;
+	pointer-events: none;
+	opacity: 0.5;
+	mix-blend-mode: multiply;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.06'/%3E%3C/svg%3E");
+}
+
+/* vinyl grooves */
+.vinyl {
+	background:
+		radial-gradient(circle at center, var(--color-accent) 0 18%, #111 18.5% 19.5%, transparent 20%),
+		repeating-radial-gradient(circle at center, #16110c 0 2px, #2b231a 2px 4px);
+}
+
+.vinyl-label {
+	background: conic-gradient(from 40deg, var(--color-accent), var(--color-gold), var(--color-accent));
+}
+
+/* outlined ghost type */
+.ghost-type {
+	-webkit-text-stroke: 1.5px var(--color-line);
+	color: transparent;
+}

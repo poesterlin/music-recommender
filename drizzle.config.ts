@@ -5,7 +5,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 export default defineConfig({
-  schema: "./src/schema.ts",
+  schema: "./web/src/lib/server/schema.ts",
 
   dbCredentials: {
     url: process.env.DATABASE_URL,

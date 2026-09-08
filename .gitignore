@@ -43,4 +43,4 @@ output
 embeddings/__pycache__/
 
 embeddings/embeddings_updates.sql
-server
+/server/

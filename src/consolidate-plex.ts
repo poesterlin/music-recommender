@@ -1,6 +1,6 @@
 import { eq, like, and } from "drizzle-orm";
-import { db } from "./db";
-import { trackTable, likedSongsTable, skippedSongsTable } from "./schema";
+import { db } from "../web/src/lib/server/db";
+import { trackTable, likedSongsTable, skippedSongsTable } from "../web/src/lib/server/schema";
 
 const dryRun = process.argv.includes("--dry-run");
 

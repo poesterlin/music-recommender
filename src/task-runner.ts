@@ -1,6 +1,6 @@
 import { eq, like, ilike, or, and, sql } from "drizzle-orm";
-import { db } from "./db";
-import { trackTable, likedSongsTable, skippedSongsTable, skippedArtistsTable } from "./schema";
+import { db } from "../web/src/lib/server/db";
+import { trackTable, likedSongsTable, skippedSongsTable, skippedArtistsTable } from "../web/src/lib/server/schema";
 
 const command = process.argv[2];
 const args = process.argv.slice(3);
