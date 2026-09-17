@@ -39,7 +39,7 @@ export async function syncFavorites(): Promise<number> {
     console.log(`Fetching favorites batch: offset ${offset}, limit ${BATCH_SIZE}`);
 
     const res = await fetch(
-      env.HOST + "/api/services/music_assistant/get_library?return_response",
+      env.HA_HOST + "/api/services/music_assistant/get_library?return_response",
       { method: "POST", headers: authHeaders, body: raw, redirect: "follow" }
     );
 

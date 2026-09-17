@@ -14,14 +14,14 @@ def main():
     if not DATABASE_URL:
         raise ValueError("DATABASE_URL not set")
 
-    HOST = os.getenv("HOST")
+    HA_HOST = os.getenv("HA_HOST")
     TOKEN = os.getenv("TOKEN")
     CONFIG_ID = os.getenv("CONFIG_ID")
 
-    if not HOST or not TOKEN or not CONFIG_ID:
-        raise ValueError("HOST, TOKEN, and CONFIG_ID must be set")
+    if not HA_HOST or not TOKEN or not CONFIG_ID:
+        raise ValueError("HA_HOST, TOKEN, and CONFIG_ID must be set")
 
-    print(f"Fetching tracks from {HOST}...")
+    print(f"Fetching tracks from {HA_HOST}...")
 
     headers = {
         "Content-Type": "application/json",
@@ -37,7 +37,7 @@ def main():
     }
 
     response = requests.post(
-        f"{HOST}/api/services/music_assistant/search?return_response",
+        f"{HA_HOST}/api/services/music_assistant/search?return_response",
         headers=headers,
         json=payload,
     )

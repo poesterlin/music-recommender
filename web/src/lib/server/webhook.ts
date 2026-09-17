@@ -150,7 +150,7 @@ async function getCurrentTrackFromHA(): Promise<CurrentTrack | null> {
     });
 
     const res = await fetch(
-      env.HOST + "/api/services/music_assistant/get_queue?return_response",
+      env.HA_HOST + "/api/services/music_assistant/get_queue?return_response",
       {
         method: "POST",
         headers: authHeaders,
