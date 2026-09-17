@@ -53,7 +53,7 @@ async function fetchAllMAURIs(): Promise<Map<string, Track>> {
     });
 
     const res = await fetch(
-      env.HOST + "/api/services/music_assistant/get_library?return_response",
+      env.HA_HOST + "/api/services/music_assistant/get_library?return_response",
       { method: "POST", headers: authHeaders, body: raw, redirect: "follow" }
     );
 
