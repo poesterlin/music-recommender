@@ -18,6 +18,14 @@ if (!building) {
 	} else {
 		console.warn('WLED_IP environment variable is not set; WLED visualization disabled.');
 	}
+
+	void import('$lib/server/ha-lidarr-watch').then(({ startHaLidarrWatch }) => {
+		try {
+			startHaLidarrWatch();
+		} catch (e) {
+			console.warn('[startup] HA→Lidarr watch failed:', e);
+		}
+	});
 }
 
 export const handle: Handle = async ({ event, resolve }) => resolve(event);
