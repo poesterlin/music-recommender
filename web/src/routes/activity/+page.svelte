@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
+	import { likeTrack } from '$lib/client/like-track';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { post } from '$lib/api';
 
@@ -32,5 +33,10 @@
 
 <section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
 	<h2 class="mb-4 text-lg font-bold text-gray-900">Recently indexed · {tracks.length}</h2>
-	<TrackList {tracks} onPlay={playTrack} emptyText="No tracks indexed yet — run “Index library” from Manage." />
+	<TrackList
+		{tracks}
+		onPlay={playTrack}
+		onLike={(uri) => likeTrack(uri)}
+		emptyText="No tracks indexed yet — run “Index library” from Manage."
+	/>
 </section>

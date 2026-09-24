@@ -11,6 +11,7 @@
 	} from '@tabler/icons-svelte';
 	import { page } from '$app/state';
 	import { toastStore } from '$lib/client/toast.svelte';
+	import { likeTrack } from '$lib/client/like-track';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
 	import { slide } from 'svelte/transition';
 	import { onMount, onDestroy } from 'svelte';
@@ -62,13 +63,12 @@
 	});
 
 	async function like() {
-		const uri = nowPlayingStore.track?.uri ?? data.nowPlaying?.uri;
-		if (!uri) {
+		const track = nowPlayingStore.track ?? data.nowPlaying;
+		if (!track) {
 			toastStore.show('Nothing playing to like');
 			return;
 		}
-		const { ok, data: json } = await post<{ name?: string }>('/track/like', { uri, source: 'web' });
-		if (ok) toastStore.show(`Liked ${json.name ?? 'track'} — spun into future mixes`);
+		await likeTrack(track.uri, track.name);
 	}
 
 	async function skip() {

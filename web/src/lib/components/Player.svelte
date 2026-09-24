@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
 	import { post } from '$lib/api';
+	import { likeTrack } from '$lib/client/like-track';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
 
 	type Track = {
@@ -23,10 +24,17 @@
 		track: Track | null;
 	};
 
-	let { initial }: { initial: State | null } = $props();
+	let {
+		initial,
+		onQueueChange = null
+	}: {
+		initial: State | null;
+		onQueueChange?: (() => void) | null;
+	} = $props();
 
 	let player = $state<State | null>(initial);
 	let busy = $state<string | null>(null);
+	let liking = $state(false);
 	let volume = $state<number | null>(initial?.volumeLevel ?? null);
 	let lastVolume = $state<number>(initial?.volumeLevel ?? 25);
 	let tick = $state(0);
@@ -69,7 +77,24 @@
 			}
 		} finally {
 			busy = null;
+			onQueueChange?.();
 		}
+	}
+
+	async function likeCurrentTrack() {
+		const track = player?.track;
+		if (!track || liking) return;
+		liking = true;
+		try {
+			await likeTrack(track.uri, track.title);
+		} finally {
+			liking = false;
+		}
+	}
+
+	async function clearQueue() {
+		if (!player || !confirm(`Clear the entire queue for ${player.playerName}?`)) return;
+		await action('clear');
 	}
 
 	let volumeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,6 +121,7 @@
 		player = { ...player, shuffle: next };
 		const { ok, data } = await post<State & { success: boolean }>('/api/player', { shuffle: next });
 		if (ok && data && 'shuffle' in data) player = data;
+		onQueueChange?.();
 	}
 
 	async function seek(e: MouseEvent) {
@@ -160,10 +186,18 @@
 						</div>
 					</div>
 				{/if}
-				<div class="min-w-0">
+				<div class="min-w-0 flex-1">
 					<p class="truncate font-display text-2xl leading-tight font-black sm:text-3xl">{player.track.title}</p>
 					<p class="truncate font-bold text-cream/80">{player.track.artist}</p>
 					<p class="truncate text-sm text-cream/50 italic">{player.track.album}</p>
+					<button
+						class="mt-3 rounded-full bg-cream/10 px-3 py-1.5 text-xs font-bold text-cream/75 transition hover:bg-moss hover:text-cream disabled:cursor-wait disabled:opacity-50"
+						disabled={liking}
+						onclick={likeCurrentTrack}
+						title="Like {player.track.title}"
+					>
+						{liking ? 'Liking…' : '♥ Like'}
+					</button>
 				</div>
 			</div>
 
@@ -217,6 +251,14 @@
 				>
 					⏹
 				</button>
+				<button
+					class="rounded-full border border-cream/15 px-4 py-2.5 font-bold text-cream/65 transition hover:border-cream/35 hover:bg-cream/10 hover:text-cream disabled:opacity-40"
+					disabled={busy !== null}
+					onclick={clearQueue}
+					title="Clear the entire queue"
+				>
+					{busy === 'clear' ? '…' : '🗑 Clear queue'}
+				</button>
 
 				{#if player.shuffle !== null && player.shuffle !== undefined}
 					<button
@@ -262,6 +304,15 @@
 					<p class="font-display text-2xl font-black">The deck is quiet.</p>
 					<p class="mt-1 text-sm text-cream/60">Drop a vibe below and the room wakes up.</p>
 				</div>
+				{#if player}
+					<button
+						class="ml-auto rounded-full border border-cream/15 px-4 py-2.5 text-sm font-bold text-cream/65 transition hover:border-cream/35 hover:bg-cream/10 hover:text-cream disabled:opacity-40"
+						disabled={busy !== null}
+						onclick={clearQueue}
+					>
+						{busy === 'clear' ? 'Clearing…' : '🗑 Clear queue'}
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</div>

@@ -3,6 +3,7 @@ import { authHeaders } from "./auth";
 import { db } from "./db";
 import { trackTable } from "./schema";
 import { withMa } from "./ma-client";
+import { preferredPlayerName } from "./player";
 
 const env = process.env;
 
@@ -112,16 +113,23 @@ async function enrichWithCluster(track: Omit<CurrentTrack, "clusterId">): Promis
 
 /** Now-playing straight from Music Assistant (players/all -> current_media). */
 async function getCurrentTrackFromMA(): Promise<CurrentTrack | null> {
-  const preferred = process.env.MA_PLAYER_NAME ?? "Wohnzimmer";
+  const preferred = preferredPlayerName();
   return withMa(async (call) => {
     const players: any[] = await call("players/all");
     const withMedia = players.filter((p) => p?.current_media?.uri);
-    if (!withMedia.length) return null;
+    const configured = preferred
+      ? withMedia.find(
+          (p) =>
+            String(p.name ?? "").trim() === preferred || String(p.player_id ?? "") === preferred,
+        )
+      : null;
+    if (preferred && !configured) return null;
     const pick =
-      withMedia.find((p) => p.name === preferred && (p.state === "playing" || p.state === "paused")) ??
+      configured ??
       withMedia.find((p) => p.state === "playing") ??
       withMedia.find((p) => p.state === "paused") ??
       withMedia[0];
+    if (!pick) return null;
     const cm = pick.current_media;
     if (cm.media_type && cm.media_type !== "track") return null;
     return enrichWithCluster({
