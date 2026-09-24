@@ -9,7 +9,15 @@ import {
 } from '$lib/server/player';
 import type { RequestHandler } from './$types';
 
-const ACTIONS: PlayerAction[] = ['play', 'pause', 'play_pause', 'stop', 'next', 'previous'];
+const ACTIONS: PlayerAction[] = [
+	'play',
+	'pause',
+	'play_pause',
+	'stop',
+	'next',
+	'previous',
+	'clear'
+];
 
 export const GET: RequestHandler = async () => {
 	try {
