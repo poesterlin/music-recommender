@@ -7,8 +7,10 @@ The worker has two source modes:
 
 The API mode needs no PostgreSQL URL, Music Assistant token, Home Assistant token, or audio mount. It is suitable for a separate VM, a container, or a Colab runtime.
 
-Use Python 3.11 for this worker. The pinned OpenL3 0.4.2 package imports the
-removed stdlib `imp` module and cannot build on Python 3.12 or newer.
+Use Python 3.11 for the reference environment. On Python 3.12 or newer, run
+`python embeddings/install_python312.py` first; it verifies the pinned source
+archives and applies a packaging-only compatibility patch for OpenL3 0.4.2
+and resampy 0.2.2. The model code and versions are unchanged.
 
 ## Safety and recovery
 

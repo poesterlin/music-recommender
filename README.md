@@ -15,8 +15,10 @@ API. The Python worker can run beside it or on another machine.
 
 Rust `1.78` or newer is needed for the optional native clustering tools. The
 Python worker uses Python 3.11 and the packages in
-`embeddings/requirements.txt`; OpenL3 0.4.2 cannot build on Python 3.12 or
-newer.
+`embeddings/requirements.txt`. Python 3.12+ is supported for notebook/API
+workers through the packaging-only compatibility installer
+`embeddings/install_python312.py`; the validated Docker image remains on Python
+3.11.
 
 ## Install
 
@@ -177,10 +179,11 @@ installs `embeddings/requirements.txt`, prompts for the key, and runs the
 existing 60-second API worker. The same notebook is downloadable as
 [`web/static/music-recommender-worker.ipynb`](web/static/music-recommender-worker.ipynb).
 
-The worker URL must be reachable from the notebook. The copied cell starts with
-`--dry-run --limit 1`; remove those flags only when you are ready to write
-embeddings. Its filesystem is temporary; use `EMBEDDING_STATE_FILE` on mounted
-storage if the job must resume there.
+The worker URL must be reachable from the notebook. The copied cell uses the
+Python 3.11 reference path, or the compatibility installer on Python 3.12+. It
+starts with `--dry-run --limit 1`; remove those flags only when you are ready to
+write embeddings. Its filesystem is temporary; use `EMBEDDING_STATE_FILE` on
+mounted storage if the job must resume there.
 
 ## Database and diagnostics
 

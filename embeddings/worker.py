@@ -16,11 +16,8 @@ from types import ModuleType
 from typing import Sequence
 
 
-if sys.version_info < (3, 11) or sys.version_info >= (3, 12):
-    raise RuntimeError(
-        "The pinned OpenL3 0.4.2 worker requires Python 3.11; "
-        "Python 3.12+ cannot build that release."
-    )
+if sys.version_info < (3, 11):
+    raise RuntimeError("The pinned OpenL3 worker requires Python 3.11 or newer.")
 
 
 CORE_PATH = Path(__file__).with_name("generate-local-embeddings.py")
