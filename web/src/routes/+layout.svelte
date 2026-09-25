@@ -5,6 +5,7 @@
 		IconCompass,
 		IconDisc,
 		IconHome,
+		IconLogout,
 		IconSparkles,
 		IconTool,
 		IconWand
@@ -137,6 +138,18 @@
 					</a>
 				{/each}
 			</nav>
+			<div class="mt-2 flex items-center justify-end gap-3 text-xs font-bold">
+				{#if data.user}
+					<span class="text-ink-soft">Signed in as {data.user.username}</span>
+					<form method="POST" action="/logout">
+						<button class="inline-flex cursor-pointer items-center gap-1 text-ink-soft hover:text-ink" type="submit">
+							<IconLogout size={14} /> Log out
+						</button>
+					</form>
+				{:else}
+					<a class="text-accent-deep hover:text-accent" href="/login">Log in</a>
+				{/if}
+			</div>
 		</div>
 	</header>
 

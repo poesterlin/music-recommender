@@ -30,7 +30,8 @@ Python worker needs the packages in `embeddings/requirements.txt`.
    - `MUSIC_LIBRARY_PATH`
    - `MUSIC_HOST` and `MA_TOKEN`
    - `HA_HOST`, `TOKEN`, and `CONFIG_ID`
-   - `WORKER_TOKEN` if remote workers will be used
+   - `WORKER_TOKEN` if the worker or internal jobs will be used
+   - `PLAYBACK_API_KEY` if Home Assistant will trigger playback
 
 3. Choose a database.
 
@@ -70,6 +71,40 @@ Python worker needs the packages in `embeddings/requirements.txt`.
    The web container reads the library through `/music`; the host path comes
    from `MUSIC_LIBRARY_PATH`. Open the application, import the library from
    **Manage**, and use `/status` to inspect progress.
+
+## Authentication
+
+The web UI uses database-backed accounts and an opaque session cookie. Run
+`bun run db:migrate` once on an existing database before using the new login
+pages. Anyone can register an account; registration does not depend on a
+restart-time flag. To create the first account or reset a password without the
+UI, run:
+
+```sh
+bun run auth:create-user --username admin
+```
+
+The command creates the account or replaces its password and revokes that
+user's sessions. Without `--password`, it prints a generated password once.
+
+There are two service credentials:
+
+- `WORKER_TOKEN` authenticates the Python worker and the two internal Compose
+  jobs. It is not accepted by ordinary application routes.
+- `PLAYBACK_API_KEY` lets Home Assistant `POST /api/play-vibe` trigger external
+  playback. It is not accepted by other application routes.
+
+For example, the Home Assistant request can use the bearer header form:
+
+```sh
+curl -X POST https://recommender.example.com/api/play-vibe \
+  -H "Authorization: Bearer $PLAYBACK_API_KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{}'
+```
+
+Browser requests use the session cookie automatically. The app does not need
+user-managed API keys.
 
 ## Python worker
 
@@ -143,8 +178,8 @@ bun run db:ensure-centered
 bun run doctor -- --json
 ```
 
-`doctor` checks configuration, the database connection, pgvector, required
-tables and columns, and the host audio path without writing data.
+`doctor` checks configuration, the database connection, pgvector, the auth and
+pipeline tables and columns, and the host audio path without writing data.
 
 ## Background services
 
@@ -188,6 +223,8 @@ versioned service images to GHCR and creates a GitHub release.
 
 - `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with
   a database user that can enable the extension.
+- `401` from the app: use the session cookie, or the service key for the
+  specific internal/playback route.
 - Worker `401`: check that `WORKER_TOKEN` matches on the worker and web service.
 - Worker `404` for audio: verify `MUSIC_LIBRARY_PATH` and the track's local file
   match.

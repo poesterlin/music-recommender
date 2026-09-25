@@ -9,6 +9,7 @@
     "db:migrate": "bun scripts/ensure-pgvector.ts && drizzle-kit migrate",
     "db:ensure-centered": "bun scripts/ensure-pgvector.ts && bun scripts/ensure-centered-space.ts",
     "doctor": "bun --env-file=.env scripts/doctor.ts",
+    "auth:create-user": "bun --env-file=.env web/scripts/create-user.ts",
     "test:fresh-db": "bun scripts/fresh-db-smoke.ts",
     "db:generate": "drizzle-kit generate",
     "db:consolidate-plex": "bun src/consolidate-plex.ts",

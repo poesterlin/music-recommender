@@ -50,6 +50,10 @@ async function main(): Promise<void> {
 	required('HA_HOST', process.env.HA_HOST, 'set the Home Assistant base URL for library sync');
 	required('TOKEN', process.env.TOKEN, 'set the Home Assistant long-lived access token');
 	required('CONFIG_ID', process.env.CONFIG_ID, 'set the Music Assistant config entry id');
+	required('WORKER_TOKEN', process.env.WORKER_TOKEN, 'set the worker and internal-job bearer token');
+	if (!process.env.PLAYBACK_API_KEY?.trim()) {
+		add('warn', 'PLAYBACK_API_KEY', 'not configured; Home Assistant playback requests will be rejected');
+	}
 
 	const musicPath = process.env.MUSIC_LIBRARY_PATH ?? process.env.AUDIO_DIR ?? '/music';
 	if (options.skipAudio) {
@@ -82,13 +86,28 @@ async function main(): Promise<void> {
 			SELECT table_name
 			FROM information_schema.tables
 			WHERE table_schema = 'public'
-				AND table_name IN ('track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid')
+				AND table_name IN ('user', 'session', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid')
 			ORDER BY table_name
 		`;
 		const tableNames = new Set(tables.map((row) => String(row['table_name'])));
-		for (const table of ['track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid']) {
+		for (const table of ['user', 'session', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid']) {
 			if (tableNames.has(table)) add('ok', `table ${table}`, 'present');
 			else add('fail', `table ${table}`, 'missing; run bun run db:migrate');
+		}
+
+		if (tableNames.has('user') && tableNames.has('session')) {
+			const authColumns = await sql`
+				SELECT table_name, column_name
+				FROM information_schema.columns
+				WHERE table_schema = 'public' AND table_name IN ('user', 'session')
+			`;
+			const authColumnNames = new Set(
+				authColumns.map((row) => `${row['table_name']}.${row['column_name']}`)
+			);
+			for (const column of ['user.id', 'user.username', 'user.password_hash', 'session.user_id', 'session.expires_at']) {
+				if (authColumnNames.has(column)) add('ok', column, 'present');
+				else add('fail', column, 'missing; run bun run db:migrate');
+			}
 		}
 
 		if (tableNames.has('track')) {

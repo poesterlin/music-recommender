@@ -36,6 +36,7 @@
 		"vite": "^8.2.2"
 	},
 	"dependencies": {
+		"@node-rs/argon2": "^2.2.1",
 		"@tabler/icons-svelte": "^3.31.0",
 		"drizzle-orm": "^0.43.1",
 		"ml-kmeans": "^7.0.0",
