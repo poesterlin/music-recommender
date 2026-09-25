@@ -7,6 +7,9 @@ The worker has two source modes:
 
 The API mode needs no PostgreSQL URL, Music Assistant token, Home Assistant token, or audio mount. It is suitable for a separate VM, a container, or a Colab runtime.
 
+Use Python 3.11 for this worker. The pinned OpenL3 0.4.2 package imports the
+removed stdlib `imp` module and cannot build on Python 3.12 or newer.
+
 ## Safety and recovery
 
 - Local mode uses a PostgreSQL advisory lock and durable `job_run.detail` cursor.
