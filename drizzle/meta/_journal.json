@@ -85,6 +85,13 @@
       "when": 1790318206593,
       "tag": "0011_user_auth",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790448000000,
+      "tag": "0012_user_api_keys",
+      "breakpoints": true
     }
   ]
 }

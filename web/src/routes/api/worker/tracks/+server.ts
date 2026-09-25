@@ -21,7 +21,7 @@ function boundedLimit(value: string | null): number {
 }
 
 export const GET: RequestHandler = async ({ request, url }) => {
-	const authError = workerAuthError(request);
+	const authError = await workerAuthError(request);
 	if (authError) return authError;
 
 	const after = url.searchParams.get('after');

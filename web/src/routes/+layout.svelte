@@ -5,6 +5,7 @@
 		IconCompass,
 		IconDisc,
 		IconHome,
+		IconKey,
 		IconLogout,
 		IconSparkles,
 		IconTool,
@@ -51,7 +52,8 @@
 		{ href: '/recommend', label: 'Recommend', icon: IconWand },
 		{ href: '/activity', label: 'Activity', icon: IconActivity },
 		{ href: '/status', label: 'Status', icon: IconActivity },
-		{ href: '/manage', label: 'Manage', icon: IconTool }
+		{ href: '/manage', label: 'Manage', icon: IconTool },
+		{ href: '/settings', label: 'API keys', icon: IconKey }
 	];
 
 	onNavigate((navigation) => {

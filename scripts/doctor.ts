@@ -86,11 +86,11 @@ async function main(): Promise<void> {
 			SELECT table_name
 			FROM information_schema.tables
 			WHERE table_schema = 'public'
-				AND table_name IN ('user', 'session', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid')
+				AND table_name IN ('user', 'session', 'api_key', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid')
 			ORDER BY table_name
 		`;
 		const tableNames = new Set(tables.map((row) => String(row['table_name'])));
-		for (const table of ['user', 'session', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid']) {
+		for (const table of ['user', 'session', 'api_key', 'track', 'job_run', 'embedding_space', 'cluster_run', 'cluster_centroid']) {
 			if (tableNames.has(table)) add('ok', `table ${table}`, 'present');
 			else add('fail', `table ${table}`, 'missing; run bun run db:migrate');
 		}
@@ -99,14 +99,24 @@ async function main(): Promise<void> {
 			const authColumns = await sql`
 				SELECT table_name, column_name
 				FROM information_schema.columns
-				WHERE table_schema = 'public' AND table_name IN ('user', 'session')
+				WHERE table_schema = 'public' AND table_name IN ('user', 'session', 'api_key')
 			`;
 			const authColumnNames = new Set(
 				authColumns.map((row) => `${row['table_name']}.${row['column_name']}`)
 			);
-			for (const column of ['user.id', 'user.username', 'user.password_hash', 'session.user_id', 'session.expires_at']) {
+			for (const column of [
+				'user.id',
+				'user.username',
+				'user.password_hash',
+				'session.user_id',
+				'session.expires_at',
+				'api_key.user_id',
+				'api_key.scope',
+				'api_key.key_hash',
+				'api_key.revoked_at'
+			]) {
 				if (authColumnNames.has(column)) add('ok', column, 'present');
-				else add('fail', column, 'missing; run bun run db:migrate');
+				else add('fail', column, 'missing; run bun run db:ensure-user-api-keys');
 			}
 		}
 
