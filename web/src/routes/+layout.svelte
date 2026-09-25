@@ -39,8 +39,8 @@
 		if (poller) clearInterval(poller);
 	});
 
-	// Primary navigation only. Explore and Schedule are Vibe tabs, API keys
-	// live under Manage, and worker status is a badge rather than a full item.
+	// Primary navigation only. Explore and Schedule are Vibe tabs; API keys and
+	// worker status sit on the right.
 	const links = [
 		{ href: '/', label: 'Home', icon: IconHome },
 		{ href: '/vibe', label: 'Vibe', icon: IconSparkles },
@@ -52,19 +52,6 @@
 		const path = page.url.pathname;
 		return href === '/' ? path === '/' : path === href || path.startsWith(`${href}/`);
 	}
-
-	const workerAge = $derived.by(() => {
-		if (!data.workerLastSeenAt) return 'no data';
-		const minutes = Math.max(
-			0,
-			Math.round((Date.now() - new Date(data.workerLastSeenAt).getTime()) / 60000)
-		);
-		if (minutes < 1) return 'just now';
-		if (minutes < 60) return `${minutes}m ago`;
-		const hours = Math.round(minutes / 60);
-		if (hours < 48) return `${hours}h ago`;
-		return `${Math.round(hours / 24)}d ago`;
-	});
 
 	onNavigate((navigation) => {
 		if (!document.startViewTransition) return;
@@ -155,12 +142,15 @@
 				<div class="flex flex-wrap items-center gap-2 text-xs font-bold">
 					<a
 						href="/status"
-						title="Worker status and embedding coverage"
-						class="border-ink/15 text-ink-soft hover:bg-ink/5 hover:text-ink flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 transition"
+						aria-current={isActive('/status') ? 'page' : undefined}
+						class="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition {isActive(
+							'/status'
+						)
+							? 'bg-ink text-cream'
+							: 'text-ink-soft hover:bg-ink/5 hover:text-ink'}"
 					>
 						<IconHeartbeat size={14} />
 						Worker
-						<span class="font-mono text-[11px]">{workerAge}</span>
 					</a>
 					<a
 						href="/manage"
