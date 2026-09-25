@@ -70,8 +70,10 @@ docker compose --profile worker up -d worker
 The API must be reachable from the worker, and its PostgreSQL/audio services
 must be reachable from the web service. Keep the key out of source files and
 shell history where possible. The web UI's **API keys** page provides a
-Worker-scoped key and a copyable Colab/Jupyter cell; the bootstrap
-`WORKER_TOKEN` is still accepted for unattended Compose jobs.
+Worker-scoped key and a copyable Colab/Jupyter cell. That cell uses a one-track
+`--dry-run --limit 1` canary by default; remove those flags only when you are
+ready to write embeddings. The bootstrap `WORKER_TOKEN` is still accepted for
+unattended Compose jobs.
 
 | Variable | Default | Purpose |
 |---|---:|---|
