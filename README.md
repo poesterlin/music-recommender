@@ -162,6 +162,7 @@ Useful settings:
 | `WORKER_TOKEN` | Bearer token shared with the web service |
 | `EMBEDDING_PREFETCH_WORKERS` | Parallel snippet downloads |
 | `EMBEDDING_PREFETCH_DEPTH` | Download lookahead |
+| `EMBEDDING_INFER_BATCH_SIZE` | One-second windows per OpenL3 predict call |
 | `EMBEDDING_DOWNLOAD_TIMEOUT` | Per-request timeout in seconds |
 | `EMBEDDING_DOWNLOAD_RETRIES` | Retry count for network failures |
 | `EMBEDDING_DOWNLOAD_MAX_BYTES` | Maximum bytes per snippet |
@@ -255,6 +256,9 @@ versioned service images to GHCR and creates a GitHub release.
   match.
 - Slow downloads: increase `EMBEDDING_PREFETCH_WORKERS` only after checking
   server and network limits.
+- Slow embedding throughput: OpenL3 inference dominates, so raise
+  `EMBEDDING_INFER_BATCH_SIZE` on a GPU and compare with a bounded
+  `--dry-run --limit 20` before a full run.
 - Pending embeddings: inspect `/status`, then use a bounded `--dry-run`.
 
 ## License
