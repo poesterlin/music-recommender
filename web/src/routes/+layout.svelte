@@ -49,6 +49,7 @@
 		{ href: '/explore', label: 'Explore', icon: IconCompass },
 		{ href: '/recommend', label: 'Recommend', icon: IconWand },
 		{ href: '/activity', label: 'Activity', icon: IconActivity },
+		{ href: '/status', label: 'Status', icon: IconActivity },
 		{ href: '/manage', label: 'Manage', icon: IconTool }
 	];
 

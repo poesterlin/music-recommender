@@ -40,7 +40,12 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .DS_Store
 
 output
-embeddings/__pycache__/
+artifacts/
+**/target/
+**/__pycache__/
+*.py[cod]
 
 embeddings/embeddings_updates.sql
 /server/
+embedding-rs/models/*.onnx
+embedding-rs/models/*.bin

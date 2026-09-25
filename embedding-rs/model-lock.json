@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "model": "openl3_audio_mel256_music",
+  "artifact": "openl3-mel256-music.onnx",
+  "weights_sha256": "624ee7b1dd5ff87e18073f66fd8b2052bebb8ac70210e9c0937c0c940c63e9d6",
+  "onnx_sha256": "f50c60a338efa08b4d15688ec7757c460f56b23537fdadfc2b5b4aa3475ea2ec",
+  "opset": 13,
+  "input_shape": [null, 256, 199, 1],
+  "output_shape": [null, 512],
+  "frontend": "rust-kapre-mel256",
+  "pool_size": [32, 24],
+  "notes": "Network-only artifact; audio frontend is implemented in Rust. The binary artifact is not committed."
+}

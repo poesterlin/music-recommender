@@ -1,0 +1,1 @@
+ALTER TABLE "cluster_centroid" ADD COLUMN "embedding_space_version" integer DEFAULT 1 NOT NULL;

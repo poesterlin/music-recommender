@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "recorded": "2026-09-24",
+  "environment": {
+    "cpu": "AMD Ryzen 7 255",
+    "logical_cpus": 10,
+    "rust": "1.78.0",
+    "production_image": "music-recommender-embedding-rs:ort",
+    "full_path_cpu_limit": 8,
+    "full_path_threads": 8,
+    "fixture": "Jonas Blue/Together/01 - Always Be There.mp3"
+  },
+  "model": {
+    "artifact_sha256": "f50c60a338efa08b4d15688ec7757c460f56b23537fdadfc2b5b4aa3475ea2ec",
+    "input_shape": [1, 256, 199, 1],
+    "output_shape": [1, 512]
+  },
+  "full_path_single_run": {
+    "note": "Representative Docker run; host load and cgroup scheduling caused substantial run-to-run variance. Use the protocol in tools/README.md for a decision-grade repetition.",
+    "python_reference_seconds": 27.87,
+    "backends": {
+      "tract": {
+        "2s": {
+          "frames": 17,
+          "elapsed_seconds": 1.972,
+          "decode_seconds": 0.004,
+          "model_load_seconds": 0.086,
+          "inference_seconds": 1.882
+        },
+        "10s": {
+          "frames": 97,
+          "elapsed_seconds": 7.454,
+          "decode_seconds": 0.017,
+          "model_load_seconds": 0.080,
+          "inference_seconds": 7.357
+        },
+        "60s": {
+          "frames": 597,
+          "elapsed_seconds": 57.899,
+          "decode_seconds": 0.104,
+          "model_load_seconds": 0.078,
+          "inference_seconds": 57.718
+        }
+      },
+      "onnxruntime": {
+        "2s": {
+          "frames": 17,
+          "elapsed_seconds": 1.636,
+          "decode_seconds": 0.005,
+          "model_load_seconds": 0.108,
+          "inference_seconds": 1.524
+        },
+        "10s": {
+          "frames": 97,
+          "elapsed_seconds": 8.572,
+          "decode_seconds": 0.022,
+          "model_load_seconds": 0.131,
+          "inference_seconds": 8.418
+        },
+        "60s": {
+          "frames": 597,
+          "elapsed_seconds": 38.679,
+          "decode_seconds": 0.100,
+          "model_load_seconds": 0.089,
+          "inference_seconds": 38.490
+        }
+      }
+    }
+  },
+  "full_path_repeated_matrix": {
+    "note": "Three sequential Docker runs per duration/backend with --cpus=8, --cpuset-cpus=0-7, and MUSIC_EMBEDDING_THREADS=8; values are medians of elapsedSeconds.",
+    "tract": {
+      "2s": 1.599502,
+      "10s": 9.598248,
+      "60s": 57.152356
+    },
+    "onnxruntime": {
+      "2s": 1.071644,
+      "10s": 6.464205,
+      "60s": 37.942159
+    }
+  },
+  "full_path_repeated_60s": {
+    "note": "Three sequential Docker runs with --cpus=8, --cpuset-cpus=0-7, and MUSIC_EMBEDDING_THREADS=8; same 597-frame MP3 fixture.",
+    "tract_samples_seconds": [57.152, 58.529, 55.112],
+    "tract_median_seconds": 57.152,
+    "onnxruntime_samples_seconds": [36.276, 39.550, 37.942],
+    "onnxruntime_median_seconds": 37.942,
+    "onnxruntime_speedup_vs_tract": 1.51
+  },
+  "network_only_median": {
+    "note": "Separate repeatable probe: one warm-up plus 50 calls, 8 configured threads, precomputed frames, model load excluded.",
+    "tract_ms_per_frame": 77.941,
+    "static_onnxruntime_ms_per_frame": 50.336,
+    "official_dynamic_onnxruntime_ms_per_frame": 40.411,
+    "static_onnxruntime_speedup_vs_tract": 1.55,
+    "short_probe_peak_rss_mb_approx": 110
+  },
+  "sampled_container_peak_rss": {
+    "note": "Approximate maximum reported by Docker stats while running the 10-second fixture with a two-CPU limit.",
+    "tract_mib": 97,
+    "onnxruntime_mib": 124
+  },
+  "parity": {
+    "tract_21_file_minimum_cosine": 0.999999987716,
+    "onnxruntime_21_file_minimum_cosine": 0.9999999877173669,
+    "tract_21_file_maximum_absolute_error": 0.002580,
+    "onnxruntime_21_file_maximum_absolute_error": 0.0025801658630371094,
+    "tract_21_file_average_absolute_error": 0.000039,
+    "onnxruntime_21_file_average_absolute_error": 0.00003891013671991892,
+    "onnxruntime_60s_cosine": 0.9999999999762857,
+    "onnxruntime_60s_maximum_absolute_error": 0.00011348724365234375,
+    "onnxruntime_60s_mean_absolute_error": 0.000009384180884808302
+  },
+  "batching": {
+    "tract_fixed_batch_4_relative_throughput": 0.32,
+    "tract_fixed_batch_8_relative_throughput": 0.29,
+    "tract_fixed_batch_32_relative_throughput": 0.27,
+    "decision": "Keep network batch size at 1; fixed tract batches regressed 3-4x on this CPU."
+  },
+  "decision": "ONNX Runtime is faster in the controlled long-track probe and preserves the parity gates, but remains opt-in. Keep tract as the default until repeated deployment-host benchmarks and the write gates pass."
+}

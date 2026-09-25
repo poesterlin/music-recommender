@@ -1,0 +1,13 @@
+# Pinned to the validated OpenL3 reference environment used by the parity fixtures.
+openl3==0.4.2
+tensorflow==2.20.0
+keras==3.13.2
+librosa==0.11.0
+numpy==2.4.6
+scipy==1.17.1
+soundfile==0.14.0
+soxr==1.1.0
+resampy==0.2.2
+audioread==3.1.0
+psycopg2-binary==2.9.13
+requests==2.34.2

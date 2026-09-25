@@ -2,7 +2,7 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api } from '$lib/api';
-	import { CLUSTER_NAMES, clusterLabel, type VibeSchedule } from '$lib/clusters';
+	import { type VibeSchedule } from '$lib/clusters';
 
 	let { data } = $props();
 
@@ -15,7 +15,15 @@
 	let endHour = $state(10);
 	let picked = $state(new Set<number>());
 
-	const clusterIds = Object.keys(CLUSTER_NAMES).map(Number).sort((a, b) => a - b);
+	const clusterIds = data.availableClusterIds;
+
+	function clusterName(id: number): string {
+		return data.clusterNames[id] ?? `Cluster ${id}`;
+	}
+
+	function clusterLabel(id: number): string {
+		return `#${id} ${clusterName(id)}`;
+	}
 
 	function togglePick(id: number, on: boolean) {
 		const next = new Set(picked);
@@ -171,7 +179,7 @@
 				{#each clusterIds as id (id)}
 					<label class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-gray-50 {picked.has(id) ? 'bg-green-50 font-semibold' : ''}">
 						<input type="checkbox" class="size-4 shrink-0 accent-green-600" checked={picked.has(id)} onchange={(e) => togglePick(id, e.currentTarget.checked)} />
-						<span class="truncate"><b class="font-normal text-gray-400">#{id}</b> {CLUSTER_NAMES[id]}</span>
+						<span class="truncate"><b class="font-normal text-gray-400">#{id}</b> {clusterName(id)}</span>
 					</label>
 				{/each}
 			</div>

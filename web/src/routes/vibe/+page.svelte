@@ -2,7 +2,6 @@
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api, post } from '$lib/api';
-	import { CLUSTER_NAMES, clusterLabel } from '$lib/clusters';
 
 	let { data } = $props();
 
@@ -10,12 +9,20 @@
 	let saveStatus = $state('');
 	let filter = $state('');
 
-	const clusterIds = Object.keys(CLUSTER_NAMES).map(Number).sort((a, b) => a - b);
+	const clusterIds = data.availableClusterIds;
+
+	function clusterName(id: number): string {
+		return data.clusterNames[id] ?? `Cluster ${id}`;
+	}
+
+	function clusterLabel(id: number): string {
+		return `#${id} ${clusterName(id)}`;
+	}
 
 	const visibleIds = $derived(
 		filter.trim()
 			? clusterIds.filter((id) =>
-					`${id} ${CLUSTER_NAMES[id] ?? ''}`.toLowerCase().includes(filter.trim().toLowerCase())
+					`${id} ${clusterName(id)}`.toLowerCase().includes(filter.trim().toLowerCase())
 				)
 			: clusterIds
 	);
@@ -103,7 +110,7 @@
 				: 'border-gray-200 hover:border-gray-300'}"
 		>
 			<input type="checkbox" class="size-4 accent-green-600" checked={vibeSelection.has(id)} onchange={(e) => toggle(id, e.currentTarget.checked)} />
-			<span class="text-sm"><b class="text-gray-400">#{id}</b> <span class="font-medium text-gray-800">{CLUSTER_NAMES[id]}</span></span>
+			<span class="text-sm"><b class="text-gray-400">#{id}</b> <span class="font-medium text-gray-800">{clusterName(id)}</span></span>
 		</label>
 	{/each}
 </div>

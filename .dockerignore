@@ -1,0 +1,10 @@
+.git
+.gitignore
+.env
+**/node_modules
+web
+embeddings
+**/target
+artifacts
+*.log
+embedding-rs/models/*.onnx

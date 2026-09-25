@@ -3,7 +3,8 @@
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api, post } from '$lib/api';
-	import { CLUSTER_NAMES, clusterLabel } from '$lib/clusters';
+	import { CLUSTER_NAMES } from '$lib/clusters';
+	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
 
 	let { data } = $props();
 
@@ -12,10 +13,18 @@
 	let loading = $state(false);
 	let playing = $state(false);
 
+	function clusterName(clusterId: number): string {
+		return data.clusterNames[clusterId] ?? CLUSTER_NAMES[clusterId] ?? 'Unknown Vibe';
+	}
+
+	function clusterDisplayName(clusterId: number): string {
+		return `#${clusterId} ${clusterName(clusterId)}`;
+	}
+
 	async function sample(clusterId: number) {
 		loading = true;
 		playing = false;
-		title = clusterLabel(clusterId);
+		title = clusterDisplayName(clusterId);
 		tracks = [];
 		const { ok, data: json } = await api<{
 			tracks: { uri: string; name: string; artists: string[]; album: string }[];
@@ -38,7 +47,11 @@
 	description="Every cluster is a vibe of its own. Open one for 30 random tracks, then play the sample on the booth to hear what it sounds like."
 />
 
-<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+<div class="mt-6">
+	<ClusterAtlas />
+</div>
+
+<div class="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 	{#each data.clusters as c (c.clusterId)}
 		<button
 			class="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-400 hover:shadow disabled:cursor-default disabled:opacity-60 disabled:hover:translate-y-0"
@@ -46,7 +59,7 @@
 			onclick={() => sample(c.clusterId)}
 		>
 			<p class="text-xs font-medium text-gray-400">#{c.clusterId}</p>
-			<p class="mt-0.5 font-bold text-blue-700">{CLUSTER_NAMES[c.clusterId] ?? 'Unknown Vibe'}</p>
+			<p class="mt-0.5 font-bold text-blue-700">{clusterName(c.clusterId)}</p>
 			{#if c.name}
 				<p class="mt-2 text-sm text-gray-600">{c.name}</p>
 				<p class="text-xs text-gray-400 italic">{c.artists.join(', ')}</p>

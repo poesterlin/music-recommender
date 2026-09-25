@@ -80,6 +80,60 @@ services:
         sleep 43200;
       done"
 
+  # Standalone Rust cluster job. Benchmark mode is read-only; an apply requires
+  # an explicit run id, artifact, and confirmation flag.
+  clusterer:
+    build:
+      context: .
+      dockerfile: clusterer/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    profiles: ["clustering"]
+    restart: "no"
+    init: true
+    volumes:
+      - cluster-artifacts:/artifacts
+    networks:
+      - music
+
+  # Bun + WASM numerical engine. Native clusterer remains the apply/rollback
+  # boundary; this service only computes and optionally records artifacts.
+  clusterer-bun:
+    build:
+      context: .
+      dockerfile: clusterer-bun/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    profiles: ["clustering"]
+    restart: "no"
+    init: true
+    mem_limit: 1g
+    volumes:
+      - cluster-artifacts:/artifacts
+    networks:
+      - music
+
+  # Rust OpenL3 embedding worker. Kept behind an explicit profile while the
+  # parity gate is running; the ONNX artifact is mounted read-only from
+  # embedding-rs/models and is not baked into the image.
+  embedding-rust:
+    build:
+      context: .
+      dockerfile: embedding-rs/Dockerfile
+    env_file: .env
+    profiles: ["embedding-rust"]
+    restart: "no"
+    init: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUDIO_DIR: /music
+    volumes:
+      - music:/music:ro
+      - ./embedding-rs/models:/models:ro
+      - embedding-artifacts:/artifacts
+    networks:
+      - music
+
   # index-library:
   #   image: curlimages/curl:latest
   #   restart: unless-stopped
@@ -100,6 +154,19 @@ services:
       context: embeddings
     env_file: .env
     command: python generate-local-embeddings.py
+    init: true
+    restart: "no"
+    environment:
+      AUDIO_DIR: /music
+      EMBEDDING_BATCH_SIZE: "${EMBEDDING_BATCH_SIZE:-8}"
+      EMBEDDING_DURATION_SECONDS: "${EMBEDDING_DURATION_SECONDS:-60}"
+      EMBEDDING_AUDIO_BACKEND: "${EMBEDDING_AUDIO_BACKEND:-fast}"
+      EMBEDDING_JOB_NAME: "${EMBEDDING_JOB_NAME:-python-local-embeddings}"
+      EMBEDDING_LOCK_KEY: "${EMBEDDING_LOCK_KEY:-5572451585022050817}"
+      EMBEDDING_TF_INTRA_THREADS: "${EMBEDDING_TF_INTRA_THREADS:-0}"
+      EMBEDDING_TF_INTER_THREADS: "${EMBEDDING_TF_INTER_THREADS:-0}"
+      EMBEDDING_DB_RETRIES: "${EMBEDDING_DB_RETRIES:-3}"
+      EMBEDDING_DB_RETRY_DELAY: "${EMBEDDING_DB_RETRY_DELAY:-1.0}"
     volumes:
       - music:/music:ro
     profiles:
@@ -125,3 +192,5 @@ volumes:
       type: none
       device: /mnt/zfs/music
       o: bind
+  cluster-artifacts:
+  embedding-artifacts:
