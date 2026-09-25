@@ -35,7 +35,13 @@ function refreshSeconds(): number {
 
 function normalized(value: unknown): string {
 	if (typeof value !== 'string') return '';
-	return value.replace(/[/:?]/g, '_').trim().toLowerCase();
+	return value
+		.normalize('NFKC')
+		.replace(/\u2026/g, '...')
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim()
+		.replace(/\s+/g, ' ')
+		.toLowerCase();
 }
 
 function addFile(index: FileIndex, path: string): void {
@@ -141,8 +147,18 @@ export async function findLocalAudioFile(track: AudioTrack): Promise<string> {
 	let selected = candidates[0];
 	if (candidates.length > 1) {
 		const album = normalized(track.album);
-		if (album) {
-			selected = candidates.find((candidate) => candidate.toLowerCase().includes(album)) ?? selected;
+		const artist = normalized(
+			Array.isArray(track.artist) ? track.artist.join(' ') : track.artist
+		);
+		const matching = candidates.find((candidate) => {
+			const key = normalized(candidate);
+			return (!artist || key.includes(artist)) && (!album || key.includes(album));
+		});
+		if (matching) {
+			selected = matching;
+		} else if (album) {
+			selected =
+				candidates.find((candidate) => normalized(candidate).includes(album)) ?? selected;
 		}
 	}
 	return ensureInsideRoot(index.root, selected);
