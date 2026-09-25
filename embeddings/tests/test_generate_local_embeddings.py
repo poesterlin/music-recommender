@@ -247,7 +247,7 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(args.infer_batch_size, 256)
 
         for value in ("0", str(local_embeddings.MAX_INFER_BATCH_SIZE + 1)):
-            with self.assertRaises(SystemExit):
+            with self.assertRaises(SystemExit) as raised:
                 with contextlib.redirect_stderr(io.StringIO()):
                     local_embeddings.parse_args(
                         [
@@ -257,6 +257,27 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
                             value,
                         ]
                     )
+            # Usage errors must not reuse the "pending tracks remain" status.
+            self.assertEqual(raised.exception.code, local_embeddings.USAGE_EXIT_CODE)
+            self.assertNotEqual(raised.exception.code, 2)
+
+    def test_unknown_flags_exit_with_the_usage_status_not_two(self):
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(io.StringIO()):
+                local_embeddings.parse_args(["--not-a-real-flag"])
+        self.assertEqual(raised.exception.code, local_embeddings.USAGE_EXIT_CODE)
+
+    def test_api_page_batch_cap_points_at_the_inference_batch_flag(self):
+        stderr = io.StringIO()
+        with self.assertRaises(SystemExit) as raised:
+            with contextlib.redirect_stderr(stderr):
+                local_embeddings.parse_args(
+                    ["--source-mode", "api", "--batch-size", "64"]
+                )
+        self.assertEqual(raised.exception.code, local_embeddings.USAGE_EXIT_CODE)
+        message = stderr.getvalue()
+        self.assertIn("--infer-batch-size", message)
+        self.assertIn("EMBEDDING_INFER_BATCH_SIZE", message)
 
     def test_infer_batch_size_reads_the_environment_default(self):
         with patch.dict(os.environ, {"EMBEDDING_INFER_BATCH_SIZE": "128"}):

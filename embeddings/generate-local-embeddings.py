@@ -30,7 +30,7 @@ import time
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, NoReturn, Sequence
 
 import librosa
 import numpy as np
@@ -62,8 +62,22 @@ DEFAULT_WORKER_DOWNLOAD_TIMEOUT = 60.0
 DEFAULT_WORKER_DOWNLOAD_RETRIES = 3
 DEFAULT_WORKER_DOWNLOAD_MAX_BYTES = 32 * 1024 * 1024
 MAX_FAILURE_DETAILS = 100
+# A healthy bounded run reports "pending tracks remain" with status 2, and
+# argparse reports usage mistakes with that same status 2. Callers such as the
+# Colab worker treat 2 as expected, so a bad flag or environment would be
+# indistinguishable from a clean dry run. Configuration errors therefore exit
+# with EX_USAGE instead.
+USAGE_EXIT_CODE = 64
 SUPPORTED_EXTENSIONS = (".mp3", ".flac", ".wav", ".m4a", ".ogg")
 openl3: Any = None
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    """Argument parser that never reports usage errors as a pending run."""
+
+    def error(self, message: str) -> NoReturn:
+        self.print_usage(sys.stderr)
+        self.exit(USAGE_EXIT_CODE, f"{self.prog}: error: {message}\n")
 
 
 class LockNotAcquired(RuntimeError):
@@ -139,7 +153,7 @@ def nonnegative_int(value: str) -> int:
 def parse_args(
     argv: Sequence[str] | None = None, *, default_source_mode: str | None = None
 ) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
+    parser = _ArgumentParser(
         description="Generate OpenL3 embeddings locally or through the worker API."
     )
     source_default = (
@@ -183,7 +197,10 @@ def parse_args(
         "--batch-size",
         type=positive_int,
         default=env_int("EMBEDDING_BATCH_SIZE", DEFAULT_BATCH_SIZE),
-        help="Number of tracks fetched and checkpointed per batch",
+        help=(
+            "Tracks fetched and checkpointed per keyset page (max 32 in API mode); "
+            "unrelated to inference batching, see --infer-batch-size"
+        ),
     )
     parser.add_argument(
         "--infer-batch-size",
@@ -308,9 +325,12 @@ def parse_args(
     if args.audio_backend not in {"fast", "librosa"}:
         parser.error("--audio-backend must be fast or librosa")
     if args.batch_size > (32 if args.source_mode == "api" else 512):
+        page_limit = 32 if args.source_mode == "api" else 512
         parser.error(
-            "--batch-size must be 32 or less in API mode" if args.source_mode == "api"
-            else "--batch-size must be 512 or less"
+            f"--batch-size is the keyset page and write batch (max {page_limit} in "
+            f"{args.source_mode} mode) and is not the OpenL3 predict batch. To change "
+            "inference batching use --infer-batch-size or "
+            "EMBEDDING_INFER_BATCH_SIZE."
         )
     if not args.job_name.strip():
         parser.error("--job-name must not be empty")

@@ -112,6 +112,24 @@ If a run ends with missing or failed tracks, it exits non-zero and leaves those
 tracks eligible for the next invocation. Do not delete the unfinished
 `job_run` row unless abandoning the run is intentional.
 
+### Exit codes
+
+| Code | Meaning |
+|---:|---|
+| `0` | The run completed and no unembedded tracks remain |
+| `2` | Tracks remain; a bounded or interrupted run, not a failure |
+| `64` | The arguments or environment were rejected; nothing was processed |
+
+Status `64` is `EX_USAGE`. The worker deliberately avoids argparse's default
+status `2` for usage errors, because callers such as the Colab notebook treat
+`2` as an expected bounded run and would otherwise report a bad flag or an
+out-of-range environment variable as a healthy dry run that did no work.
+
+Two settings are easy to confuse. `--batch-size` / `EMBEDDING_BATCH_SIZE` is
+the keyset page and write batch, capped at 32 in API mode by the server's page
+limit. `--infer-batch-size` / `EMBEDDING_INFER_BATCH_SIZE` is the OpenL3 predict
+batch. To change inference batching, use the latter.
+
 ## Profiling
 
 Every invocation ends with a `PROFILE` JSON line containing count, total, mean,
