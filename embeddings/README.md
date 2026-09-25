@@ -45,7 +45,7 @@ Run it with:
 
 ```sh
 export WORKER_URL=https://recommender.example.com
-export WORKER_TOKEN='same-token-as-the-web-service'
+export WORKER_TOKEN='a-worker-scoped-key-from-the-web-ui'
 python embeddings/worker.py --source-mode api
 ```
 
@@ -65,8 +65,10 @@ docker compose --profile worker up -d worker
 ```
 
 The API must be reachable from the worker, and its PostgreSQL/audio services
-must be reachable from the web service. Keep `WORKER_TOKEN` out of source
-files and shell history where possible.
+must be reachable from the web service. Keep the key out of source files and
+shell history where possible. The web UI's **API keys** page provides a
+Worker-scoped key and a copyable Colab/Jupyter cell; the bootstrap
+`WORKER_TOKEN` is still accepted for unattended Compose jobs.
 
 | Variable | Default | Purpose |
 |---|---:|---|

@@ -10,6 +10,8 @@
 - Python worker tests: build `embeddings/Dockerfile`, then run `unittest discover` from `embeddings/tests`
 - Fresh database: provide a disposable pgvector URL and run `bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db`
 - Create/reset an account: `bun run auth:create-user --username <name>`
+- The authenticated `/settings` page manages scoped Worker and Home Assistant
+  API keys; secrets are shown once and stored hashed.
 
 ## Configuration
 

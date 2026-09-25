@@ -6,6 +6,7 @@ import {
 	serviceUser,
 	sessionCookieName
 } from '$lib/server/auth';
+import { authenticateApiKey } from '$lib/server/api-keys';
 import { startHaLidarrWatch } from '$lib/server/ha-lidarr-watch';
 
 // App-level startup: seed persisted vibe state and start the WLED
@@ -87,7 +88,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// dedicated key. It is deliberately limited to the playback POST route.
 	if (
 		isExternalPlaybackRequest(event) &&
-		matchesConfiguredToken(event.request, 'PLAYBACK_API_KEY')
+		(matchesConfiguredToken(event.request, 'PLAYBACK_API_KEY') ||
+			(await authenticateApiKey(event.request, 'playback')) !== null)
 	) {
 		event.locals.user = serviceUser;
 		event.locals.session = null;

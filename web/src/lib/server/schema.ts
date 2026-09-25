@@ -21,6 +21,31 @@ export const sessionTable = pgTable("session", {
 
 export type Session = typeof sessionTable.$inferSelect;
 
+export type ApiKeyScope = 'worker' | 'playback';
+
+export const apiKeyTable = pgTable(
+	'api_key',
+	{
+		id: text('id').primaryKey(),
+		userId: text('user_id')
+			.notNull()
+			.references(() => userTable.id, authCascade),
+		name: text('name').notNull(),
+		scope: text('scope').$type<ApiKeyScope>().notNull(),
+		keyPrefix: text('key_prefix').notNull(),
+		keyHash: text('key_hash').notNull().unique(),
+		createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' })
+			.defaultNow()
+			.notNull(),
+		lastUsedAt: timestamp('last_used_at', { withTimezone: true, mode: 'date' }),
+		expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
+		revokedAt: timestamp('revoked_at', { withTimezone: true, mode: 'date' })
+	},
+	(table) => [index('apiKeyUserIdx').on(table.userId)]
+);
+
+export type ApiKey = typeof apiKeyTable.$inferSelect;
+
 export const trackTable = pgTable(
   "track",
   {

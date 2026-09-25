@@ -65,7 +65,7 @@ function sameMetadata(row: TrackRow, item: UploadItem): boolean {
 }
 
 export const POST: RequestHandler = async ({ request }) => {
-	const authError = workerAuthError(request);
+	const authError = await workerAuthError(request);
 	if (authError) return authError;
 
 	const contentLength = Number(request.headers.get('content-length') ?? 0);

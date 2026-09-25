@@ -30,8 +30,10 @@ Python worker needs the packages in `embeddings/requirements.txt`.
    - `MUSIC_LIBRARY_PATH`
    - `MUSIC_HOST` and `MA_TOKEN`
    - `HA_HOST`, `TOKEN`, and `CONFIG_ID`
-   - `WORKER_TOKEN` if the worker or internal jobs will be used
-   - `PLAYBACK_API_KEY` if Home Assistant will trigger playback
+   - `WORKER_TOKEN` for the default Compose worker and internal jobs (optional
+     when using a UI-created worker key for an external worker)
+   - `PLAYBACK_API_KEY` for the default Home Assistant integration (optional
+     when using a UI-created playback key)
 
 3. Choose a database.
 
@@ -87,14 +89,21 @@ bun run auth:create-user --username admin
 The command creates the account or replaces its password and revokes that
 user's sessions. Without `--password`, it prints a generated password once.
 
-There are two service credentials:
+There are two bootstrap service credentials for Compose and existing automations:
 
-- `WORKER_TOKEN` authenticates the Python worker and the two internal Compose
-  jobs. It is not accepted by ordinary application routes.
+- `WORKER_TOKEN` authenticates the default Python worker and the two internal
+  Compose jobs. It is not accepted by ordinary application routes.
 - `PLAYBACK_API_KEY` lets Home Assistant `POST /api/play-vibe` trigger external
   playback. It is not accepted by other application routes.
 
-For example, the Home Assistant request can use the bearer header form:
+Signed-in users can also create narrowly scoped keys under **API keys** in the
+web UI. A `worker` key is accepted only by `/api/worker/*`; a `playback` key is
+accepted only by the Home Assistant playback POST. The secret is displayed once,
+stored only as a hash, and can be revoked without affecting the account. The
+environment credentials remain useful for unattended Compose jobs.
+
+For example, the Home Assistant request can use either the bootstrap key or a
+UI-created playback key:
 
 ```sh
 curl -X POST https://recommender.example.com/api/play-vibe \
@@ -103,8 +112,7 @@ curl -X POST https://recommender.example.com/api/play-vibe \
   -d '{}'
 ```
 
-Browser requests use the session cookie automatically. The app does not need
-user-managed API keys.
+Browser requests use the session cookie automatically.
 
 ## Python worker
 
@@ -121,13 +129,14 @@ python embeddings/generate-local-embeddings.py --dry-run --limit 10
 
 ### API mode
 
-API mode is portable. It needs only the worker API URL and its bearer token; it
-does not need PostgreSQL, Music Assistant, Home Assistant, or a local music
-mount.
+API mode is portable. It needs only the worker API URL and a worker-scoped
+bearer key; it does not need PostgreSQL, Music Assistant, Home Assistant, or a
+local music mount. Create the key under **API keys** in the UI, or use the
+bootstrap `WORKER_TOKEN` for an existing deployment.
 
 ```sh
 export WORKER_URL=https://recommender.example.com
-export WORKER_TOKEN='the-same-token-as-the-web-service'
+export WORKER_TOKEN='a-worker-scoped-key'
 python embeddings/worker.py --source-mode api
 ```
 
@@ -160,14 +169,13 @@ The Compose profile runs API mode beside the web service:
 docker compose --profile worker up -d worker
 ```
 
-For Colab, clone the repository, install `embeddings/requirements.txt` in a
-fresh runtime, set `WORKER_URL` and `WORKER_TOKEN`, and run:
+For Colab or Jupyter, open **API keys** in the web UI, create a Worker key, and
+copy the ready-made worker cell from that page. The cell clones the repository,
+installs `embeddings/requirements.txt`, prompts for the key, and runs the
+existing 60-second API worker. The same notebook is downloadable as
+[`web/static/music-recommender-worker.ipynb`](web/static/music-recommender-worker.ipynb).
 
-```python
-!python embeddings/worker.py --source-mode api --limit 10
-```
-
-The worker URL must be reachable from Colab. Colab's filesystem is temporary;
+The worker URL must be reachable from the notebook. Its filesystem is temporary;
 use `EMBEDDING_STATE_FILE` on mounted storage if the job must resume there.
 
 ## Database and diagnostics
@@ -223,9 +231,10 @@ versioned service images to GHCR and creates a GitHub release.
 
 - `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with
   a database user that can enable the extension.
-- `401` from the app: use the session cookie, or the service key for the
-  specific internal/playback route.
-- Worker `401`: check that `WORKER_TOKEN` matches on the worker and web service.
+- `401` from the app: use the session cookie, or the scoped key for the
+  specific worker/playback route.
+- Worker `401`: check that the key is Worker-scoped, active, and matches the
+  web service; the bootstrap `WORKER_TOKEN` remains supported.
 - Worker `404` for audio: verify `MUSIC_LIBRARY_PATH` and the track's local file
   match.
 - Slow downloads: increase `EMBEDDING_PREFETCH_WORKERS` only after checking

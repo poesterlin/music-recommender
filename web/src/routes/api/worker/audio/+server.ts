@@ -27,7 +27,7 @@ function streamError(message: string, status: number): Response {
 }
 
 export const GET: RequestHandler = async ({ request, url }) => {
-	const authError = workerAuthError(request);
+	const authError = await workerAuthError(request);
 	if (authError) return authError;
 
 	const uri = url.searchParams.get('uri');
