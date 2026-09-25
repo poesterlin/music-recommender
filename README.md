@@ -186,6 +186,10 @@ bun run db:ensure-centered
 bun run doctor -- --json
 ```
 
+For an existing legacy database that predates the Drizzle migration journal,
+run `bun run db:ensure-user-api-keys` after the `user` and `session` tables are
+present.
+
 `doctor` checks configuration, the database connection, pgvector, the auth and
 pipeline tables and columns, and the host audio path without writing data.
 
