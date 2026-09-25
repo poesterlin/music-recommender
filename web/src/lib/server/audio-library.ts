@@ -45,7 +45,16 @@ function normalized(value: unknown): string {
 		.replace(/[^\p{L}\p{N}]+/gu, ' ')
 		.trim()
 		.replace(/\s+/g, ' ')
-		.toLowerCase();
+		.toLowerCase()
+		// NFKD does not decompose these letters, but local filenames often do.
+		.replace(/ø/g, 'o')
+		.replace(/æ/g, 'ae')
+		.replace(/œ/g, 'oe')
+		.replace(/ð/g, 'd')
+		.replace(/þ/g, 'th')
+		.replace(/ß/g, 'ss')
+		.replace(/ł/g, 'l')
+		.replace(/ı/g, 'i');
 }
 
 function addFile(index: FileIndex, path: string): void {
