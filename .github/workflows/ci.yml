@@ -41,6 +41,7 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
