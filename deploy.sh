@@ -16,7 +16,7 @@ set -euo pipefail
 REMOTE="lab@homelab"
 REMOTE_DIR="projects/services/music-recommender"
 BRANCH="main"
-REMOTE_HEALTH_URL="http://127.0.0.1:4932/api/status"
+REMOTE_HEALTH_URL="http://127.0.0.1:4932/api/health"
 
 cd "$(dirname "$0")"
 
@@ -62,7 +62,7 @@ ssh "$REMOTE" "
 echo "==> verifying public URL"
 PUBLIC_URL="https://$(ssh "$REMOTE" "grep ^DOMAIN= $REMOTE_DIR/.env | cut -d= -f2")"
 for i in $(seq 1 12); do
-  if curl -sf "$PUBLIC_URL/api/status" >/dev/null; then echo "PUBLIC OK ($PUBLIC_URL)"; exit 0; fi
+  if curl -sf "$PUBLIC_URL/api/health" >/dev/null; then echo "PUBLIC OK ($PUBLIC_URL)"; exit 0; fi
   sleep 5
 done
 echo "public check FAILED ($PUBLIC_URL)"; exit 1

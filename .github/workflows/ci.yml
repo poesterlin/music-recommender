@@ -121,6 +121,7 @@ jobs:
           HA_HOST: http://home-assistant.example.test
           TOKEN: ci-token
           CONFIG_ID: ci-config
+          WORKER_TOKEN: ci-worker-token
         run: |
           cat > .env <<'EOF'
           DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/recommender
@@ -130,6 +131,7 @@ jobs:
           HA_HOST=http://home-assistant.example.test
           TOKEN=ci-token
           CONFIG_ID=ci-config
+          WORKER_TOKEN=ci-worker-token
           EOF
           bun run doctor -- --json --skip-audio > fresh-doctor.json
           node -e "const r=require('./fresh-doctor.json'); if (!r.ok) process.exit(1)"

@@ -78,6 +78,13 @@
       "when": 1790318206592,
       "tag": "0010_allow_precentered_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790318206593,
+      "tag": "0011_user_auth",
+      "breakpoints": true
     }
   ]
 }

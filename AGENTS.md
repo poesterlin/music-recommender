@@ -9,6 +9,7 @@
 - Embedding core/CLI: `cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'`
 - Python worker tests: build `embeddings/Dockerfile`, then run `unittest discover` from `embeddings/tests`
 - Fresh database: provide a disposable pgvector URL and run `bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db`
+- Create/reset an account: `bun run auth:create-user --username <name>`
 
 ## Configuration
 
@@ -34,10 +35,14 @@ External PostgreSQL installations can leave that profile disabled and provide
 - `embedding-rust`: optional Rust embedding worker.
 - `worker`: API-mode Python worker; it uses the web worker API and no database.
 
-API worker mode is enabled with `--source-mode api` and `WORKER_URL` plus
-`WORKER_TOKEN`. It downloads bounded snippets in a background pool and uploads
-batches over HTTP. Cluster apply/rollback and embedding writes are explicit
-operations. Read-only status and dry-run commands are safe for diagnostics.
+The app uses database-backed user/session authentication. Registration is
+always available; use `bun run auth:create-user --username <name>` to create
+or reset an account. `WORKER_TOKEN` is limited to the worker and internal jobs;
+`PLAYBACK_API_KEY` is limited to the Home Assistant playback POST. API worker
+mode is enabled with `--source-mode api` and `WORKER_URL` plus `WORKER_TOKEN`.
+It downloads bounded snippets in a background pool and uploads batches over
+HTTP. Cluster apply/rollback and embedding writes are explicit operations.
+Read-only status and dry-run commands are safe for diagnostics.
 
 ## Deployment
 

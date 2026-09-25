@@ -1,5 +1,26 @@
 import { index, uniqueIndex, vector, pgTable, text, timestamp, boolean, integer, serial, jsonb, real } from "drizzle-orm/pg-core";
 
+const authCascade = { onDelete: "cascade", onUpdate: "cascade" } as const;
+
+export const userTable = pgTable("user", {
+  id: text("id").primaryKey(),
+  email: text("email").unique(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).defaultNow().notNull(),
+  lastLogin: timestamp("last_login", { withTimezone: true, mode: "date" }),
+  username: text("username").notNull().unique(),
+  passwordHash: text("password_hash").notNull()
+});
+
+export type User = typeof userTable.$inferSelect;
+
+export const sessionTable = pgTable("session", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => userTable.id, authCascade),
+  expiresAt: timestamp("expires_at", { withTimezone: true, mode: "date" }).notNull()
+});
+
+export type Session = typeof sessionTable.$inferSelect;
+
 export const trackTable = pgTable(
   "track",
   {
