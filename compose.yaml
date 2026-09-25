@@ -8,6 +8,9 @@ services:
       - "4932:3000"
     environment:
       PORT: "3000"
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
+      MUSIC_LIBRARY_PATH: /music
+      WORKER_TOKEN: "${WORKER_TOKEN:-}"
     labels:
       - "traefik.enable=true"
       # set host in DOMAIN env variable
@@ -16,6 +19,8 @@ services:
     networks:
       - traefik_web
       - music
+    volumes:
+      - music:/music:ro
     healthcheck:
       test:
         [
@@ -69,6 +74,8 @@ services:
       context: embeddings
     env_file: .env
     restart: unless-stopped
+    environment:
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
     volumes:
       - music:/music:ro
     networks:
@@ -77,6 +84,7 @@ services:
       sh -c "while true; do
         echo \"[embeddings-loop] $$(date): generating...\";
         python generate-local-embeddings.py || echo failed;
+        python migrate-centered-embeddings.py || echo centering-failed;
         sleep 43200;
       done"
 
@@ -87,7 +95,7 @@ services:
       context: .
       dockerfile: clusterer/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
     profiles: ["clustering"]
     restart: "no"
     init: true
@@ -103,7 +111,7 @@ services:
       context: .
       dockerfile: clusterer-bun/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
     profiles: ["clustering"]
     restart: "no"
     init: true
@@ -125,7 +133,7 @@ services:
     restart: "no"
     init: true
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
       AUDIO_DIR: /music
     volumes:
       - music:/music:ro
@@ -157,6 +165,7 @@ services:
     init: true
     restart: "no"
     environment:
+      DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
       AUDIO_DIR: /music
       EMBEDDING_BATCH_SIZE: "${EMBEDDING_BATCH_SIZE:-8}"
       EMBEDDING_DURATION_SECONDS: "${EMBEDDING_DURATION_SECONDS:-60}"
@@ -172,6 +181,25 @@ services:
     profiles:
       - embedding
 
+  # Portable worker mode. The worker talks only to the authenticated worker
+  # API; it does not need PostgreSQL or a music volume.
+  worker:
+    build:
+      context: embeddings
+    env_file: .env
+    profiles: ["worker"]
+    command: python worker.py --source-mode api
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      WORKER_URL: "${WORKER_URL:-http://web:3000}"
+      WORKER_TOKEN: "${WORKER_TOKEN:-}"
+    restart: unless-stopped
+    init: true
+    networks:
+      - music
+
   # indexer:
   #   build:
   #     context: embeddings
@@ -180,9 +208,30 @@ services:
   #   profiles:
   #     - embedding
 
+  postgres:
+    image: pgvector/pgvector:pg16
+    profiles: ["database"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-recommender}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: ${POSTGRES_DB:-recommender}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recommender} -d ${POSTGRES_DB:-recommender}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - music
+
 networks:
   traefik_web:
     external: true
+    name: ${TRAEFIK_NETWORK:-traefik_web}
   music:
 
 volumes:
@@ -190,7 +239,8 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: /mnt/zfs/music
+      device: ${MUSIC_LIBRARY_PATH:-/mnt/zfs/music}
       o: bind
+  postgres-data:
   cluster-artifacts:
   embedding-artifacts:

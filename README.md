@@ -1,186 +1,196 @@
 # Music Recommender
 
-## Steps:
+A local music-library indexer, OpenL3 embedding worker, pgvector similarity
+search, and clustering service. The web process is the database-backed UI and
+API. The Python worker can run beside it or on another machine.
 
-1. update music libary in [Plex](https://plex.oesterlin.dev)
-1. press sync library in [Music Assistant](https://musicassistant.oesterlin.dev/#/settings/providers) 
-1. update index `bun src/index-library.ts`
-2. analyze using ai 
-3. cluster
+## Requirements
 
-## High-Level Steps
+- Docker Compose v2
+- Bun
+- PostgreSQL with the `vector` extension
+- A music library available to the web process
+- Music Assistant for library metadata and playback
+- Home Assistant for the current library import endpoint
 
-1. Get the data from the database
-2. Find the song file on disk
-3. Generate the song vector
-4. Store the song vector in the database
-5. Get a random song from the library
-6. Lookup the song vector from the database by the URI
-7. Get the 10 nearest neighbors from the database
-8. Add the songs to the queue
+Rust `1.78` or newer is needed for the optional native clustering tools. The
+Python worker needs the packages in `embeddings/requirements.txt`.
 
-## My Library
+## Install
 
-Get the list of all items in the library.
+1. Create the environment file:
 
-**Request**
+   ```sh
+   cp .env.example .env
+   ```
 
-```bash
-curl --location {{HOST}}'/api/services/music_assistant/search?return_response=null' \
---header 'Content-Type: application/json' \
---header 'Authorization: Bearer {{TOKEN}}' \
---data '{
-    "library_only": "true",
-    "config_entry_id": "{{CONFIG_ID}}",
-    "name": "",
-    "media_type": "track"
-}'
+2. Set at least:
+
+   - `DOMAIN`
+   - `MUSIC_LIBRARY_PATH`
+   - `MUSIC_HOST` and `MA_TOKEN`
+   - `HA_HOST`, `TOKEN`, and `CONFIG_ID`
+   - `WORKER_TOKEN` if remote workers will be used
+
+3. Choose a database.
+
+   For the optional Compose database:
+
+   ```sh
+   docker network create "${TRAEFIK_NETWORK:-traefik_web}" 2>/dev/null || true
+   docker compose --profile database up -d postgres
+   ```
+
+   `DATABASE_URL` is for commands run on the host. `DATABASE_INTERNAL_URL` is
+   used by containers. For an external database, set both to its reachable URL,
+   or leave `DATABASE_INTERNAL_URL` unset.
+
+4. Install the schema:
+
+   ```sh
+   bun install --frozen-lockfile
+   bun run db:migrate
+   ```
+
+   `db:migrate` enables pgvector when needed. A new database has no centered
+   embedding space until at least two raw embeddings exist.
+
+5. Check the host configuration:
+
+   ```sh
+   bun run doctor -- --strict
+   ```
+
+6. Start the web and default background services:
+
+   ```sh
+   docker compose up -d
+   ```
+
+   The web container reads the library through `/music`; the host path comes
+   from `MUSIC_LIBRARY_PATH`. Open the application, import the library from
+   **Manage**, and use `/status` to inspect progress.
+
+## Python worker
+
+The worker has two source modes.
+
+### Local mode
+
+Local mode keeps the existing PostgreSQL advisory lock and `job_run` checkpoint.
+It reads files from `AUDIO_DIR` and writes embeddings directly to PostgreSQL.
+
+```sh
+python embeddings/generate-local-embeddings.py --dry-run --limit 10
 ```
 
-```typescript
-type Response = {
-  service_response: ServiceResponse;
-};
+### API mode
 
-interface ServiceResponse {
-  artists: Artist[];
-  albums: Album[];
-  tracks: Track[];
-  playlists: Playlist[];
-  radio: Radio[];
-  audiobooks: any[];
-  podcasts: any[];
-}
+API mode is portable. It needs only the worker API URL and its bearer token; it
+does not need PostgreSQL, Music Assistant, Home Assistant, or a local music
+mount.
 
-interface Artist {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image?: string;
-}
-
-interface Album {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image: string;
-  artists: Artist[];
-}
-
-interface Track {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image: string;
-  artists: Artist[];
-  album: Album;
-}
-
-interface Playlist {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image?: string;
-}
-
-interface Radio {
-  media_type: string;
-  uri: string;
-  name: string;
-  version: string;
-  image: string;
-}
+```sh
+export WORKER_URL=https://recommender.example.com
+export WORKER_TOKEN='the-same-token-as-the-web-service'
+python embeddings/worker.py --source-mode api
 ```
 
-Example Tracks:
+The web service provides three authenticated endpoints:
 
-```json
-{
-    "media_type": "track",
-    "uri": "library://track/1670",
-    "name": "1000 Doves",
-    "version": "",
-    "image": "",
-    "artists": [
-        {
-            "media_type": "artist",
-            "uri": "library://artist/37",
-            "name": "Lady Gaga",
-            "version": "",
-            "image": null
-        }
-    ],
-    "album": {
-        "media_type": "album",
-        "uri": "library://album/33",
-        "name": "Chromatica",
-        "version": "",
-        "image": null
-    }
-},
-{
-    "media_type": "track",
-    "uri": "library://track/6205",
-    "name": "1000 Nights",
-    "version": "",
-    "image": "",
-    "artists": [
-        {
-            "media_type": "artist",
-            "uri": "library://artist/1346",
-            "name": "Ed Sheeran feat. Meek Mill & A Boogie Wit da Hoodie",
-            "version": "",
-            "image": null
-        }
-    ],
-    "album": {
-        "media_type": "album",
-        "uri": "library://album/403",
-        "name": "No.6 Collaborations Project",
-        "version": "",
-        "image": null
-    }
-},
+- `GET /api/worker/tracks` — a bounded page of pending track metadata;
+- `GET /api/worker/audio` — a server-generated, time-bounded MP3 snippet;
+- `POST /api/worker/embeddings` — an idempotent vector batch.
+
+The worker uses a bounded thread pool for network downloads while OpenL3
+inference remains sequential. A page is checkpointed only after its upload
+succeeds, so a failed page is retried instead of being skipped.
+
+Useful settings:
+
+| Variable | Meaning |
+|---|---|
+| `WORKER_URL` | Base URL of the web worker API |
+| `WORKER_TOKEN` | Bearer token shared with the web service |
+| `EMBEDDING_PREFETCH_WORKERS` | Parallel snippet downloads |
+| `EMBEDDING_PREFETCH_DEPTH` | Download lookahead |
+| `EMBEDDING_DOWNLOAD_TIMEOUT` | Per-request timeout in seconds |
+| `EMBEDDING_DOWNLOAD_RETRIES` | Retry count for network failures |
+| `EMBEDDING_DOWNLOAD_MAX_BYTES` | Maximum bytes per snippet |
+| `EMBEDDING_STATE_FILE` | Optional local cursor/progress file |
+
+The Compose profile runs API mode beside the web service:
+
+```sh
+docker compose --profile worker up -d worker
 ```
 
-## Music Files 
+For Colab, clone the repository, install `embeddings/requirements.txt` in a
+fresh runtime, set `WORKER_URL` and `WORKER_TOKEN`, and run:
 
-Files are stored on disk 
-
-Example:
-
-```bash
-/music$ cd Lady\ Gaga/
-/music/Lady Gaga$ cd Chromatica/
-/music/Lady Gaga/Chromatica$ ls
-'01 - Chromatica I.mp3'  '07 - Chromatica II.mp3'  '13 - Chromatica III.mp3'
-'02 - Alice.mp3'         '08 - 911.mp3'            '14 - Sine From Above.mp3'
-'03 - Stupid Love.mp3'   '09 - Plastic Doll.mp3'   '15 - 1000 Doves.mp3'
-'04 - Rain on Me.mp3'    '10 - Sour Candy.mp3'     '16 - Babylon.mp3'
-'05 - Free Woman.mp3'    '11 - Enigma.mp3'          albumart.jpg
-'06 - Fun Tonight.mp3'   '12 - Replay.mp3'
-```	
-
-## Data Preparation
-
-Data is extracted into a postgreSQL database. The data is stored in a table with the following columns:
-
-```sql
-CREATE TABLE "track" (
-  "uri" text PRIMARY KEY NOT NULL,
-	"name" text NOT NULL,
-	"artist" text[] NOT NULL,
-	"album" text NOT NULL,
-	"embedding" vector(256)
-);
+```python
+!python embeddings/worker.py --source-mode api --limit 10
 ```
 
-The artists array is guaranteed to contain the artist name of the album. If there are multiple artists, it can not be said under which artist the song is stored on the disk. All have to be tried to find the correct one.
+The worker URL must be reachable from Colab. Colab's filesystem is temporary;
+use `EMBEDDING_STATE_FILE` on mounted storage if the job must resume there.
 
-## Generate the Song Vector
+## Database and diagnostics
 
-The song vector is generated using OpenL3 and stored in the database. The song vector is a 256-dimensional vector that represents the audio content of the song. The vector is generated by passing the audio file through a pre-trained neural network model.
+```sh
+bun run db:migrate
+bun run db:ensure-centered
+bun run doctor -- --json
+```
+
+`doctor` checks configuration, the database connection, pgvector, required
+tables and columns, and the host audio path without writing data.
+
+## Background services
+
+The default Compose stack includes the web process, Music Assistant sync, the
+analyzer, and the Python embedding loop. Additional profiles are available for
+manual embedding runs, clustering, the Rust embedding worker, and API-mode
+workers.
+
+Cluster benchmark commands are read-only. Applying or rolling back a cluster is
+an explicit operation.
+
+## Development checks
+
+```sh
+cd web && bun install --frozen-lockfile && bun run check && bun run build
+cargo test --manifest-path clustering-rs/Cargo.toml --locked
+cargo test --manifest-path clustering-wasm/Cargo.toml --locked
+cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'
+docker build -t music-recommender-embeddings:ci embeddings
+docker run --rm -v "$PWD/embeddings:/workspace-tests:ro" \
+  --entrypoint python music-recommender-embeddings:ci \
+  -m unittest discover -s /workspace-tests/tests
+```
+
+CI runs the same web, Rust, Python, fresh-database, Compose, and Docker checks.
+Tagging a commit as `v*` runs `.github/workflows/release.yml`, which publishes
+versioned service images to GHCR and creates a GitHub release.
+
+## Configuration notes
+
+- Keep `.env`, database URLs, and tokens out of source control.
+- Keep PostgreSQL private. The optional database profile binds its host port
+  to `127.0.0.1`.
+- The web service must have `ffmpeg` and a read-only music mount to serve worker
+  audio snippets.
+- The repository `deploy.sh` targets the original homelab. Use the Compose
+  workflow for another host.
+- The Rust embedding model artifact is optional and is not committed.
+
+## Troubleshooting
+
+- `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with
+  a database user that can enable the extension.
+- Worker `401`: check that `WORKER_TOKEN` matches on the worker and web service.
+- Worker `404` for audio: verify `MUSIC_LIBRARY_PATH` and the track's local file
+  match.
+- Slow downloads: increase `EMBEDDING_PREFETCH_WORKERS` only after checking
+  server and network limits.
+- Pending embeddings: inspect `/status`, then use a bounded `--dry-run`.

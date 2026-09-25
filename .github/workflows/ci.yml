@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BUN_VERSION: 1.4.2
+  RUST_VERSION: 1.78.0
+
+jobs:
+  web:
+    name: Web checks and build
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run build
+
+  rust:
+    name: Rust tests and lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            clustering-rs
+            clustering-wasm
+            embedding-rs
+      - name: Check Rust formatting
+        run: |
+          cargo fmt --manifest-path clustering-rs/Cargo.toml --all -- --check
+          cargo fmt --manifest-path clustering-wasm/Cargo.toml --all -- --check
+          cargo fmt --manifest-path embedding-rs/Cargo.toml --all -- --check
+      - name: Test native clustering
+        run: cargo test --manifest-path clustering-rs/Cargo.toml --locked
+      - name: Test WASM adapter
+        run: cargo test --manifest-path clustering-wasm/Cargo.toml --locked
+      - name: Check WASM target
+        run: cargo check --manifest-path clustering-wasm/Cargo.toml --locked --target wasm32-unknown-unknown
+      - name: Lint native clustering
+        run: cargo clippy --manifest-path clustering-rs/Cargo.toml --locked --all-targets -- -D warnings
+      - name: Test embedding core and CLI
+        run: cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'
+      - name: Lint embedding core and CLI
+        run: cargo clippy --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime' --all-targets -- -D warnings
+
+  python:
+    name: Python worker tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build pinned worker image
+        run: docker build --tag music-recommender-embeddings:ci embeddings
+      - name: Run worker unit tests
+        run: |
+          docker run --rm \
+            --volume "$PWD/embeddings:/workspace-tests:ro" \
+            --entrypoint python \
+            music-recommender-embeddings:ci \
+            -m unittest discover -s /workspace-tests/tests
+
+  fresh-db:
+    name: Fresh database migration smoke test
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recommender
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recommender"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - name: Apply migrations to an empty database
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
+        run: bun run db:migrate
+      - name: Verify first embeddings and centering backfill
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
+          FRESH_DATABASE: '1'
+        run: bun run test:fresh-db
+      - name: Run machine-readable preflight
+        env:
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
+          DOMAIN: recommender.example.test
+          MUSIC_HOST: http://music-assistant.example.test
+          MA_TOKEN: ci-token
+          HA_HOST: http://home-assistant.example.test
+          TOKEN: ci-token
+          CONFIG_ID: ci-config
+        run: |
+          cat > .env <<'EOF'
+          DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/recommender
+          DOMAIN=recommender.example.test
+          MUSIC_HOST=http://music-assistant.example.test
+          MA_TOKEN=ci-token
+          HA_HOST=http://home-assistant.example.test
+          TOKEN=ci-token
+          CONFIG_ID=ci-config
+          EOF
+          bun run doctor -- --json --skip-audio > fresh-doctor.json
+          node -e "const r=require('./fresh-doctor.json'); if (!r.ok) process.exit(1)"
+
+  docker:
+    name: Docker Compose builds
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare example environment
+        run: cp .env.example .env
+      - name: Validate Compose profiles
+        run: docker compose --profile database --profile clustering --profile embedding-rust --profile embedding --profile worker config --quiet
+      - name: Build release services
+        run: docker compose --profile clustering --profile embedding-rust --profile embedding --profile worker build
