@@ -36,9 +36,7 @@ export async function createApiKey(
 	expiresInDays: number | null = null
 ): Promise<CreatedApiKey> {
 	const secret = `${API_KEY_PREFIX}${randomBytes(32).toString('base64url')}`;
-	const expiresAt = expiresInDays
-		? new Date(Date.now() + expiresInDays * DAY_IN_MS)
-		: null;
+	const expiresAt = expiresInDays ? new Date(Date.now() + expiresInDays * DAY_IN_MS) : null;
 	const [key] = await db
 		.insert(apiKeyTable)
 		.values({
@@ -69,11 +67,7 @@ export async function revokeApiKey(userId: string, keyId: string): Promise<boole
 		.update(apiKeyTable)
 		.set({ revokedAt: new Date() })
 		.where(
-			and(
-				eq(apiKeyTable.id, keyId),
-				eq(apiKeyTable.userId, userId),
-				isNull(apiKeyTable.revokedAt)
-			)
+			and(eq(apiKeyTable.id, keyId), eq(apiKeyTable.userId, userId), isNull(apiKeyTable.revokedAt))
 		)
 		.returning({ id: apiKeyTable.id });
 	return Boolean(revoked);
@@ -94,9 +88,6 @@ export async function authenticateApiKey(
 		.limit(1);
 	if (!key || key.scope !== scope || !isActive(key)) return null;
 
-	await db
-		.update(apiKeyTable)
-		.set({ lastUsedAt: new Date() })
-		.where(eq(apiKeyTable.id, key.id));
+	await db.update(apiKeyTable).set({ lastUsedAt: new Date() }).where(eq(apiKeyTable.id, key.id));
 	return key;
 }

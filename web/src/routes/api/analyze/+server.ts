@@ -2,7 +2,8 @@ import { indexLibrary } from '$lib/server/index-library';
 import { recordJobRun } from '$lib/server/job-log';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async ({ locals }) => {
+	const source = locals.method === 'service' ? 'automatic' : 'manual';
 	try {
 		// 0. Ask Music Assistant to sync its providers (e.g. Plex) so new
 		// downloads show up. Skipped (not failed) when MA_TOKEN is unset.
@@ -20,11 +21,16 @@ export const POST: RequestHandler = async () => {
 		// generation itself runs in the embeddings-loop container.
 		const { assignNewTracksToClusters } = await import('$lib/server/clustering');
 		const assigned = await assignNewTracksToClusters();
-		await recordJobRun('analyze', true, `${indexed} indexed, ${assigned} sorted into vibes`);
+		await recordJobRun(
+			'analyze',
+			true,
+			`${indexed} indexed, ${assigned} sorted into vibes`,
+			source
+		);
 		return Response.json({ success: true, maSync, indexed, assigned });
 	} catch (error) {
 		console.error('Analyze failed:', error);
-		await recordJobRun('analyze', false, String(error).slice(0, 200));
+		await recordJobRun('analyze', false, String(error).slice(0, 200), source);
 		return Response.json({ success: false, error: String(error) }, { status: 500 });
 	}
 };

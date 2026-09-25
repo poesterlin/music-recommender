@@ -153,19 +153,30 @@
 	});
 </script>
 
-<section class="relative overflow-hidden rounded-3xl bg-ink p-6 text-cream shadow-xl sm:p-7">
-	<div class="pointer-events-none absolute -top-24 -right-24 size-64 rounded-full bg-accent/25 blur-3xl"></div>
-	<div class="pointer-events-none absolute -bottom-28 -left-16 size-64 rounded-full bg-gold/15 blur-3xl"></div>
+<section class="bg-ink text-cream relative overflow-hidden rounded-3xl p-6 shadow-xl sm:p-7">
+	<div
+		class="bg-accent/25 pointer-events-none absolute -top-24 -right-24 size-64 rounded-full blur-3xl"
+	></div>
+	<div
+		class="bg-gold/15 pointer-events-none absolute -bottom-28 -left-16 size-64 rounded-full blur-3xl"
+	></div>
 
 	<div class="relative">
-		<h2 class="flex items-center gap-2 text-[11px] font-bold tracking-[0.28em] text-cream/60 uppercase">
+		<h2
+			class="text-cream/60 flex items-center gap-2 text-[11px] font-bold tracking-[0.28em] uppercase"
+		>
 			<span class="relative flex size-2">
 				{#if playing}
-					<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-70"></span>
+					<span
+						class="bg-accent absolute inline-flex h-full w-full animate-ping rounded-full opacity-70"
+					></span>
 				{/if}
-				<span class="relative inline-flex size-2 rounded-full {playing ? 'bg-accent' : 'bg-cream/40'}"></span>
+				<span
+					class="relative inline-flex size-2 rounded-full {playing ? 'bg-accent' : 'bg-cream/40'}"
+				></span>
 			</span>
-			Now spinning{#if player} <span class="normal-case">· {player.playerName}</span>{/if}
+			Now spinning{#if player}
+				<span class="normal-case">· {player.playerName}</span>{/if}
 		</h2>
 
 		{#if player?.track}
@@ -174,24 +185,30 @@
 					<img
 						src={player.track.image}
 						alt={player.track.album}
-						class="h-24 w-24 shrink-0 rounded-2xl object-cover shadow-lg ring-1 ring-cream/20"
+						class="ring-cream/20 h-24 w-24 shrink-0 rounded-2xl object-cover shadow-lg ring-1"
 						loading="lazy"
 					/>
 				{:else}
-					<div class="vinyl h-24 w-24 shrink-0 rounded-full shadow-lg ring-1 ring-cream/20 {playing ? 'animate-spin-slow' : ''}">
+					<div
+						class="vinyl ring-cream/20 h-24 w-24 shrink-0 rounded-full shadow-lg ring-1 {playing
+							? 'animate-spin-slow'
+							: ''}"
+					>
 						<div class="flex h-full w-full items-center justify-center">
 							<div class="vinyl-label flex size-8 items-center justify-center rounded-full">
-								<div class="size-2 rounded-full bg-ink"></div>
+								<div class="bg-ink size-2 rounded-full"></div>
 							</div>
 						</div>
 					</div>
 				{/if}
 				<div class="min-w-0 flex-1">
-					<p class="truncate font-display text-2xl leading-tight font-black sm:text-3xl">{player.track.title}</p>
-					<p class="truncate font-bold text-cream/80">{player.track.artist}</p>
-					<p class="truncate text-sm text-cream/50 italic">{player.track.album}</p>
+					<p class="font-display truncate text-2xl leading-tight font-black sm:text-3xl">
+						{player.track.title}
+					</p>
+					<p class="text-cream/80 truncate font-bold">{player.track.artist}</p>
+					<p class="text-cream/50 truncate text-sm italic">{player.track.album}</p>
 					<button
-						class="mt-3 rounded-full bg-cream/10 px-3 py-1.5 text-xs font-bold text-cream/75 transition hover:bg-moss hover:text-cream disabled:cursor-wait disabled:opacity-50"
+						class="bg-cream/10 text-cream/75 hover:bg-moss hover:text-cream mt-3 rounded-full px-3 py-1.5 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50"
 						disabled={liking}
 						onclick={likeCurrentTrack}
 						title="Like {player.track.title}"
@@ -203,15 +220,20 @@
 
 			<!-- progress (click to seek) -->
 			<div class="mt-5">
-				<button class="block h-4 w-full cursor-pointer" onclick={seek} title="Seek" aria-label="Seek in track">
-					<span class="block h-1.5 overflow-hidden rounded-full bg-cream/15">
+				<button
+					class="block h-4 w-full cursor-pointer"
+					onclick={seek}
+					title="Seek"
+					aria-label="Seek in track"
+				>
+					<span class="bg-cream/15 block h-1.5 overflow-hidden rounded-full">
 						<span
-							class="block h-full rounded-full bg-accent transition-all"
+							class="bg-accent block h-full rounded-full transition-all"
 							style="width: {duration ? Math.min(100, (elapsed / duration) * 100) : 0}%"
 						></span>
 					</span>
 				</button>
-				<div class="mt-1.5 flex justify-between text-xs font-bold text-cream/50 tabular-nums">
+				<div class="text-cream/50 mt-1.5 flex justify-between text-xs font-bold tabular-nums">
 					<span>{fmt(elapsed)}</span>
 					<span>{fmt(duration)}</span>
 				</div>
@@ -220,7 +242,7 @@
 			<!-- transport -->
 			<div class="mt-4 flex flex-wrap items-center gap-2">
 				<button
-					class="rounded-full bg-cream/10 px-4 py-2.5 font-bold text-cream transition hover:bg-cream/20 disabled:opacity-40"
+					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action('previous')}
 					title="Previous track"
@@ -228,7 +250,7 @@
 					⏮
 				</button>
 				<button
-					class="rounded-full bg-accent px-7 py-2.5 font-bold text-cream shadow-lg shadow-accent/30 transition hover:bg-accent-deep disabled:opacity-40"
+					class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep rounded-full px-7 py-2.5 font-bold shadow-lg transition disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action(playing ? 'pause' : 'play')}
 					title={playing ? 'Pause' : 'Play'}
@@ -236,7 +258,7 @@
 					{busy ? '…' : playing ? '⏸ Pause' : '▶ Play'}
 				</button>
 				<button
-					class="rounded-full bg-cream/10 px-4 py-2.5 font-bold text-cream transition hover:bg-cream/20 disabled:opacity-40"
+					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action('next')}
 					title="Next track"
@@ -244,7 +266,7 @@
 					⏭
 				</button>
 				<button
-					class="rounded-full bg-cream/10 px-4 py-2.5 font-bold text-cream transition hover:bg-cream/20 disabled:opacity-40"
+					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action('stop')}
 					title="Stop"
@@ -252,7 +274,7 @@
 					⏹
 				</button>
 				<button
-					class="rounded-full border border-cream/15 px-4 py-2.5 font-bold text-cream/65 transition hover:border-cream/35 hover:bg-cream/10 hover:text-cream disabled:opacity-40"
+					class="border-cream/15 text-cream/65 hover:border-cream/35 hover:bg-cream/10 hover:text-cream rounded-full border px-4 py-2.5 font-bold transition disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={clearQueue}
 					title="Clear the entire queue"
@@ -274,8 +296,12 @@
 				{/if}
 
 				{#if volume !== null}
-					<label class="ml-auto flex items-center gap-2 text-sm font-bold text-cream/60">
-						<button class="transition hover:text-cream" onclick={toggleMute} title={volume > 0 ? 'Mute' : 'Unmute'}>
+					<label class="text-cream/60 ml-auto flex items-center gap-2 text-sm font-bold">
+						<button
+							class="hover:text-cream transition"
+							onclick={toggleMute}
+							title={volume > 0 ? 'Mute' : 'Unmute'}
+						>
 							{volume > 0 ? '🔈' : '🔇'}
 						</button>
 						<input
@@ -293,20 +319,20 @@
 			</div>
 		{:else}
 			<div class="mt-4 flex items-center gap-5">
-				<div class="vinyl h-24 w-24 shrink-0 rounded-full opacity-60 ring-1 ring-cream/20">
+				<div class="vinyl ring-cream/20 h-24 w-24 shrink-0 rounded-full opacity-60 ring-1">
 					<div class="flex h-full w-full items-center justify-center">
 						<div class="vinyl-label flex size-8 items-center justify-center rounded-full">
-							<div class="size-2 rounded-full bg-ink"></div>
+							<div class="bg-ink size-2 rounded-full"></div>
 						</div>
 					</div>
 				</div>
 				<div>
 					<p class="font-display text-2xl font-black">The deck is quiet.</p>
-					<p class="mt-1 text-sm text-cream/60">Drop a vibe below and the room wakes up.</p>
+					<p class="text-cream/60 mt-1 text-sm">Drop a vibe below and the room wakes up.</p>
 				</div>
 				{#if player}
 					<button
-						class="ml-auto rounded-full border border-cream/15 px-4 py-2.5 text-sm font-bold text-cream/65 transition hover:border-cream/35 hover:bg-cream/10 hover:text-cream disabled:opacity-40"
+						class="border-cream/15 text-cream/65 hover:border-cream/35 hover:bg-cream/10 hover:text-cream ml-auto rounded-full border px-4 py-2.5 text-sm font-bold transition disabled:opacity-40"
 						disabled={busy !== null}
 						onclick={clearQueue}
 					>

@@ -8,7 +8,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	} | null;
 	const limit = body?.limit ?? 30;
 	const seedUris = Array.isArray(body?.seedUris)
-		? [...new Set(body.seedUris.filter((uri): uri is string => typeof uri === 'string' && uri.length > 0))]
+		? [
+				...new Set(
+					body.seedUris.filter((uri): uri is string => typeof uri === 'string' && uri.length > 0)
+				)
+			]
 		: [];
 
 	if (

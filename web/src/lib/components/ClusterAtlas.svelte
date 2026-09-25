@@ -73,7 +73,10 @@
 	}
 
 	function clusterName(clusterId: number): string {
-		return projection?.clusters.find((cluster) => cluster.id === clusterId)?.name ?? `Cluster ${clusterId}`;
+		return (
+			projection?.clusters.find((cluster) => cluster.id === clusterId)?.name ??
+			`Cluster ${clusterId}`
+		);
 	}
 
 	function resetView() {
@@ -89,7 +92,11 @@
 		resetView();
 	}
 
-	function transformPoint(point: { x: number; y: number; z: number }): { x: number; y: number; depth: number } {
+	function transformPoint(point: { x: number; y: number; z: number }): {
+		x: number;
+		y: number;
+		depth: number;
+	} {
 		const scale = Math.min(width, height) * 0.38 * zoom;
 		const centerX = width / 2 + panX;
 		const centerY = height / 2 + panY;
@@ -162,9 +169,7 @@
 
 		for (const item of rendered) {
 			const depthAlpha =
-				mode === '3d'
-					? Math.max(0.35, Math.min(1, 0.35 + ((item.depth + 1) / 2) * 0.6))
-					: 0.9;
+				mode === '3d' ? Math.max(0.35, Math.min(1, 0.35 + ((item.depth + 1) / 2) * 0.6)) : 0.9;
 			if (item.kind === 'point') {
 				const isSelected = selectedPoint?.uri === item.point.uri;
 				const isHovered =
@@ -311,28 +316,25 @@
 	}
 
 	$effect(() => {
-		projection;
-		selectedCluster;
-		mode;
-		width;
-		height;
-		yaw;
-		pitch;
-		zoom;
-		panX;
-		panY;
-		showCentroids;
-		hoveredMarkerKey;
-		selectedPoint?.uri;
+		// Track every input the canvas depends on so any change redraws.
+		void projection;
+		void selectedCluster;
+		void mode;
+		void width;
+		void height;
+		void yaw;
+		void pitch;
+		void zoom;
+		void panX;
+		void panY;
+		void showCentroids;
+		void hoveredMarkerKey;
+		void selectedPoint?.uri;
 		draw();
 	});
 
 	$effect(() => {
-		if (
-			selectedPoint &&
-			selectedCluster !== 'all' &&
-			selectedPoint.clusterId !== selectedCluster
-		) {
+		if (selectedPoint && selectedCluster !== 'all' && selectedPoint.clusterId !== selectedCluster) {
 			selectedPoint = null;
 		}
 	});
@@ -349,35 +351,41 @@
 	});
 
 	onMount(() => {
-		void api<ClusterProjectionData & { error?: string }>('/api/cluster-visualization').then(({ ok, data }) => {
-			if (ok) projection = data;
-			else error = data?.error ?? 'Could not build the cluster atlas.';
-			loading = false;
-		});
+		void api<ClusterProjectionData & { error?: string }>('/api/cluster-visualization').then(
+			({ ok, data }) => {
+				if (ok) projection = data;
+				else error = data?.error ?? 'Could not build the cluster atlas.';
+				loading = false;
+			}
+		);
 	});
 </script>
 
-<section class="overflow-hidden rounded-3xl border border-ink/15 bg-cream shadow-sm">
-	<div class="border-b border-ink/10 p-6 sm:p-7">
+<section class="border-ink/15 bg-cream overflow-hidden rounded-3xl border shadow-sm">
+	<div class="border-ink/10 border-b p-6 sm:p-7">
 		<div class="flex flex-wrap items-start justify-between gap-4">
 			<div>
-				<p class="text-[11px] font-bold tracking-[0.24em] text-accent-deep uppercase">Interactive cluster atlas</p>
-				<h2 class="mt-1 font-display text-3xl font-black">See the shape of your library</h2>
-				<p class="mt-2 max-w-2xl text-sm leading-relaxed text-ink-soft">
-					A deterministic PCA sample of every cluster with its full-library centroid. Drag to
-					rotate in 3D, pan in 2D, scroll to zoom, and select a point to inspect the track.
+				<p class="text-accent-deep text-[11px] font-bold tracking-[0.24em] uppercase">
+					Interactive cluster atlas
+				</p>
+				<h2 class="font-display mt-1 text-3xl font-black">See the shape of your library</h2>
+				<p class="text-ink-soft mt-2 max-w-2xl text-sm leading-relaxed">
+					A deterministic PCA sample of every cluster with its full-library centroid. Drag to rotate
+					in 3D, pan in 2D, scroll to zoom, and select a point to inspect the track.
 				</p>
 			</div>
 			{#if projection}
-				<div class="text-right text-xs text-faded">
+				<div class="text-faded text-right text-xs">
 					<p>
-						<strong class="text-ink">{projection.pointCount.toLocaleString()}</strong> sampled points ·
+						<strong class="text-ink">{projection.pointCount.toLocaleString()}</strong> sampled
+						points ·
 						<strong class="text-ink">{projection.centroids.length}</strong> centroids
 					</p>
 					<p>{projection.clusters.length} clusters · {projection.dimensions}D source</p>
 					{#if projection.activeRun}
-						<p class="mt-1 font-bold text-accent-deep">
-							Applied run #{projection.activeRun.id} · k={projection.activeRun.k} · {projection.activeRun.trackCount.toLocaleString()} tracks
+						<p class="text-accent-deep mt-1 font-bold">
+							Applied run #{projection.activeRun.id} · k={projection.activeRun.k} · {projection.activeRun.trackCount.toLocaleString()}
+							tracks
 						</p>
 					{/if}
 				</div>
@@ -385,7 +393,7 @@
 		</div>
 
 		<div class="mt-5 flex flex-wrap items-center gap-2">
-			<div class="inline-flex rounded-full bg-ink/5 p-1">
+			<div class="bg-ink/5 inline-flex rounded-full p-1">
 				<button
 					class="rounded-full px-4 py-2 text-sm font-bold transition {mode === '2d'
 						? 'bg-ink text-cream shadow'
@@ -411,7 +419,7 @@
 			</button>
 
 			<select
-				class="rounded-full border border-ink/15 bg-paper px-4 py-2.5 text-sm font-bold outline-none focus:border-accent"
+				class="border-ink/15 bg-paper focus:border-accent rounded-full border px-4 py-2.5 text-sm font-bold outline-none"
 				bind:value={selectedCluster}
 				onchange={() => {
 					selectedPoint = null;
@@ -426,33 +434,39 @@
 			</select>
 
 			<button
-				class="rounded-full border border-ink/15 px-4 py-2.5 text-sm font-bold text-ink-soft transition hover:border-ink hover:text-ink"
+				class="border-ink/15 text-ink-soft hover:border-ink hover:text-ink rounded-full border px-4 py-2.5 text-sm font-bold transition"
 				onclick={resetView}>Reset view</button
 			>
 		</div>
 	</div>
 
 	{#if loading}
-		<div class="flex h-[520px] items-center justify-center bg-paper/60">
+		<div class="bg-paper/60 flex h-[520px] items-center justify-center">
 			<div class="text-center">
-				<div class="mx-auto size-10 animate-spin rounded-full border-4 border-ink/10 border-t-accent"></div>
+				<div
+					class="border-ink/10 border-t-accent mx-auto size-10 animate-spin rounded-full border-4"
+				></div>
 				<p class="mt-4 text-sm font-bold">Projecting centered embeddings…</p>
 			</div>
 		</div>
 	{:else if error}
-		<div class="flex h-[360px] items-center justify-center bg-paper/60 px-6 text-center">
+		<div class="bg-paper/60 flex h-[360px] items-center justify-center px-6 text-center">
 			<div>
-				<p class="font-bold text-ink">{error}</p>
-				<p class="mt-1 text-sm text-faded">The raw embedding data is safe; try rebuilding the atlas.</p>
+				<p class="text-ink font-bold">{error}</p>
+				<p class="text-faded mt-1 text-sm">
+					The raw embedding data is safe; try rebuilding the atlas.
+				</p>
 			</div>
 		</div>
 	{:else}
-		<div class="relative bg-paper/65" bind:this={container}>
+		<div class="bg-paper/65 relative" bind:this={container}>
 			<canvas
 				bind:this={canvas}
 				class="block h-[520px] w-full touch-none outline-none sm:h-[600px]"
 				tabindex="0"
-				aria-label="{mode === '3d' ? 'Three-dimensional' : 'Two-dimensional'} interactive cluster projection with track samples and centroid markers. Use pointer to rotate or pan, scroll to zoom, select a track, or focus a cluster from its centroid."
+				aria-label="{mode === '3d'
+					? 'Three-dimensional'
+					: 'Two-dimensional'} interactive cluster projection with track samples and centroid markers. Use pointer to rotate or pan, scroll to zoom, select a track, or focus a cluster from its centroid."
 				onpointerdown={onPointerDown}
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}
@@ -463,72 +477,89 @@
 				ondblclick={resetView}
 			></canvas>
 
-			<div class="pointer-events-none absolute bottom-3 left-3 rounded-xl bg-paper/85 px-3 py-2 text-[10px] font-bold tracking-[0.12em] text-faded uppercase backdrop-blur">
+			<div
+				class="bg-paper/85 text-faded pointer-events-none absolute bottom-3 left-3 rounded-xl px-3 py-2 text-[10px] font-bold tracking-[0.12em] uppercase backdrop-blur"
+			>
 				{#if projection}
-					PC1 {((projection.explainedVariance[0] ?? 0) * 100).toFixed(1)}% ·
-					PC2 {((projection.explainedVariance[1] ?? 0) * 100).toFixed(1)}%
+					PC1 {((projection.explainedVariance[0] ?? 0) * 100).toFixed(1)}% · PC2 {(
+						(projection.explainedVariance[1] ?? 0) * 100
+					).toFixed(1)}%
 					{#if mode === '3d'}
 						· PC3 {((projection.explainedVariance[2] ?? 0) * 100).toFixed(1)}%
 					{/if}
 				{/if}
 			</div>
 
-			<div class="pointer-events-none absolute top-3 left-3 rounded-full bg-ink/80 px-3 py-1.5 text-[10px] font-bold tracking-[0.14em] text-cream uppercase backdrop-blur">
-				{visiblePoints.length.toLocaleString()} points{#if showCentroids} · {visibleCentroids.length} centroids{/if}
+			<div
+				class="bg-ink/80 text-cream pointer-events-none absolute top-3 left-3 rounded-full px-3 py-1.5 text-[10px] font-bold tracking-[0.14em] uppercase backdrop-blur"
+			>
+				{visiblePoints.length.toLocaleString()} points{#if showCentroids}
+					· {visibleCentroids.length} centroids{/if}
 			</div>
 
-			<div class="pointer-events-none absolute right-3 bottom-3 rounded-xl bg-paper/85 px-3 py-2 text-[10px] font-bold tracking-[0.1em] text-faded uppercase backdrop-blur">
-				<span class="mr-3"><span class="mr-1 text-accent">●</span> Track</span>
-				{#if showCentroids}<span><span class="mr-1 text-accent">◆</span> Centroid</span>{/if}
+			<div
+				class="bg-paper/85 text-faded pointer-events-none absolute right-3 bottom-3 rounded-xl px-3 py-2 text-[10px] font-bold tracking-[0.1em] uppercase backdrop-blur"
+			>
+				<span class="mr-3"><span class="text-accent mr-1">●</span> Track</span>
+				{#if showCentroids}<span><span class="text-accent mr-1">◆</span> Centroid</span>{/if}
 			</div>
 
 			{#if hoveredMarker}
 				<div
-					class="pointer-events-none absolute z-10 w-64 rounded-2xl border border-ink/10 bg-paper/95 p-3 shadow-xl backdrop-blur"
+					class="border-ink/10 bg-paper/95 pointer-events-none absolute z-10 w-64 rounded-2xl border p-3 shadow-xl backdrop-blur"
 					style:left="{Math.min(Math.max(12, hoveredMarker.x + 14), Math.max(12, width - 270))}px"
 					style:top="{Math.min(Math.max(12, hoveredMarker.y + 14), Math.max(12, height - 120))}px"
 				>
 					{#if hoveredMarker.kind === 'centroid'}
 						<p class="truncate font-bold">Cluster centroid</p>
-						<p class="truncate text-xs text-ink-soft">Full-library cluster center</p>
-						<p class="mt-1 truncate text-[10px] font-bold tracking-[0.12em] text-accent-deep uppercase">
-							#{hoveredMarker.centroid.clusterId} {clusterName(hoveredMarker.centroid.clusterId)}
+						<p class="text-ink-soft truncate text-xs">Full-library cluster center</p>
+						<p
+							class="text-accent-deep mt-1 truncate text-[10px] font-bold tracking-[0.12em] uppercase"
+						>
+							#{hoveredMarker.centroid.clusterId}
+							{clusterName(hoveredMarker.centroid.clusterId)}
 						</p>
 					{:else}
 						<p class="truncate font-bold">{hoveredMarker.point.name}</p>
-						<p class="truncate text-xs text-ink-soft">{hoveredMarker.point.artists.join(', ')}</p>
-						<p class="mt-1 truncate text-[10px] font-bold tracking-[0.12em] text-accent-deep uppercase">
-							#{hoveredMarker.point.clusterId} {clusterName(hoveredMarker.point.clusterId)}
+						<p class="text-ink-soft truncate text-xs">{hoveredMarker.point.artists.join(', ')}</p>
+						<p
+							class="text-accent-deep mt-1 truncate text-[10px] font-bold tracking-[0.12em] uppercase"
+						>
+							#{hoveredMarker.point.clusterId}
+							{clusterName(hoveredMarker.point.clusterId)}
 						</p>
 					{/if}
 				</div>
 			{/if}
 		</div>
 
-		<div class="border-t border-ink/10 p-5 sm:p-6">
+		<div class="border-ink/10 border-t p-5 sm:p-6">
 			{#if selectedPoint}
-				<div class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-ink p-4 text-cream sm:p-5">
+				<div
+					class="bg-ink text-cream flex flex-wrap items-center justify-between gap-4 rounded-2xl p-4 sm:p-5"
+				>
 					<div class="min-w-0">
-						<p class="truncate font-display text-xl font-black">{selectedPoint.name}</p>
-						<p class="truncate text-sm text-cream/70">{selectedPoint.artists.join(', ')}</p>
-						<p class="mt-1 truncate text-xs text-cream/50">
-							{selectedPoint.album} · #{selectedPoint.clusterId} {clusterName(selectedPoint.clusterId)}
+						<p class="font-display truncate text-xl font-black">{selectedPoint.name}</p>
+						<p class="text-cream/70 truncate text-sm">{selectedPoint.artists.join(', ')}</p>
+						<p class="text-cream/50 mt-1 truncate text-xs">
+							{selectedPoint.album} · #{selectedPoint.clusterId}
+							{clusterName(selectedPoint.clusterId)}
 						</p>
 					</div>
 					<div class="flex gap-2">
 						<button
-							class="rounded-full bg-cream/10 px-4 py-2 text-sm font-bold transition hover:bg-cream/20 disabled:opacity-50"
+							class="bg-cream/10 hover:bg-cream/20 rounded-full px-4 py-2 text-sm font-bold transition disabled:opacity-50"
 							onclick={() => (selectedPoint = null)}>Close</button
 						>
 						<button
-							class="rounded-full bg-accent px-5 py-2 text-sm font-bold text-cream transition hover:bg-accent-deep disabled:opacity-50"
+							class="bg-accent text-cream hover:bg-accent-deep rounded-full px-5 py-2 text-sm font-bold transition disabled:opacity-50"
 							disabled={playing}
 							onclick={playSelected}>{playing ? 'Starting…' : '▶ Play track'}</button
 						>
 					</div>
 				</div>
 			{:else}
-				<div class="flex flex-wrap items-center justify-between gap-3 text-sm text-faded">
+				<div class="text-faded flex flex-wrap items-center justify-between gap-3 text-sm">
 					<p>
 						{mode === '3d'
 							? 'Drag to orbit · Shift-drag to pan · Scroll to zoom'

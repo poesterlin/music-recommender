@@ -135,47 +135,59 @@
 
 <!-- HERO -->
 <section class="relative overflow-hidden">
-	<p class="ghost-type pointer-events-none absolute -top-6 right-0 hidden font-display text-[11rem] leading-none font-black tracking-tight select-none lg:block" aria-hidden="true">
+	<p
+		class="ghost-type font-display pointer-events-none absolute -top-6 right-0 hidden text-[11rem] leading-none font-black tracking-tight select-none lg:block"
+		aria-hidden="true"
+	>
 		A-side
 	</p>
 
 	<div class="relative grid items-center gap-10 lg:grid-cols-[1.2fr_0.8fr]">
 		<div class="animate-rise">
-			<p class="mb-4 flex items-center gap-2 text-[11px] font-bold tracking-[0.28em] text-accent-deep uppercase">
-				<span class="inline-block h-px w-8 bg-accent"></span>
+			<p
+				class="text-accent-deep mb-4 flex items-center gap-2 text-[11px] font-bold tracking-[0.28em] uppercase"
+			>
+				<span class="bg-accent inline-block h-px w-8"></span>
 				Tonight at the listening bar
 			</p>
-			<h1 class="font-display text-5xl leading-[0.98] font-black tracking-tight text-balance sm:text-7xl">
+			<h1
+				class="font-display text-5xl leading-[0.98] font-black tracking-tight text-balance sm:text-7xl"
+			>
 				Put the needle<br />
-				on <em class="font-light text-accent-deep italic">your mood.</em>
+				on <em class="text-accent-deep font-light italic">your mood.</em>
 			</h1>
-			<p class="mt-5 max-w-xl text-lg leading-relaxed text-ink-soft">
+			<p class="text-ink-soft mt-5 max-w-xl text-lg leading-relaxed">
 				{slotLine}. {data.vibeClusterIds.length} clusters in rotation, {queuedTrackCount}
 				{queuedTrackCount === 1 ? 'track' : 'tracks'} coming up — one tap and the room wakes up.
 			</p>
 			<div class="mt-7 flex flex-wrap gap-2.5">
 				<button
-					class="rounded-full bg-accent px-7 py-3 font-bold text-cream shadow-lg shadow-accent/30 transition hover:-translate-y-0.5 hover:bg-accent-deep disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+					class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep rounded-full px-7 py-3 font-bold shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
 					disabled={vibeBusy}
 					onclick={playVibe}>{vibeBusy ? 'Starting…' : '▶ Play the vibe'}</button
 				>
 				<button
-					class="rounded-full bg-ink px-6 py-3 font-bold text-cream transition hover:-translate-y-0.5 hover:bg-ink-soft disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+					class="bg-ink text-cream hover:bg-ink-soft rounded-full px-6 py-3 font-bold transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
 					disabled={scheduledBusy}
 					onclick={playScheduled}>{scheduledBusy ? 'Starting…' : 'Play scheduled slot'}</button
 				>
 			</div>
 			<dl class="mt-8 flex flex-wrap gap-x-10 gap-y-3">
 				<div>
-					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">In rotation</dt>
-					<dd class="font-display text-3xl font-black">{data.vibeClusterIds.length} <span class="text-base font-light italic text-faded">clusters</span></dd>
+					<dt class="text-faded text-[11px] font-bold tracking-[0.2em] uppercase">In rotation</dt>
+					<dd class="font-display text-3xl font-black">
+						{data.vibeClusterIds.length}
+						<span class="text-faded text-base font-light italic">clusters</span>
+					</dd>
 				</div>
 				<div>
-					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">Coming up</dt>
-					<dd class="font-display text-3xl font-black">{queuedTrackLabel} <span class="text-base font-light italic text-faded">tracks</span></dd>
+					<dt class="text-faded text-[11px] font-bold tracking-[0.2em] uppercase">Coming up</dt>
+					<dd class="font-display text-3xl font-black">
+						{queuedTrackLabel} <span class="text-faded text-base font-light italic">tracks</span>
+					</dd>
 				</div>
 				<div>
-					<dt class="text-[11px] font-bold tracking-[0.2em] text-faded uppercase">On the slate</dt>
+					<dt class="text-faded text-[11px] font-bold tracking-[0.2em] uppercase">On the slate</dt>
 					<dd class="font-display text-3xl font-black">
 						{data.activeSchedule ? data.activeSchedule.name : '∞'}
 					</dd>
@@ -183,23 +195,32 @@
 			</dl>
 		</div>
 
-		<div class="relative mx-auto hidden w-full max-w-sm animate-rise lg:block" style="animation-delay: 120ms">
-			<div class="vinyl animate-spin-slow aspect-square w-full rounded-full shadow-2xl ring-1 ring-ink/30">
+		<div
+			class="animate-rise relative mx-auto hidden w-full max-w-sm lg:block"
+			style="animation-delay: 120ms"
+		>
+			<div
+				class="vinyl animate-spin-slow ring-ink/30 aspect-square w-full rounded-full shadow-2xl ring-1"
+			>
 				<div class="flex h-full w-full items-center justify-center">
-					<div class="vinyl-label flex size-32 items-center justify-center rounded-full shadow-inner">
-						<div class="flex size-28 flex-col items-center justify-center rounded-full bg-paper text-center">
-							<p class="px-4 font-display text-sm leading-tight font-black text-ink">
+					<div
+						class="vinyl-label flex size-32 items-center justify-center rounded-full shadow-inner"
+					>
+						<div
+							class="bg-paper flex size-28 flex-col items-center justify-center rounded-full text-center"
+						>
+							<p class="font-display text-ink px-4 text-sm leading-tight font-black">
 								{data.activeSchedule?.name ?? 'Open Deck'}
 							</p>
-							<p class="mt-1 text-[10px] font-bold tracking-[0.2em] text-faded uppercase">
+							<p class="text-faded mt-1 text-[10px] font-bold tracking-[0.2em] uppercase">
 								33⅓ rpm
 							</p>
-							<div class="mt-1 size-2.5 rounded-full bg-ink"></div>
+							<div class="bg-ink mt-1 size-2.5 rounded-full"></div>
 						</div>
 					</div>
 				</div>
 			</div>
-			<p class="mt-4 text-center font-display text-sm italic text-faded">
+			<p class="font-display text-faded mt-4 text-center text-sm italic">
 				{data.nowPlaying ? `spinning now: ${data.nowPlaying.name}` : 'the deck is quiet — for now'}
 			</p>
 		</div>
@@ -212,35 +233,38 @@
 		<Player initial={data.player} onQueueChange={refreshQueues} />
 	</div>
 
-	<section class="animate-rise rounded-3xl border border-ink/15 bg-cream p-6 shadow-sm sm:p-7" style="animation-delay: 240ms">
-		<h2 class="text-[11px] font-bold tracking-[0.28em] text-faded uppercase">On the slate</h2>
+	<section
+		class="animate-rise border-ink/15 bg-cream rounded-3xl border p-6 shadow-sm sm:p-7"
+		style="animation-delay: 240ms"
+	>
+		<h2 class="text-faded text-[11px] font-bold tracking-[0.28em] uppercase">On the slate</h2>
 		{#if data.activeSchedule}
-			<p class="mt-2 font-display text-3xl font-black">{data.activeSchedule.name}</p>
-			<p class="mt-1 text-sm font-bold text-ink-soft">
+			<p class="font-display mt-2 text-3xl font-black">{data.activeSchedule.name}</p>
+			<p class="text-ink-soft mt-1 text-sm font-bold">
 				{data.activeSchedule.startHour}–{data.activeSchedule.endHour}h · {data.activeSchedule
 					.clusterIds.length} clusters
 			</p>
-			<p class="mt-3 text-sm leading-relaxed text-ink-soft">
+			<p class="text-ink-soft mt-3 text-sm leading-relaxed">
 				{data.activeSchedule.clusterIds.map(clusterLabel).join(' · ')}
 			</p>
 		{:else}
-			<p class="mt-2 font-display text-3xl font-black">Hand-picked</p>
-			<p class="mt-1 text-sm font-bold text-ink-soft">
+			<p class="font-display mt-2 text-3xl font-black">Hand-picked</p>
+			<p class="text-ink-soft mt-1 text-sm font-bold">
 				No schedule slot matches this hour — your manual picks run the room.
 			</p>
 			<div class="mt-3 flex flex-wrap gap-1.5">
 				{#each data.vibeClusterIds as id (id)}
 					<a
 						href="/vibe"
-						class="rounded-full bg-ink/5 px-3 py-1 text-xs font-bold text-ink-soft transition hover:bg-ink hover:text-cream"
+						class="bg-ink/5 text-ink-soft hover:bg-ink hover:text-cream rounded-full px-3 py-1 text-xs font-bold transition"
 					>
 						{clusterLabel(id)}
 					</a>
 				{/each}
 			</div>
 		{/if}
-		<div class="mt-5 border-t border-ink/10 pt-4">
-			<a href="/vibe" class="text-sm font-bold text-accent-deep underline-offset-4 hover:underline">
+		<div class="border-ink/10 mt-5 border-t pt-4">
+			<a href="/vibe" class="text-accent-deep text-sm font-bold underline-offset-4 hover:underline">
 				Retune the vibe mixer →
 			</a>
 		</div>
@@ -248,67 +272,92 @@
 </div>
 
 <!-- SETLIST — live Music Assistant queues, grouped by their active queue -->
-<section class="mt-6 animate-rise rounded-3xl border border-ink/15 bg-cream p-6 shadow-sm sm:p-7" style="animation-delay: 300ms">
+<section
+	class="animate-rise border-ink/15 bg-cream mt-6 rounded-3xl border p-6 shadow-sm sm:p-7"
+	style="animation-delay: 300ms"
+>
 	<div class="mb-5 flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h2 class="font-display text-3xl font-black">Up next <span class="font-light text-faded italic">— the setlist</span></h2>
-			<p class="mt-1 text-sm text-ink-soft">
+			<h2 class="font-display text-3xl font-black">
+				Up next <span class="text-faded font-light italic">— the setlist</span>
+			</h2>
+			<p class="text-ink-soft mt-1 text-sm">
 				{#if queueState.scope === 'main'}
 					Main device · {queueState.mainPlayer}
 				{:else}
-					{queueDeviceCount} {queueDeviceCount === 1 ? 'device' : 'devices'} · {queueState.queues.length}
+					{queueDeviceCount}
+					{queueDeviceCount === 1 ? 'device' : 'devices'} · {queueState.queues.length}
 					{queueState.queues.length === 1 ? 'queue' : 'queues'} · {queuedTrackLabel} tracks
 				{/if}
 			</p>
 		</div>
 		<div
-			class="flex items-center gap-2 rounded-full bg-ink/5 px-3 py-1.5 text-[11px] font-bold tracking-[0.16em] text-faded uppercase"
+			class="bg-ink/5 text-faded flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-bold tracking-[0.16em] uppercase"
 			aria-live="polite"
 		>
 			<span class="relative flex size-2">
 				{#if !queueUnavailable}
-					<span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60"></span>
+					<span
+						class="bg-accent absolute inline-flex h-full w-full animate-ping rounded-full opacity-60"
+					></span>
 				{/if}
-				<span class="relative inline-flex size-2 rounded-full {queueUnavailable ? 'bg-accent' : 'bg-moss'}"></span>
+				<span
+					class="relative inline-flex size-2 rounded-full {queueUnavailable
+						? 'bg-accent'
+						: 'bg-moss'}"
+				></span>
 			</span>
 			{queueUnavailable ? 'Reconnecting' : queueRefreshing ? 'Syncing' : 'Live'}
 		</div>
 	</div>
 
 	{#if queueState.queues.length > 0}
-		<div class="grid gap-5 {queueState.scope === 'all' && queueState.queues.length > 1 ? 'lg:grid-cols-2' : ''}">
+		<div
+			class="grid gap-5 {queueState.scope === 'all' && queueState.queues.length > 1
+				? 'lg:grid-cols-2'
+				: ''}"
+		>
 			{#each queueState.queues as queue (queue.queueId)}
-				<article class="min-w-0 rounded-2xl border border-ink/10 bg-paper/45 p-4 sm:p-5">
+				<article class="border-ink/10 bg-paper/45 min-w-0 rounded-2xl border p-4 sm:p-5">
 					<div class="flex items-start justify-between gap-3">
 						<div class="min-w-0">
-							<p class="text-[10px] font-bold tracking-[0.22em] text-faded uppercase">
+							<p class="text-faded text-[10px] font-bold tracking-[0.22em] uppercase">
 								{queue.playerNames.length > 1 ? 'Synced group' : 'Device queue'}
 							</p>
-							<h3 class="mt-1 truncate font-display text-xl font-black">{queue.playerNames.join(' + ')}</h3>
+							<h3 class="font-display mt-1 truncate text-xl font-black">
+								{queue.playerNames.join(' + ')}
+							</h3>
 						</div>
-						<span class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize {queue.state === 'playing'
+						<span
+							class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize {queue.state ===
+							'playing'
 								? 'bg-moss/15 text-moss'
 								: queue.state === 'paused'
 									? 'bg-gold/20 text-ink-soft'
-									: 'bg-ink/5 text-faded'}">
-							<span class="size-1.5 rounded-full {queue.state === 'playing' ? 'bg-moss' : 'bg-current'}"></span>
+									: 'bg-ink/5 text-faded'}"
+						>
+							<span
+								class="size-1.5 rounded-full {queue.state === 'playing' ? 'bg-moss' : 'bg-current'}"
+							></span>
 							{queueStateLabel(queue.state)}
 						</span>
 					</div>
 
-					<div class="mt-4 rounded-xl bg-ink/[0.045] px-3 py-2.5">
-						<p class="text-[10px] font-bold tracking-[0.2em] text-faded uppercase">
+					<div class="bg-ink/[0.045] mt-4 rounded-xl px-3 py-2.5">
+						<p class="text-faded text-[10px] font-bold tracking-[0.2em] uppercase">
 							{queue.state === 'playing' ? 'Now playing' : 'Current track'}
 						</p>
 						{#if queue.currentTrack}
 							<div class="mt-1 flex items-center gap-3">
 								<div class="min-w-0 flex-1">
 									<p class="truncate font-bold">{queue.currentTrack.name}</p>
-									<p class="truncate text-xs text-ink-soft">{queue.currentTrack.artists.join(', ')}</p>
+									<p class="text-ink-soft truncate text-xs">
+										{queue.currentTrack.artists.join(', ')}
+									</p>
 								</div>
 								{#if queue.currentTrack.uri}
 									<button
-										class="shrink-0 rounded-full bg-moss/10 px-3 py-1.5 text-xs font-bold text-moss transition hover:bg-moss hover:text-cream"
+										class="bg-moss/10 text-moss hover:bg-moss hover:text-cream shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition"
 										onclick={() => {
 											const uri = queue.currentTrack?.uri;
 											if (uri) void likeTrack(uri, queue.currentTrack?.name);
@@ -320,13 +369,15 @@
 								{/if}
 							</div>
 						{:else}
-							<p class="mt-1 text-sm text-faded">Nothing is playing on this device.</p>
+							<p class="text-faded mt-1 text-sm">Nothing is playing on this device.</p>
 						{/if}
 					</div>
 
-					<div class="mb-1 mt-5 flex items-baseline justify-between gap-3">
-						<h4 class="text-[11px] font-bold tracking-[0.22em] text-faded uppercase">Then play</h4>
-						<p class="text-xs font-bold text-faded">{queue.tracks.length}{queue.hasMore ? '+' : ''} tracks</p>
+					<div class="mt-5 mb-1 flex items-baseline justify-between gap-3">
+						<h4 class="text-faded text-[11px] font-bold tracking-[0.22em] uppercase">Then play</h4>
+						<p class="text-faded text-xs font-bold">
+							{queue.tracks.length}{queue.hasMore ? '+' : ''} tracks
+						</p>
 					</div>
 					<TrackList
 						tracks={queue.tracks}
@@ -335,23 +386,23 @@
 						emptyText="Nothing is lined up after this track."
 					/>
 					{#if queue.hasMore}
-						<p class="mt-3 text-xs text-faded">More tracks are waiting in Music Assistant.</p>
+						<p class="text-faded mt-3 text-xs">More tracks are waiting in Music Assistant.</p>
 					{/if}
 				</article>
 			{/each}
 		</div>
 	{:else}
-		<div class="rounded-2xl border border-dashed border-ink/20 bg-cream/60 px-6 py-8 text-center">
+		<div class="border-ink/20 bg-cream/60 rounded-2xl border border-dashed px-6 py-8 text-center">
 			{#if queueUnavailable}
-				<p class="text-sm font-bold text-ink-soft">Music Assistant is taking a moment.</p>
-				<p class="mt-1 text-sm text-faded">The last queue is safe; this page will keep trying.</p>
+				<p class="text-ink-soft text-sm font-bold">Music Assistant is taking a moment.</p>
+				<p class="text-faded mt-1 text-sm">The last queue is safe; this page will keep trying.</p>
 			{:else if queueState.scope === 'main'}
-				<p class="text-sm text-faded">No queue was found for {queueState.mainPlayer}.</p>
+				<p class="text-faded text-sm">No queue was found for {queueState.mainPlayer}.</p>
 			{:else}
-				<p class="text-sm text-faded">Music Assistant has no available device queues.</p>
+				<p class="text-faded text-sm">Music Assistant has no available device queues.</p>
 			{/if}
 			<button
-				class="mt-4 rounded-full bg-accent px-6 py-2.5 font-bold text-cream shadow-lg shadow-accent/30 transition hover:-translate-y-0.5 hover:bg-accent-deep disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
+				class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep mt-4 rounded-full px-6 py-2.5 font-bold shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
 				disabled={vibeBusy}
 				onclick={playVibe}>{vibeBusy ? 'Starting…' : '▶ Play the vibe'}</button
 			>

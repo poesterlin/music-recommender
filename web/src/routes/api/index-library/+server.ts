@@ -2,14 +2,15 @@ import { indexLibrary } from '$lib/server/index-library';
 import { recordJobRun } from '$lib/server/job-log';
 import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async () => {
+export const POST: RequestHandler = async ({ locals }) => {
+	const source = locals.method === 'service' ? 'automatic' : 'manual';
 	try {
 		const count = await indexLibrary();
-		await recordJobRun('index-library', true, `${count} new tracks`);
+		await recordJobRun('index-library', true, `${count} new tracks`, source);
 		return Response.json({ success: true, count });
 	} catch (error) {
 		console.error('Index library failed:', error);
-		await recordJobRun('index-library', false, String(error).slice(0, 200));
+		await recordJobRun('index-library', false, String(error).slice(0, 200), source);
 		return Response.json({ success: false, error: String(error) }, { status: 500 });
 	}
 };

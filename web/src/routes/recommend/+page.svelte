@@ -91,7 +91,9 @@
 	description="Start from one track you love and get a fresh mix of similar songs. Press play to hear it on the booth."
 />
 
-<div class="flex max-w-2xl flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+<div
+	class="flex max-w-2xl flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm"
+>
 	<div class="relative grid flex-1 gap-1 text-sm text-gray-600">
 		<label for="rec-track">Track name</label>
 		<input
@@ -110,7 +112,9 @@
 			autocomplete="off"
 		/>
 		{#if suggestOpen}
-			<ul class="absolute top-full right-0 left-0 z-10 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+			<ul
+				class="absolute top-full right-0 left-0 z-10 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
+			>
 				{#each suggestions as s (s.uri)}
 					<li>
 						<button
@@ -126,9 +130,18 @@
 	</div>
 	<label class="grid gap-1 text-sm text-gray-600">
 		Count
-		<input class="w-24 rounded-xl border border-gray-300 px-3 py-2" type="number" min="5" max="100" bind:value={limit} />
+		<input
+			class="w-24 rounded-xl border border-gray-300 px-3 py-2"
+			type="number"
+			min="5"
+			max="100"
+			bind:value={limit}
+		/>
 	</label>
-	<button class="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700" onclick={recommend}>
+	<button
+		class="rounded-xl bg-blue-600 px-5 py-2.5 font-semibold text-white hover:bg-blue-700"
+		onclick={recommend}
+	>
 		Get recommendations
 	</button>
 </div>

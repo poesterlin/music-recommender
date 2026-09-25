@@ -102,7 +102,7 @@ export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata>
 		ids.map((id) => [
 			id,
 			matches[id]?.displayName ??
-				(activeRun ? `K${activeRun.k} Cluster ${id}` : CLUSTER_NAMES[id] ?? `Cluster ${id}`)
+				(activeRun ? `K${activeRun.k} Cluster ${id}` : (CLUSTER_NAMES[id] ?? `Cluster ${id}`))
 		])
 	) as Record<number, string>;
 

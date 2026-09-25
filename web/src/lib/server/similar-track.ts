@@ -1,433 +1,395 @@
 import {
-  and,
-  avg,
-  cosineDistance,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNotNull,
-  lt,
-  notInArray,
-  sql,
-} from "drizzle-orm";
-import { db } from "./db";
-import { likedSongsTable, skippedArtistsTable, skippedSongsTable, trackTable } from "./schema";
-import { invalidateLikedCache } from "./recomendation-engine";
+	and,
+	avg,
+	cosineDistance,
+	desc,
+	eq,
+	gt,
+	inArray,
+	isNotNull,
+	lt,
+	notInArray,
+	sql
+} from 'drizzle-orm';
+import { db } from './db';
+import { likedSongsTable, skippedArtistsTable, skippedSongsTable, trackTable } from './schema';
+import { invalidateLikedCache } from './recomendation-engine';
 
-async function fetchRelatedTracks(
-  uri: string,
-  limit = 20,
-  excludeUris: string[] = []
-) {
-  const [track] = await db
-    .select({
-      uri: trackTable.uri,
-      embedding: trackTable.embeddingCentered,
-      name: trackTable.name,
-      artists: trackTable.artist,
-    })
-    .from(trackTable)
-    .where(eq(trackTable.uri, uri));
+async function fetchRelatedTracks(uri: string, limit = 20, excludeUris: string[] = []) {
+	const [track] = await db
+		.select({
+			uri: trackTable.uri,
+			embedding: trackTable.embeddingCentered,
+			name: trackTable.name,
+			artists: trackTable.artist
+		})
+		.from(trackTable)
+		.where(eq(trackTable.uri, uri));
 
-  if (!track) {
-    throw new Error(`Track with URI ${uri} not found`);
-  }
+	if (!track) {
+		throw new Error(`Track with URI ${uri} not found`);
+	}
 
-  if (!track.embedding) {
-    throw new Error(`Track does not have an embedding yet`);
-  }
+	if (!track.embedding) {
+		throw new Error(`Track does not have an embedding yet`);
+	}
 
-  const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embeddingCentered,
-    track.embedding
-  )})`;
+	const similarity = sql<number>`1 - (${cosineDistance(
+		trackTable.embeddingCentered,
+		track.embedding
+	)})`;
 
-  const similarTracks = await db
-    .select({
-      uri: trackTable.uri,
-      name: trackTable.name,
-      artists: trackTable.artist,
-      similarity,
-    })
-    .from(trackTable)
-    .where(and(gt(similarity, 0.5), notInArray(trackTable.uri, excludeUris)))
-    .orderBy((t) => desc(t.similarity))
-    .limit(limit);
+	const similarTracks = await db
+		.select({
+			uri: trackTable.uri,
+			name: trackTable.name,
+			artists: trackTable.artist,
+			similarity
+		})
+		.from(trackTable)
+		.where(and(gt(similarity, 0.5), notInArray(trackTable.uri, excludeUris)))
+		.orderBy((t) => desc(t.similarity))
+		.limit(limit);
 
-  return similarTracks;
+	return similarTracks;
 }
 
 async function chainSimilarSongs(uri: string, limit = 40, batchSize = 3) {
-  const tracks = await fetchRelatedTracks(uri, batchSize);
+	const tracks = await fetchRelatedTracks(uri, batchSize);
 
-  while (tracks.length < limit) {
-    const last = tracks[tracks.length - 1];
-    if (!last?.uri) {
-      break;
-    }
+	while (tracks.length < limit) {
+		const last = tracks[tracks.length - 1];
+		if (!last?.uri) {
+			break;
+		}
 
-    const nextTracks = await fetchRelatedTracks(
-      last.uri,
-      batchSize,
-      tracks.map((t) => t.uri)
-    );
-    if (nextTracks.length === 0) {
-      break;
-    }
+		const nextTracks = await fetchRelatedTracks(
+			last.uri,
+			batchSize,
+			tracks.map((t) => t.uri)
+		);
+		if (nextTracks.length === 0) {
+			break;
+		}
 
-    tracks.push(...nextTracks);
-  }
+		tracks.push(...nextTracks);
+	}
 
-  return tracks;
+	return tracks;
 }
 
 async function findArtists(uri: string) {
-  const [track] = await db
-    .select({
-      artists: trackTable.artist,
-      embedding: avg(trackTable.embeddingCentered),
-    })
-    .from(trackTable)
-    .groupBy(trackTable.artist)
-    .where(eq(trackTable.uri, uri));
+	const [track] = await db
+		.select({
+			artists: trackTable.artist,
+			embedding: avg(trackTable.embeddingCentered)
+		})
+		.from(trackTable)
+		.groupBy(trackTable.artist)
+		.where(eq(trackTable.uri, uri));
 
-  if (!track) {
-    throw new Error(`Track with URI ${uri} not found`);
-  }
+	if (!track) {
+		throw new Error(`Track with URI ${uri} not found`);
+	}
 
-  return {
-    artists: track.artists,
-    embedding: track.embedding as unknown as number[],
-  };
+	return {
+		artists: track.artists,
+		embedding: track.embedding as unknown as number[]
+	};
 }
 
 async function findAlbum(uri: string) {
-  const [track] = await db
-    .select({
-      embedding: avg(trackTable.embeddingCentered),
-      album: trackTable.album,
-    })
-    .from(trackTable)
-    .groupBy(trackTable.album)
-    .where(eq(trackTable.uri, uri));
+	const [track] = await db
+		.select({
+			embedding: avg(trackTable.embeddingCentered),
+			album: trackTable.album
+		})
+		.from(trackTable)
+		.groupBy(trackTable.album)
+		.where(eq(trackTable.uri, uri));
 
-  if (!track) {
-    throw new Error(`Track with URI ${uri} not found`);
-  }
+	if (!track) {
+		throw new Error(`Track with URI ${uri} not found`);
+	}
 
-  return {
-    album: track.album,
-    embedding: track.embedding as unknown as number[],
-  };
+	return {
+		album: track.album,
+		embedding: track.embedding as unknown as number[]
+	};
 }
 
-async function findSongsFromSimilarArtists(
-  uri: string,
-  limit = 30,
-  excludeUris: string[] = []
-) {
-  const { embedding } = await findArtists(uri);
+async function findSongsFromSimilarArtists(uri: string, limit = 30, excludeUris: string[] = []) {
+	const { embedding } = await findArtists(uri);
 
-  if (!embedding) {
-    throw new Error(`Track does not have an embedding yet`);
-  }
+	if (!embedding) {
+		throw new Error(`Track does not have an embedding yet`);
+	}
 
-  const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embeddingCentered,
-    embedding
-  )})`;
+	const similarity = sql<number>`1 - (${cosineDistance(trackTable.embeddingCentered, embedding)})`;
 
-  const similarTracks = await db
-    .select({
-      uri: trackTable.uri,
-      name: trackTable.name,
-      artists: trackTable.artist,
-      similarity,
-    })
-    .from(trackTable)
-    .where(
-      and(
-        gt(similarity, 0.5),
-        lt(similarity, 1),
-        notInArray(trackTable.uri, excludeUris)
-      )
-    )
-    .orderBy((t) => desc(t.similarity))
-    .limit(limit);
+	const similarTracks = await db
+		.select({
+			uri: trackTable.uri,
+			name: trackTable.name,
+			artists: trackTable.artist,
+			similarity
+		})
+		.from(trackTable)
+		.where(and(gt(similarity, 0.5), lt(similarity, 1), notInArray(trackTable.uri, excludeUris)))
+		.orderBy((t) => desc(t.similarity))
+		.limit(limit);
 
-  return similarTracks;
+	return similarTracks;
 }
 
-async function findSimilarAlbums(
-  uri: string,
-  limit = 30,
-  excludeUris: string[] = []
-) {
-  const { embedding } = await findAlbum(uri);
+async function findSimilarAlbums(uri: string, limit = 30, excludeUris: string[] = []) {
+	const { embedding } = await findAlbum(uri);
 
-  const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embeddingCentered,
-    embedding
-  )})`;
+	const similarity = sql<number>`1 - (${cosineDistance(trackTable.embeddingCentered, embedding)})`;
 
-  const similarTracks = await db
-    .select({
-      uri: trackTable.uri,
-      name: trackTable.name,
-      artists: trackTable.artist,
-      similarity,
-    })
-    .from(trackTable)
-    .where(
-      and(
-        gt(similarity, 0.5),
-        lt(similarity, 1),
-        notInArray(trackTable.uri, excludeUris)
-      )
-    )
-    .orderBy((t) => desc(t.similarity))
-    .limit(limit);
+	const similarTracks = await db
+		.select({
+			uri: trackTable.uri,
+			name: trackTable.name,
+			artists: trackTable.artist,
+			similarity
+		})
+		.from(trackTable)
+		.where(and(gt(similarity, 0.5), lt(similarity, 1), notInArray(trackTable.uri, excludeUris)))
+		.orderBy((t) => desc(t.similarity))
+		.limit(limit);
 
-  return similarTracks;
+	return similarTracks;
 }
 
 async function findRandomSongOfArtist(artist: string, limit: number) {
-  const tracks = await db
-    .select({
-      uri: trackTable.uri,
-      name: trackTable.name,
-      artists: trackTable.artist,
-      similarity: sql<number>`1`,
-    })
-    .from(trackTable)
-    .where(eq(trackTable.artist, [artist]))
-    .orderBy(() => sql`random()`)
-    .limit(limit);
+	const tracks = await db
+		.select({
+			uri: trackTable.uri,
+			name: trackTable.name,
+			artists: trackTable.artist,
+			similarity: sql<number>`1`
+		})
+		.from(trackTable)
+		.where(eq(trackTable.artist, [artist]))
+		.orderBy(() => sql`random()`)
+		.limit(limit);
 
-  return tracks;
+	return tracks;
 }
 
 function uniqueSongs(
-  songs: {
-    uri: string;
-    name: string;
-    artists: string[];
-    similarity: number;
-  }[]
+	songs: {
+		uri: string;
+		name: string;
+		artists: string[];
+		similarity: number;
+	}[]
 ) {
-  const uniqueSongs = new Map<string, (typeof songs)[0]>();
+	const uniqueSongs = new Map<string, (typeof songs)[0]>();
 
-  for (const song of songs) {
-    if (!song?.uri) {
-      continue;
-    }
-    if (!uniqueSongs.has(song.uri)) {
-      uniqueSongs.set(song.uri, song);
-    }
-  }
+	for (const song of songs) {
+		if (!song?.uri) {
+			continue;
+		}
+		if (!uniqueSongs.has(song.uri)) {
+			uniqueSongs.set(song.uri, song);
+		}
+	}
 
-  return Array.from(uniqueSongs.values());
+	return Array.from(uniqueSongs.values());
 }
 
 async function removeLongChainOfSameArtists(
-  songs: {
-    uri: string;
-    name: string;
-    artists: string[];
-    similarity: number;
-  }[],
-  limit: number
+	songs: {
+		uri: string;
+		name: string;
+		artists: string[];
+		similarity: number;
+	}[],
+	limit: number
 ) {
-  let lastArtists: string[] = [];
-  let chainCount = 0;
-  const counts: number[] = [];
+	let lastArtists: string[] = [];
+	let chainCount = 0;
+	const counts: number[] = [];
 
-  for (const song of songs) {
-    if (song.artists.some((artist) => lastArtists.includes(artist))) {
-      chainCount++;
-    } else {
-      chainCount = 1;
-    }
+	for (const song of songs) {
+		if (song.artists.some((artist) => lastArtists.includes(artist))) {
+			chainCount++;
+		} else {
+			chainCount = 1;
+		}
 
-    counts.push(chainCount);
-    lastArtists = song.artists;
-  }
+		counts.push(chainCount);
+		lastArtists = song.artists;
+	}
 
-  const skippedArtists = await db.select().from(skippedArtistsTable);
+	const skippedArtists = await db.select().from(skippedArtistsTable);
 
-  return songs.filter((song, index) => {
-    const artistSkipped = skippedArtists.some((skipped) =>
-      song.artists.some((artist) => skipped.name === artist)
-    );
-    if (artistSkipped && Math.random() < 0.3) {
-      return false;
-    }
+	return songs.filter((song, index) => {
+		const artistSkipped = skippedArtists.some((skipped) =>
+			song.artists.some((artist) => skipped.name === artist)
+		);
+		if (artistSkipped && Math.random() < 0.3) {
+			return false;
+		}
 
-    const count = counts[index] ?? 0;
-    return count <= limit;
-  });
+		const count = counts[index] ?? 0;
+		return count <= limit;
+	});
 }
 
 export async function skipTrack(uri: string) {
-  const [track] = await db
-    .select()
-    .from(skippedSongsTable)
-    .where(eq(skippedSongsTable.uri, uri));
+	const [track] = await db.select().from(skippedSongsTable).where(eq(skippedSongsTable.uri, uri));
 
-  if (track) {
-    console.log("Track already skipped", uri);
-    return;
-  }
+	if (track) {
+		console.log('Track already skipped', uri);
+		return;
+	}
 
-  await db.insert(skippedSongsTable).values({ uri });
-  console.log("Track skipped", uri);
+	await db.insert(skippedSongsTable).values({ uri });
+	console.log('Track skipped', uri);
 }
 
 export async function skipArtists(artists: string[]) {
-  if (artists.length === 0) {
-    console.log("No artists to skip");
-    return;
-  }
+	if (artists.length === 0) {
+		console.log('No artists to skip');
+		return;
+	}
 
-  await db
-    .insert(skippedArtistsTable)
-    .values(artists.map((artist) => ({ name: artist })))
-    .onConflictDoNothing();
+	await db
+		.insert(skippedArtistsTable)
+		.values(artists.map((artist) => ({ name: artist })))
+		.onConflictDoNothing();
 
-  console.log("Artists skipped", artists);
+	console.log('Artists skipped', artists);
 }
 
 export async function likeTrack(uri: string, source?: string) {
-  // 1. Verify the track exists and has an embedding
-  const [dbTrack] = await db
-    .select({ uri: trackTable.uri, embedding: trackTable.embeddingCentered })
-    .from(trackTable)
-    .where(eq(trackTable.uri, uri));
+	// 1. Verify the track exists and has an embedding
+	const [dbTrack] = await db
+		.select({ uri: trackTable.uri, embedding: trackTable.embeddingCentered })
+		.from(trackTable)
+		.where(eq(trackTable.uri, uri));
 
-  if (!dbTrack || !dbTrack.embedding) {
-    console.warn(`Cannot like track ${uri}: not found in database or missing embedding.`);
-  }
+	if (!dbTrack || !dbTrack.embedding) {
+		console.warn(`Cannot like track ${uri}: not found in database or missing embedding.`);
+	}
 
-  const [existing] = await db
-    .select()
-    .from(likedSongsTable)
-    .where(eq(likedSongsTable.uri, uri));
+	const [existing] = await db.select().from(likedSongsTable).where(eq(likedSongsTable.uri, uri));
 
-  if (existing) {
-    console.log("Track already liked", uri);
-    return;
-  }
+	if (existing) {
+		console.log('Track already liked', uri);
+		return;
+	}
 
-  const hour = new Date().getHours();
-  await db.insert(likedSongsTable).values({ 
-    uri, 
-    hour,
-    source: source || "unknown"
-  });
-  console.log(`Track liked (${source || "unknown"}):`, uri);
-  
-  // 2. Invalidate the recommendation engine cache so the new like is picked up immediately
-  invalidateLikedCache();
+	const hour = new Date().getHours();
+	await db.insert(likedSongsTable).values({
+		uri,
+		hour,
+		source: source || 'unknown'
+	});
+	console.log(`Track liked (${source || 'unknown'}):`, uri);
+
+	// 2. Invalidate the recommendation engine cache so the new like is picked up immediately
+	invalidateLikedCache();
 }
 
 export async function getRandomTrack() {
-  const [track] = await db
-    .select({
-      uri: trackTable.uri,
-    })
-    .from(trackTable)
-    .where(isNotNull(trackTable.embeddingCentered))
-    .orderBy(() => sql`random()`)
-    .limit(1);
+	const [track] = await db
+		.select({
+			uri: trackTable.uri
+		})
+		.from(trackTable)
+		.where(isNotNull(trackTable.embeddingCentered))
+		.orderBy(() => sql`random()`)
+		.limit(1);
 
-  if (!track) {
-    throw new Error("No track found");
-  }
+	if (!track) {
+		throw new Error('No track found');
+	}
 
-  return track.uri;
+	return track.uri;
 }
 
 export async function findSimilarTracks(uri: string) {
-  const res = await Promise.all([
-    chainSimilarSongs(uri),
-    findSongsFromSimilarArtists(uri),
-    findSimilarAlbums(uri),
-    fetchRelatedTracks(uri),
-  ]);
+	const res = await Promise.all([
+		chainSimilarSongs(uri),
+		findSongsFromSimilarArtists(uri),
+		findSimilarAlbums(uri),
+		fetchRelatedTracks(uri)
+	]);
 
-  const results = res.flat();
+	const results = res.flat();
 
-  let uniqueResults = await Promise.all(
-    uniqueSongs(results).sort((a, b) => b.similarity - a.similarity)
-  );
+	let uniqueResults = await Promise.all(
+		uniqueSongs(results).sort((a, b) => b.similarity - a.similarity)
+	);
 
-  // insert another track of the same artist after each track
-  for (let i = uniqueResults.length - 1; i >= 0; i--) {
-    const result = uniqueResults[i];
-    if (!result?.artists) {
-      continue;
-    }
+	// insert another track of the same artist after each track
+	for (let i = uniqueResults.length - 1; i >= 0; i--) {
+		const result = uniqueResults[i];
+		if (!result?.artists) {
+			continue;
+		}
 
-    const isNextTrackFromTheSameArtist = uniqueResults[i + 1]?.artists?.some(
-      (artist) => result.artists.includes(artist)
-    );
+		const isNextTrackFromTheSameArtist = uniqueResults[i + 1]?.artists?.some((artist) =>
+			result.artists.includes(artist)
+		);
 
-    if (isNextTrackFromTheSameArtist) {
-      continue;
-    }
+		if (isNextTrackFromTheSameArtist) {
+			continue;
+		}
 
-    const isPreviousTrackFromTheSameArtist = uniqueResults[
-      i - 1
-    ]?.artists?.some((artist) => result.artists.includes(artist));
+		const isPreviousTrackFromTheSameArtist = uniqueResults[i - 1]?.artists?.some((artist) =>
+			result.artists.includes(artist)
+		);
 
-    let twoOrThree: number;
-    if (isPreviousTrackFromTheSameArtist) {
-      twoOrThree = 1;
-    } else {
-      twoOrThree = Math.random() < 0.5 ? 2 : 3;
-    }
-    const tracksFromArtist = await Promise.all(
-      result.artists.map((artist) => findRandomSongOfArtist(artist, twoOrThree))
-    );
+		let twoOrThree: number;
+		if (isPreviousTrackFromTheSameArtist) {
+			twoOrThree = 1;
+		} else {
+			twoOrThree = Math.random() < 0.5 ? 2 : 3;
+		}
+		const tracksFromArtist = await Promise.all(
+			result.artists.map((artist) => findRandomSongOfArtist(artist, twoOrThree))
+		);
 
-    const randomTrack = tracksFromArtist.concat([result]).flat();
-    const uniqueRandomTrack = uniqueSongs(randomTrack);
-    uniqueResults.splice(i, 1, ...uniqueRandomTrack);
-  }
+		const randomTrack = tracksFromArtist.concat([result]).flat();
+		const uniqueRandomTrack = uniqueSongs(randomTrack);
+		uniqueResults.splice(i, 1, ...uniqueRandomTrack);
+	}
 
-  // remove duplicates
-  uniqueResults = uniqueSongs(
-    await removeLongChainOfSameArtists(uniqueResults, 3)
-  );
+	// remove duplicates
+	uniqueResults = uniqueSongs(await removeLongChainOfSameArtists(uniqueResults, 3));
 
-  const ids = [];
-  for (let i = 0; i < uniqueResults.length; i++) {
-    const result = uniqueResults[i];
+	const ids = [];
+	for (let i = 0; i < uniqueResults.length; i++) {
+		const result = uniqueResults[i];
 
-    if (!result?.uri) {
-      console.error("No URI found for track", result);
-      continue;
-    }
+		if (!result?.uri) {
+			console.error('No URI found for track', result);
+			continue;
+		}
 
-    const [shouldSkip] = await db
-      .select()
-      .from(skippedSongsTable)
-      .where(eq(skippedSongsTable.uri, result.uri));
+		const [shouldSkip] = await db
+			.select()
+			.from(skippedSongsTable)
+			.where(eq(skippedSongsTable.uri, result.uri));
 
-    if (shouldSkip) {
-      console.log("Track was skipped", result.uri);
-      continue;
-    }
+		if (shouldSkip) {
+			console.log('Track was skipped', result.uri);
+			continue;
+		}
 
-    console.log(
-      `${result.artists.join(", ")}: ${
-        result.name
-      }, similarity: ${result.similarity.toFixed(3)}, uri: ${result.uri}`
-    );
+		console.log(
+			`${result.artists.join(', ')}: ${
+				result.name
+			}, similarity: ${result.similarity.toFixed(3)}, uri: ${result.uri}`
+		);
 
-    ids.push(result.uri);
-  }
+		ids.push(result.uri);
+	}
 
-  return ids;
+	return ids;
 }

@@ -28,6 +28,11 @@ else:
 
 os.environ["WORKER_URL"] = ${JSON.stringify(data.workerUrl)}
 os.environ["WORKER_TOKEN"] = getpass.getpass("Paste worker API key: ")
+
+# OpenL3 predict batch. 64 is safe on CPU; 128-256 helps on a GPU.
+# This is not the same as --batch-size, which is the page size (max 32).
+infer_batch_size = os.environ.get("EMBEDDING_INFER_BATCH_SIZE", "64")
+
 env = os.environ.copy()
 env["PYTHONUNBUFFERED"] = "1"
 process = subprocess.Popen(
@@ -38,7 +43,9 @@ process = subprocess.Popen(
         "api",
         "--duration",
         "60",
-        "--dry-run",
+        "--infer-batch-size",
+        infer_batch_size,
+        "--dry-run",      # remove these two for the real run
         "--limit",
         "1",
     ],
@@ -52,9 +59,13 @@ assert process.stdout is not None
 for line in process.stdout:
     print(line, end="", flush=True)
 returncode = process.wait()
-if returncode == 2:
-    print("Worker stopped with exit code 2; this is expected when pending tracks remain. Check run_summary for failures.")
-elif returncode != 0:
+if returncode == 0:
+    print("Done; nothing pending.")
+elif returncode == 2:
+    print("Pending tracks remain (expected). Check run_summary for failures.")
+elif returncode == 64:
+    raise RuntimeError("Worker configuration rejected (exit 64); nothing was processed.")
+else:
     raise subprocess.CalledProcessError(returncode, process.args)`);
 
 	async function copyText(value: string, kind: 'secret' | 'notebook') {
@@ -71,7 +82,9 @@ elif returncode != 0:
 
 	function formatDate(value: string | null): string {
 		if (!value) return 'Never';
-		return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(value));
+		return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+			new Date(value)
+		);
 	}
 
 	function keyStatus(key: { active: boolean; revokedAt: string | null }): string {
@@ -80,21 +93,21 @@ elif returncode != 0:
 	}
 </script>
 
-<svelte:head><title>API keys · Music Recommender</title></svelte:head>
+<svelte:head><title>Access · Music Recommender</title></svelte:head>
 
 <PageHeader
-	kicker="Account access"
-	title="API keys"
-	description="Create narrowly scoped credentials for the embedding worker or Home Assistant. Keys are shown once, can be revoked here, and never grant access to the rest of the app."
+	kicker="Manage"
+	title="Access"
+	description="Scoped keys for the embedding worker and Home Assistant. Each key is shown once and can be revoked here."
 />
 
 <div class="grid gap-6 lg:grid-cols-2">
-	<section class="rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-sm">
+	<section class="border-ink/10 rounded-2xl border bg-white/80 p-6 shadow-sm">
 		<div class="flex items-start gap-3">
-			<div class="rounded-xl bg-accent/10 p-2 text-accent-deep"><IconKey size={22} /></div>
+			<div class="bg-accent/10 text-accent-deep rounded-xl p-2"><IconKey size={22} /></div>
 			<div>
 				<h2 class="text-lg font-bold">Create a key</h2>
-				<p class="mt-1 text-sm text-ink-soft">Use a separate key for each external integration.</p>
+				<p class="text-ink-soft mt-1 text-sm">Use a separate key for each external integration.</p>
 			</div>
 		</div>
 
@@ -102,7 +115,7 @@ elif returncode != 0:
 			<div>
 				<label class="mb-1 block text-sm font-bold" for="key-name">Name</label>
 				<input
-					class="w-full rounded-lg border border-ink/20 bg-paper px-3 py-2 outline-none focus:border-accent"
+					class="border-ink/20 bg-paper focus:border-accent w-full rounded-lg border px-3 py-2 outline-none"
 					id="key-name"
 					name="name"
 					placeholder="Colab worker"
@@ -112,7 +125,7 @@ elif returncode != 0:
 			<div>
 				<label class="mb-1 block text-sm font-bold" for="key-scope">Purpose</label>
 				<select
-					class="w-full rounded-lg border border-ink/20 bg-paper px-3 py-2 outline-none focus:border-accent"
+					class="border-ink/20 bg-paper focus:border-accent w-full rounded-lg border px-3 py-2 outline-none"
 					id="key-scope"
 					name="scope"
 				>
@@ -123,7 +136,7 @@ elif returncode != 0:
 			<div>
 				<label class="mb-1 block text-sm font-bold" for="key-expiry">Expires</label>
 				<select
-					class="w-full rounded-lg border border-ink/20 bg-paper px-3 py-2 outline-none focus:border-accent"
+					class="border-ink/20 bg-paper focus:border-accent w-full rounded-lg border px-3 py-2 outline-none"
 					id="key-expiry"
 					name="expiresInDays"
 				>
@@ -133,60 +146,82 @@ elif returncode != 0:
 					<option value="365">1 year</option>
 				</select>
 			</div>
-			<button class="cursor-pointer rounded-lg bg-ink px-4 py-2 font-bold text-cream transition hover:bg-ink-soft" type="submit">
+			<button
+				class="bg-ink text-cream hover:bg-ink-soft cursor-pointer rounded-lg px-4 py-2 font-bold transition"
+				type="submit"
+			>
 				Create API key
 			</button>
 		</form>
 
 		{#if form?.message}
-			<p class="mt-4 rounded-lg bg-ink/5 px-3 py-2 text-sm text-ink-soft">{form.message}</p>
+			<p class="bg-ink/5 text-ink-soft mt-4 rounded-lg px-3 py-2 text-sm">{form.message}</p>
 		{/if}
 
 		{#if form?.createdKey}
-			<div class="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-4">
-				<p class="text-sm font-bold text-ink">Copy this key now. It will not be shown again.</p>
+			<div class="border-accent/30 bg-accent/5 mt-4 rounded-xl border p-4">
+				<p class="text-ink text-sm font-bold">Copy this key now. It will not be shown again.</p>
 				<div class="mt-3 flex items-start gap-2">
-					<code class="min-w-0 flex-1 overflow-x-auto rounded-lg bg-ink px-3 py-2 text-xs break-all text-cream">{form.createdKey.secret}</code>
+					<code
+						class="bg-ink text-cream min-w-0 flex-1 overflow-x-auto rounded-lg px-3 py-2 text-xs break-all"
+						>{form.createdKey.secret}</code
+					>
 					<button
-						class="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg bg-accent px-3 py-2 text-xs font-bold text-white hover:bg-accent-deep"
+						class="bg-accent hover:bg-accent-deep inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold text-white"
 						type="button"
 						onclick={() => copyText(form.createdKey.secret, 'secret')}
 					>
-						<IconClipboardCopy size={15} /> {copied === 'secret' ? 'Copied' : 'Copy'}
+						<IconClipboardCopy size={15} />
+						{copied === 'secret' ? 'Copied' : 'Copy'}
 					</button>
 				</div>
-				<p class="mt-2 text-xs text-ink-soft">Scope: {form.createdKey.scope === 'worker' ? 'Embedding worker API' : 'Home Assistant playback POST'}.</p>
+				<p class="text-ink-soft mt-2 text-xs">
+					Scope: {form.createdKey.scope === 'worker'
+						? 'Embedding worker API'
+						: 'Home Assistant playback POST'}.
+				</p>
 			</div>
 		{/if}
 	</section>
 
-	<section class="rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-sm">
+	<section class="border-ink/10 rounded-2xl border bg-white/80 p-6 shadow-sm">
 		<div class="flex items-start gap-3">
-			<div class="rounded-xl bg-moss/10 p-2 text-moss"><IconKey size={22} /></div>
+			<div class="bg-moss/10 text-moss rounded-xl p-2"><IconKey size={22} /></div>
 			<div>
 				<h2 class="text-lg font-bold">Your keys</h2>
-				<p class="mt-1 text-sm text-ink-soft">Revoke a key immediately if an integration is no longer trusted.</p>
+				<p class="text-ink-soft mt-1 text-sm">
+					Revoke a key immediately if an integration is no longer trusted.
+				</p>
 			</div>
 		</div>
 
 		{#if data.keys.length === 0}
-			<p class="mt-6 rounded-xl border border-dashed border-ink/20 px-4 py-6 text-center text-sm text-faded">No API keys yet.</p>
+			<p
+				class="border-ink/20 text-faded mt-6 rounded-xl border border-dashed px-4 py-6 text-center text-sm"
+			>
+				No API keys yet.
+			</p>
 		{:else}
-			<ul class="mt-5 divide-y divide-ink/10">
+			<ul class="divide-ink/10 mt-5 divide-y">
 				{#each data.keys as key (key.id)}
 					<li class="py-4 first:pt-0 last:pb-0">
 						<div class="flex flex-wrap items-start justify-between gap-3">
 							<div class="min-w-0">
 								<p class="font-bold">{key.name}</p>
-								<p class="mt-1 text-xs text-ink-soft">
-									{key.scope === 'worker' ? 'Embedding worker API' : 'Home Assistant playback'} · <code>{key.keyPrefix}…</code>
+								<p class="text-ink-soft mt-1 text-xs">
+									{key.scope === 'worker' ? 'Embedding worker API' : 'Home Assistant playback'} ·
+									<code>{key.keyPrefix}…</code>
 								</p>
 							</div>
-							<span class="rounded-full px-2.5 py-1 text-xs font-bold {keyStatus(key) === 'Active' ? 'bg-moss/15 text-moss' : 'bg-ink/10 text-faded'}">
+							<span
+								class="rounded-full px-2.5 py-1 text-xs font-bold {keyStatus(key) === 'Active'
+									? 'bg-moss/15 text-moss'
+									: 'bg-ink/10 text-faded'}"
+							>
 								{keyStatus(key)}
 							</span>
 						</div>
-						<div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-faded">
+						<div class="text-faded mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
 							<span>Created {formatDate(key.createdAt)}</span>
 							<span>Last used {formatDate(key.lastUsedAt)}</span>
 							{#if key.expiresAt}<span>Expires {formatDate(key.expiresAt)}</span>{/if}
@@ -194,7 +229,10 @@ elif returncode != 0:
 						{#if !key.revokedAt}
 							<form method="POST" action="?/revoke" use:enhance class="mt-3">
 								<input type="hidden" name="id" value={key.id} />
-								<button class="cursor-pointer text-xs font-bold text-red-700 hover:text-red-900" type="submit">Revoke key</button>
+								<button
+									class="cursor-pointer text-xs font-bold text-red-700 hover:text-red-900"
+									type="submit">Revoke key</button
+								>
 							</form>
 						{/if}
 					</li>
@@ -204,22 +242,34 @@ elif returncode != 0:
 	</section>
 </div>
 
-<section class="mt-6 rounded-2xl border border-ink/10 bg-white/80 p-6 shadow-sm">
+<section class="border-ink/10 mt-6 rounded-2xl border bg-white/80 p-6 shadow-sm">
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h2 class="text-lg font-bold">Colab / Jupyter worker cell</h2>
-			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Python 3.11 is recommended. On Python 3.12+, the cell applies a packaging-only compatibility patch for the pinned OpenL3/resampy source releases; model code and versions remain unchanged. Worker JSON events are streamed line-by-line into the cell output. The cell runs a one-track dry run by default; exit code 2 is expected when unembedded tracks remain, but the final `run_summary` must be checked for failures. Remove `--dry-run` and `--limit 1` only when you are ready to write embeddings.</p>
+			<h2 class="text-lg font-bold">Worker notebook cell</h2>
+			<p class="text-ink-soft mt-1 max-w-2xl text-sm">
+				Copy this into a Colab or Jupyter cell after creating a Worker key. It runs a one-track dry
+				run first; check <code>run_summary</code> for failures, then remove
+				<code>--dry-run</code> and <code>--limit 1</code> to write embeddings. Progress appears under
+				Worker once the first batch uploads.
+			</p>
 		</div>
 		<div class="flex gap-2">
 			<button
-				class="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-ink px-3 py-2 text-xs font-bold text-cream hover:bg-ink-soft"
+				class="bg-ink text-cream hover:bg-ink-soft inline-flex cursor-pointer items-center gap-1 rounded-lg px-3 py-2 text-xs font-bold"
 				type="button"
 				onclick={() => copyText(workerCell, 'notebook')}
 			>
-				<IconClipboardCopy size={15} /> {copied === 'notebook' ? 'Copied' : 'Copy cell'}
+				<IconClipboardCopy size={15} />
+				{copied === 'notebook' ? 'Copied' : 'Copy cell'}
 			</button>
-			<a class="rounded-lg border border-ink/15 px-3 py-2 text-xs font-bold hover:bg-ink/5" href="/music-recommender-worker.ipynb" download>Download notebook</a>
+			<a
+				class="border-ink/15 hover:bg-ink/5 rounded-lg border px-3 py-2 text-xs font-bold"
+				href="/music-recommender-worker.ipynb"
+				download>Download notebook</a
+			>
 		</div>
 	</div>
-	<pre class="mt-5 overflow-x-auto rounded-xl bg-ink p-4 text-xs leading-relaxed text-cream"><code>{workerCell}</code></pre>
+	<pre class="bg-ink text-cream mt-5 overflow-x-auto rounded-xl p-4 text-xs leading-relaxed"><code
+			>{workerCell}</code
+		></pre>
 </section>

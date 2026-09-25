@@ -1,10 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import {
-	createApiKey,
-	listApiKeys,
-	revokeApiKey,
-	type ApiKeyView
-} from '$lib/server/api-keys';
+import { createApiKey, listApiKeys, revokeApiKey, type ApiKeyView } from '$lib/server/api-keys';
 import type { ApiKeyScope } from '$lib/server/schema';
 import type { Actions, PageServerLoad } from './$types';
 

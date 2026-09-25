@@ -75,8 +75,8 @@ workers through the packaging-only compatibility installer
    ```
 
    The web container reads the library through `/music`; the host path comes
-   from `MUSIC_LIBRARY_PATH`. Open the application, import the library from
-   **Manage**, and use `/status` to inspect progress.
+   from `MUSIC_LIBRARY_PATH`. Open the application and run the full tidy-up
+   from **Manage**. Use `/status` for embedding coverage and worker liveness.
 
 ## Authentication
 
@@ -259,6 +259,8 @@ versioned service images to GHCR and creates a GitHub release.
 - Slow embedding throughput: OpenL3 inference dominates, so raise
   `EMBEDDING_INFER_BATCH_SIZE` on a GPU and compare with a bounded
   `--dry-run --limit 20` before a full run.
+- Worker looks stalled: `/status` shows the last upload time. Silence past
+  15 minutes means it stopped, since uploads are its only heartbeat.
 - Pending embeddings: inspect `/status`, then use a bounded `--dry-run`.
 
 ## License

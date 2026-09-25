@@ -42,7 +42,9 @@ function normalizedPathname(pathname: string): string {
 
 function isPublicPath(pathname: string): boolean {
 	const normalized = normalizedPathname(pathname);
-	return publicPages.has(normalized) || publicPaths.has(normalized) || pathname.startsWith('/_app/');
+	return (
+		publicPages.has(normalized) || publicPaths.has(normalized) || pathname.startsWith('/_app/')
+	);
 }
 
 function isInternalJob(pathname: string): boolean {
@@ -51,13 +53,19 @@ function isInternalJob(pathname: string): boolean {
 }
 
 function isExternalPlaybackRequest(event: Parameters<Handle>[0]['event']): boolean {
-	return normalizedPathname(event.url.pathname) === '/api/play-vibe' && event.request.method === 'POST';
+	return (
+		normalizedPathname(event.url.pathname) === '/api/play-vibe' && event.request.method === 'POST'
+	);
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Worker endpoints have their own WORKER_TOKEN auth and must not be
 	// intercepted by the browser-session guard.
-	if (building || event.url.pathname === '/api/worker' || event.url.pathname.startsWith('/api/worker/')) {
+	if (
+		building ||
+		event.url.pathname === '/api/worker' ||
+		event.url.pathname.startsWith('/api/worker/')
+	) {
 		event.locals.user = null;
 		event.locals.session = null;
 		event.locals.method = null;

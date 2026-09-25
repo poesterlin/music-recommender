@@ -36,10 +36,15 @@ export const actions: Actions = {
 		const username = parsed.data.username.trim();
 		const password = parsed.data.password;
 		if (!validateUsername(username) || !validatePassword(password)) {
-			return fail(400, { message: 'Username must be 3–31 characters and password at least 8 characters.' });
+			return fail(400, {
+				message: 'Username must be 3–31 characters and password at least 8 characters.'
+			});
 		}
 
-		const [existing] = await db.select({ id: userTable.id }).from(userTable).where(eq(userTable.username, username));
+		const [existing] = await db
+			.select({ id: userTable.id })
+			.from(userTable)
+			.where(eq(userTable.username, username));
 		if (existing) return fail(400, { message: 'That username is already in use.' });
 
 		const userId = generateId();

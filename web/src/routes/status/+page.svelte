@@ -8,24 +8,33 @@
 	let lastUpdated = $state(new Date(data.generatedAt));
 
 	const counts = $derived(status.embedding.counts);
+	const worker = $derived(status.embedding.worker);
 	const activeJob = $derived(status.embedding.activeJob);
-	const latestRun = $derived(status.clustering.latestRun);
-	const activeRun = $derived(status.clustering.activeRun);
+	const clusters = $derived(status.clusters);
+
+	// A worker that has not spoken in a while is the signal you actually want:
+	// "it stopped" and "it finished" look identical without a heartbeat.
+	const WORKER_STALE_MINUTES = 15;
+	const workerMinutes = $derived(
+		worker.lastSeenAt ? (Date.now() - new Date(worker.lastSeenAt).getTime()) / 60000 : null
+	);
+	const workerState = $derived.by((): 'idle' | 'running' | 'stale' => {
+		if (!worker.active || workerMinutes === null) return 'idle';
+		return workerMinutes <= WORKER_STALE_MINUTES ? 'running' : 'stale';
+	});
+
+	const UPKEEP_LABELS: Record<string, string> = {
+		analyze: 'Full tidy-up',
+		'index-library': 'Check for new music',
+		'sync-favorites': 'Refresh liked songs'
+	};
 
 	function formatNumber(value: number | null | undefined): string {
 		return value === null || value === undefined ? '—' : new Intl.NumberFormat().format(value);
 	}
 
-	function formatDecimal(value: number | null | undefined, digits = 3): string {
-		return value === null || value === undefined || !Number.isFinite(value)
-			? '—'
-			: value.toFixed(digits);
-	}
-
-	function formatPercent(value: number | null | undefined, digits = 1): string {
-		return value === null || value === undefined || !Number.isFinite(value)
-			? '—'
-			: `${(value * 100).toFixed(digits)}%`;
+	function formatSeconds(value: number | null | undefined): string {
+		return value === null || value === undefined ? '—' : `${value.toFixed(1)}s`;
 	}
 
 	function formatDate(value: string | Date | null | undefined): string {
@@ -33,10 +42,7 @@
 		const date = value instanceof Date ? value : new Date(value);
 		return Number.isNaN(date.getTime())
 			? '—'
-			: date.toLocaleString(undefined, {
-					dateStyle: 'medium',
-					timeStyle: 'short'
-				});
+			: date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 	}
 
 	function relativeTime(value: string | Date | null | undefined): string {
@@ -60,14 +66,16 @@
 	}
 
 	function jobLabel(state: string): string {
-		return {
-			complete: 'Complete',
-			incomplete: 'Incomplete',
-			failed: 'Failed',
-			unfinished: 'Unfinished',
-			unknown: 'Unknown',
-			'not-started': 'Not started'
-		}[state] ?? state;
+		return (
+			{
+				complete: 'Complete',
+				incomplete: 'Incomplete',
+				failed: 'Failed',
+				unfinished: 'Running',
+				unknown: 'Unknown',
+				'not-started': 'Not started'
+			}[state] ?? state
+		);
 	}
 
 	function jobTone(state: string): string {
@@ -75,17 +83,6 @@
 		if (state === 'failed' || state === 'incomplete') return 'bg-red-100 text-red-700';
 		if (state === 'unfinished') return 'bg-amber-100 text-amber-800';
 		return 'bg-gray-100 text-gray-700';
-	}
-
-	function runTone(statusValue: string): string {
-		if (statusValue === 'applied') return 'bg-moss/15 text-moss';
-		if (statusValue === 'completed') return 'bg-blue-100 text-blue-700';
-		if (statusValue === 'failed' || statusValue === 'error') return 'bg-red-100 text-red-700';
-		return 'bg-gray-100 text-gray-700';
-	}
-
-	function qualityValue(value: number | null | undefined): string {
-		return formatDecimal(value, 4);
 	}
 
 	async function refresh() {
@@ -110,89 +107,142 @@
 </script>
 
 <PageHeader
-	title="Pipeline status"
-	description="A read-only view of embedding coverage, worker checkpoints, and the latest clustering quality. Nothing on this page starts a job or changes the database."
+	title="Worker"
+	description="Embedding coverage, worker liveness, and upkeep jobs. Read-only — nothing here starts a job."
 	kicker="Operations"
 />
 
-<div class="mb-6 flex flex-wrap items-center justify-between gap-3 text-sm text-ink-soft">
-	<p>Last refreshed {formatDate(lastUpdated)} · page polls every 30 seconds</p>
+<div class="text-ink-soft mb-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+	<p>Updated {formatDate(lastUpdated)} · refreshes every 30s</p>
 	<button
-		class="rounded-full border border-ink/20 bg-cream px-4 py-2 font-bold transition hover:border-ink/50 hover:bg-white disabled:opacity-50"
+		class="border-ink/20 bg-cream hover:border-ink/50 rounded-full border px-4 py-2 font-bold transition hover:bg-white disabled:opacity-50"
 		disabled={refreshing}
 		onclick={refresh}
 	>
-		{refreshing ? 'Refreshing…' : 'Refresh now'}
+		{refreshing ? 'Refreshing…' : 'Refresh'}
 	</button>
 </div>
 
 {#if status.errors.length > 0}
 	<section class="mb-6 rounded-2xl border border-amber-300 bg-amber-50 p-5 text-amber-950">
-		<h2 class="font-bold">Some status sources are unavailable</h2>
+		<h2 class="font-bold">Some sources are unavailable</h2>
 		<ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
-			{#each status.errors as error}
+			{#each status.errors as error, i (i)}
 				<li>{error}</li>
 			{/each}
 		</ul>
-		<p class="mt-3 text-sm">The page is read-only and will keep showing the sections that are available.</p>
 	</section>
 {/if}
 
-<section class="mb-8 rounded-3xl border border-line bg-cream p-6 shadow-sm sm:p-8">
+<section class="border-line bg-cream mb-8 rounded-3xl border p-6 shadow-sm sm:p-8">
 	<div class="flex flex-wrap items-end justify-between gap-3">
 		<div>
-			<p class="text-xs font-bold tracking-[0.24em] text-accent-deep uppercase">01 · Embeddings</p>
-			<h2 class="mt-1 font-display text-3xl font-black">Library coverage</h2>
+			<p class="text-accent-deep text-xs font-bold tracking-[0.24em] uppercase">01 · Embeddings</p>
+			<h2 class="font-display mt-1 text-3xl font-black">Coverage</h2>
 		</div>
 		{#if status.embedding.space}
-			<span class="rounded-full bg-ink px-3 py-1 text-xs font-bold text-cream">
+			<span class="bg-ink text-cream rounded-full px-3 py-1 text-xs font-bold">
 				space v{status.embedding.space.version} · {status.embedding.space.model}
 			</span>
 		{/if}
 	</div>
 
 	<div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-		<div class="rounded-2xl border border-line bg-white/70 p-4">
-			<p class="text-xs font-bold tracking-wide text-ink-soft uppercase">Total tracks</p>
-			<p class="mt-2 font-display text-3xl font-black">{formatNumber(counts.total)}</p>
+		<div class="border-line rounded-2xl border bg-white/70 p-4">
+			<p class="text-ink-soft text-xs font-bold tracking-wide uppercase">Total tracks</p>
+			<p class="font-display mt-2 text-3xl font-black">{formatNumber(counts.total)}</p>
 		</div>
-		<div class="rounded-2xl border border-line bg-white/70 p-4">
-			<p class="text-xs font-bold tracking-wide text-ink-soft uppercase">Embedded</p>
-			<p class="mt-2 font-display text-3xl font-black text-moss">{formatNumber(counts.embedded)}</p>
+		<div class="border-line rounded-2xl border bg-white/70 p-4">
+			<p class="text-ink-soft text-xs font-bold tracking-wide uppercase">Embedded</p>
+			<p class="font-display text-moss mt-2 text-3xl font-black">{formatNumber(counts.embedded)}</p>
 		</div>
-		<div class="rounded-2xl border border-line bg-white/70 p-4">
-			<p class="text-xs font-bold tracking-wide text-ink-soft uppercase">Pending</p>
-			<p class="mt-2 font-display text-3xl font-black text-accent-deep">{formatNumber(counts.pending)}</p>
+		<div class="border-line rounded-2xl border bg-white/70 p-4">
+			<p class="text-ink-soft text-xs font-bold tracking-wide uppercase">Pending</p>
+			<p class="font-display text-accent-deep mt-2 text-3xl font-black">
+				{formatNumber(counts.pending)}
+			</p>
 		</div>
-		<div class="rounded-2xl border border-line bg-white/70 p-4">
-			<p class="text-xs font-bold tracking-wide text-ink-soft uppercase">Centered</p>
-			<p class="mt-2 font-display text-3xl font-black">{formatNumber(counts.centered)}</p>
+		<div class="border-line rounded-2xl border bg-white/70 p-4">
+			<p class="text-ink-soft text-xs font-bold tracking-wide uppercase">Unclustered</p>
+			<p class="font-display mt-2 text-3xl font-black">{formatNumber(counts.unclustered)}</p>
 		</div>
 	</div>
 
-	<div class="mt-6 rounded-2xl border border-line bg-white/70 p-5">
+	<div class="border-line mt-6 rounded-2xl border bg-white/70 p-5">
 		<div class="mb-2 flex items-center justify-between gap-3 text-sm">
-			<span class="font-bold">Embedding progress</span>
+			<span class="font-bold">Progress</span>
 			<span class="text-ink-soft">{formatProgress(counts.embedded, counts.total)}</span>
 		</div>
-		<div class="h-3 overflow-hidden rounded-full bg-line">
+		<div class="bg-line h-3 overflow-hidden rounded-full">
 			<div
-				class="h-full rounded-full bg-moss transition-all"
+				class="bg-moss h-full rounded-full transition-all"
 				style={`width: ${progress(counts.embedded, counts.total)}%`}
 			></div>
 		</div>
-		<div class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-ink-soft">
+		<div class="text-ink-soft mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
 			<span>{formatNumber(counts.pending)} pending</span>
 			<span>{formatNumber(counts.skipped)} skipped</span>
-			<span>{formatNumber(counts.versioned)} versioned</span>
-			<span>Last track update {relativeTime(counts.lastUpdated)}</span>
+			<span>{formatNumber(counts.centered)} centered</span>
+			<span>last write {relativeTime(counts.lastUpdated)}</span>
 		</div>
+	</div>
+</section>
+
+<section class="border-line bg-cream mb-8 rounded-3xl border p-6 shadow-sm sm:p-8">
+	<div>
+		<p class="text-accent-deep text-xs font-bold tracking-[0.24em] uppercase">02 · Worker</p>
+		<h2 class="font-display mt-1 text-3xl font-black">Liveness</h2>
 	</div>
 
 	<div class="mt-6 grid gap-4 lg:grid-cols-2">
-		<div class="rounded-2xl border border-line bg-white/70 p-5">
+		<div class="border-line rounded-2xl border bg-white/70 p-5">
 			<div class="flex items-center justify-between gap-3">
-				<h3 class="font-bold">Python worker</h3>
+				<h3 class="font-bold">Portable worker</h3>
+				<span
+					class={`rounded-full px-2.5 py-1 text-xs font-bold ${
+						workerState === 'running'
+							? 'bg-moss/15 text-moss'
+							: workerState === 'stale'
+								? 'bg-amber-100 text-amber-800'
+								: 'bg-gray-100 text-gray-700'
+					}`}
+				>
+					{workerState === 'running' ? 'Running' : workerState === 'stale' ? 'Stalled' : 'No data'}
+				</span>
+			</div>
+			{#if worker.active}
+				<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+					<div>
+						<p class="text-ink-soft text-xs">Last upload</p>
+						<p class="font-bold">{relativeTime(worker.lastSeenAt)}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Written this run</p>
+						<p class="font-bold">{formatNumber(worker.written)}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Rejected</p>
+						<p class="font-bold">{formatNumber(worker.failed)}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Per track</p>
+						<p class="font-bold">{formatSeconds(worker.secondsPerTrack)}</p>
+					</div>
+				</div>
+				<p class="text-ink-soft mt-4 text-xs">
+					Run started {relativeTime(worker.startedAt)} · uploads are the only heartbeat, so silence past
+					{WORKER_STALE_MINUTES}m means it stopped.
+				</p>
+			{:else}
+				<p class="text-ink-soft mt-4 text-sm">
+					No uploads recorded. Start the worker with a Worker API key from Manage → Access.
+				</p>
+			{/if}
+		</div>
+
+		<div class="border-line rounded-2xl border bg-white/70 p-5">
+			<div class="flex items-center justify-between gap-3">
+				<h3 class="font-bold">Local worker</h3>
 				{#if activeJob}
 					<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${jobTone(activeJob.state)}`}>
 						{jobLabel(activeJob.state)}
@@ -201,163 +251,143 @@
 			</div>
 			{#if activeJob}
 				<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-					<div><p class="text-xs text-ink-soft">Job</p><p class="font-mono">{activeJob.job}</p></div>
-					<div><p class="text-xs text-ink-soft">Run ID</p><p class="font-mono">#{activeJob.id}</p></div>
-					<div><p class="text-xs text-ink-soft">Processed</p><p class="font-bold">{formatNumber(activeJob.processed)}</p></div>
-					<div><p class="text-xs text-ink-soft">Failed</p><p class="font-bold">{formatNumber(activeJob.failed)}</p></div>
-					<div><p class="text-xs text-ink-soft">Remaining</p><p class="font-bold">{formatNumber(activeJob.remaining)}</p></div>
-					<div><p class="text-xs text-ink-soft">Last batch</p><p>{formatDate(activeJob.lastBatchAt)}</p></div>
+					<div>
+						<p class="text-ink-soft text-xs">Job</p>
+						<p class="font-mono">{activeJob.job}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Run</p>
+						<p class="font-mono">#{activeJob.id}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Processed</p>
+						<p class="font-bold">{formatNumber(activeJob.processed)}</p>
+					</div>
+					<div>
+						<p class="text-ink-soft text-xs">Remaining</p>
+						<p class="font-bold">{formatNumber(activeJob.remaining)}</p>
+					</div>
 				</div>
 				{#if activeJob.lastError}
 					<p class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{activeJob.lastError}</p>
 				{/if}
 			{:else}
-				<p class="mt-4 text-sm text-ink-soft">No Python embedding job has been recorded yet.</p>
-			{/if}
-		</div>
-
-		<div class="rounded-2xl border border-line bg-white/70 p-5">
-			<h3 class="font-bold">Embedding space</h3>
-			{#if status.embedding.space}
-				<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-					<div><p class="text-xs text-ink-soft">Version</p><p class="font-bold">{status.embedding.space.version}</p></div>
-					<div><p class="text-xs text-ink-soft">Model</p><p class="font-bold">{status.embedding.space.model}</p></div>
-					<div><p class="text-xs text-ink-soft">Source tracks</p><p class="font-bold">{formatNumber(status.embedding.space.trackCount)}</p></div>
-					<div><p class="text-xs text-ink-soft">Created</p><p>{formatDate(status.embedding.space.createdAt)}</p></div>
-				</div>
-			{:else}
-				<p class="mt-4 text-sm text-ink-soft">No active embedding space is available.</p>
+				<p class="text-ink-soft mt-4 text-sm">No local embedding run recorded.</p>
 			{/if}
 		</div>
 	</div>
 
-	<div class="mt-6 overflow-x-auto rounded-2xl border border-line bg-white/70">
-		<table class="w-full min-w-[720px] text-left text-sm">
-			<thead class="border-b border-line text-xs tracking-wide text-ink-soft uppercase">
-				<tr><th class="px-4 py-3">Run</th><th class="px-4 py-3">State</th><th class="px-4 py-3">Processed</th><th class="px-4 py-3">Failed</th><th class="px-4 py-3">Remaining</th><th class="px-4 py-3">Last activity</th></tr>
-			</thead>
-			<tbody>
-				{#each status.embedding.jobs as job (job.id)}
-					<tr class="border-b border-line/70 last:border-0">
-						<td class="px-4 py-3 font-mono">#{job.id}</td>
-						<td class="px-4 py-3"><span class={`rounded-full px-2 py-0.5 text-xs font-bold ${jobTone(job.state)}`}>{jobLabel(job.state)}</span></td>
-						<td class="px-4 py-3">{formatNumber(job.processed)}</td>
-						<td class="px-4 py-3">{formatNumber(job.failed)}</td>
-						<td class="px-4 py-3">{formatNumber(job.remaining)}</td>
-						<td class="px-4 py-3 text-ink-soft">{formatDate(job.finishedAt ?? job.lastBatchAt ?? job.startedAt)}</td>
-					</tr>
-				{:else}
-					<tr><td colspan="6" class="px-4 py-6 text-center text-ink-soft">No embedding runs recorded.</td></tr>
-				{/each}
-			</tbody>
-		</table>
-	</div>
-</section>
-
-<section class="rounded-3xl border border-line bg-cream p-6 shadow-sm sm:p-8">
-	<div class="flex flex-wrap items-end justify-between gap-3">
-		<div>
-			<p class="text-xs font-bold tracking-[0.24em] text-accent-deep uppercase">02 · Clustering</p>
-			<h2 class="mt-1 font-display text-3xl font-black">Quality and generations</h2>
-		</div>
-		<span class="rounded-full bg-ink px-3 py-1 text-xs font-bold text-cream">
-			{formatNumber(counts.clustered)} clustered · {formatNumber(counts.unclustered)} unassigned
-		</span>
-	</div>
-
-	<div class="mt-6 grid gap-4 lg:grid-cols-2">
-		<div class="rounded-2xl border border-line bg-white/70 p-5">
-			<div class="flex items-center justify-between gap-3">
-				<h3 class="font-bold">Active generation</h3>
-				{#if activeRun}<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${runTone(activeRun.status)}`}>{activeRun.status}</span>{/if}
-			</div>
-			{#if activeRun}
-				<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-					<div><p class="text-xs text-ink-soft">Run</p><p class="font-mono">#{activeRun.id}</p></div>
-					<div><p class="text-xs text-ink-soft">Clusters</p><p class="font-bold">{formatNumber(activeRun.k)}</p></div>
-					<div><p class="text-xs text-ink-soft">Tracks</p><p class="font-bold">{formatNumber(activeRun.trackCount)}</p></div>
-					<div><p class="text-xs text-ink-soft">Applied</p><p>{formatDate(activeRun.appliedAt)}</p></div>
-				</div>
-			{:else}
-				<p class="mt-4 text-sm text-ink-soft">No clustering generation has been explicitly applied.</p>
-			{/if}
-		</div>
-
-		<div class="rounded-2xl border border-line bg-white/70 p-5">
-			<div class="flex items-center justify-between gap-3">
-				<h3 class="font-bold">Latest recorded run</h3>
-				{#if latestRun}<span class={`rounded-full px-2.5 py-1 text-xs font-bold ${runTone(latestRun.status)}`}>{latestRun.status}</span>{/if}
-			</div>
-			{#if latestRun}
-				<div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-					<div><p class="text-xs text-ink-soft">Run</p><p class="font-mono">#{latestRun.id} · {latestRun.mode}</p></div>
-					<div><p class="text-xs text-ink-soft">Clusters</p><p class="font-bold">{formatNumber(latestRun.k)}</p></div>
-					<div><p class="text-xs text-ink-soft">Tracks</p><p class="font-bold">{formatNumber(latestRun.trackCount)}</p></div>
-					<div><p class="text-xs text-ink-soft">Completed</p><p>{formatDate(latestRun.completedAt ?? latestRun.createdAt)}</p></div>
-				</div>
-				{#if latestRun.error}<p class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800">{latestRun.error}</p>{/if}
-			{:else}
-				<p class="mt-4 text-sm text-ink-soft">No clustering runs have been recorded.</p>
-			{/if}
-		</div>
-	</div>
-
-	{#if latestRun?.bestRun}
-		<div class="mt-6 rounded-2xl border border-line bg-white/70 p-5">
-			<div class="flex flex-wrap items-end justify-between gap-3">
-				<div>
-					<h3 class="font-bold">Best-run quality</h3>
-					<p class="mt-1 text-xs text-ink-soft">Seed {formatNumber(latestRun.bestRun.seed)} · {formatNumber(latestRun.bestRun.iterations)} iterations · {latestRun.bestRun.converged ? 'converged' : 'not converged'}</p>
-				</div>
-				<div class="text-right text-xs text-ink-soft"><p>Mean pairwise ARI</p><p class="text-lg font-bold text-ink">{formatDecimal(latestRun.meanPairwiseAri, 4)}</p></div>
-			</div>
-			<div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-				<div><p class="text-xs text-ink-soft">Intra similarity</p><p class="mt-1 text-xl font-bold">{qualityValue(latestRun.bestRun.quality.meanIntraSimilarity)}</p></div>
-				<div><p class="text-xs text-ink-soft">Silhouette</p><p class="mt-1 text-xl font-bold">{qualityValue(latestRun.bestRun.quality.silhouette)}</p></div>
-				<div><p class="text-xs text-ink-soft">Inertia</p><p class="mt-1 text-xl font-bold">{qualityValue(latestRun.bestRun.quality.inertia)}</p></div>
-				<div><p class="text-xs text-ink-soft">Cluster size range</p><p class="mt-1 text-xl font-bold">{formatNumber(latestRun.bestRun.quality.minClusterSize)}–{formatNumber(latestRun.bestRun.quality.maxClusterSize)}</p></div>
-			</div>
-			{#if latestRun.pca.explainedVariance.length > 0}
-				<div class="mt-5 border-t border-line pt-4">
-					<p class="text-xs font-bold tracking-wide text-ink-soft uppercase">PCA explained variance</p>
-					<div class="mt-3 flex h-3 overflow-hidden rounded-full bg-line">
-						{#each latestRun.pca.explainedVariance.slice(0, 12) as value}
-							<div class="h-full border-r border-cream/70 bg-accent/70" style={`width: ${Math.max(0, Math.min(100, value * 100))}%`} title={formatPercent(value)}></div>
-						{/each}
-					</div>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	<div class="mt-6 grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-		<div class="rounded-2xl border border-line bg-white/70 p-5">
-			<h3 class="font-bold">Largest clusters</h3>
-			<div class="mt-4 space-y-3">
-				{#each status.clustering.topClusters as cluster (cluster.clusterId)}
-					<div>
-						<div class="mb-1 flex justify-between text-xs"><span class="font-mono">Cluster {cluster.clusterId}</span><span class="text-ink-soft">{formatNumber(cluster.trackCount)}</span></div>
-						<div class="h-2 overflow-hidden rounded-full bg-line"><div class="h-full rounded-full bg-accent" style={`width: ${progress(cluster.trackCount, Math.max(...status.clustering.topClusters.map((item) => item.trackCount), 1))}%`}></div></div>
-					</div>
-				{:else}
-					<p class="text-sm text-ink-soft">No cluster distribution available.</p>
-				{/each}
-			</div>
-		</div>
-
-		<div class="overflow-x-auto rounded-2xl border border-line bg-white/70">
+	{#if status.embedding.jobs.length > 0}
+		<div class="border-line mt-6 overflow-x-auto rounded-2xl border bg-white/70">
 			<table class="w-full min-w-[620px] text-left text-sm">
-				<thead class="border-b border-line text-xs tracking-wide text-ink-soft uppercase"><tr><th class="px-4 py-3">Run</th><th class="px-4 py-3">State</th><th class="px-4 py-3">K</th><th class="px-4 py-3">Tracks</th><th class="px-4 py-3">Created</th></tr></thead>
+				<thead class="border-line text-ink-soft border-b text-xs tracking-wide uppercase">
+					<tr
+						><th class="px-4 py-3">Run</th><th class="px-4 py-3">State</th><th class="px-4 py-3"
+							>Processed</th
+						><th class="px-4 py-3">Failed</th><th class="px-4 py-3">Last activity</th></tr
+					>
+				</thead>
 				<tbody>
-					{#each status.clustering.runs as run (run.id)}
-						<tr class="border-b border-line/70 last:border-0"><td class="px-4 py-3 font-mono">#{run.id} · {run.mode}</td><td class="px-4 py-3"><span class={`rounded-full px-2 py-0.5 text-xs font-bold ${runTone(run.status)}`}>{run.status}</span></td><td class="px-4 py-3">{formatNumber(run.k)}</td><td class="px-4 py-3">{formatNumber(run.trackCount)}</td><td class="px-4 py-3 text-ink-soft">{formatDate(run.createdAt)}</td></tr>
-					{:else}
-						<tr><td colspan="5" class="px-4 py-6 text-center text-ink-soft">No clustering runs recorded.</td></tr>
+					{#each status.embedding.jobs as job (job.id)}
+						<tr class="border-line/70 border-b last:border-0">
+							<td class="px-4 py-3 font-mono">#{job.id} · {job.job}</td>
+							<td class="px-4 py-3"
+								><span class={`rounded-full px-2 py-0.5 text-xs font-bold ${jobTone(job.state)}`}
+									>{jobLabel(job.state)}</span
+								></td
+							>
+							<td class="px-4 py-3">{formatNumber(job.processed)}</td>
+							<td class="px-4 py-3">{formatNumber(job.failed)}</td>
+							<td class="text-ink-soft px-4 py-3"
+								>{relativeTime(job.finishedAt ?? job.lastBatchAt ?? job.startedAt)}</td
+							>
+						</tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
+	{/if}
+</section>
+
+<section class="border-line bg-cream mb-8 rounded-3xl border p-6 shadow-sm sm:p-8">
+	<div>
+		<p class="text-accent-deep text-xs font-bold tracking-[0.24em] uppercase">03 · Upkeep</p>
+		<h2 class="font-display mt-1 text-3xl font-black">Library jobs</h2>
+	</div>
+
+	<div class="mt-6 grid gap-4 lg:grid-cols-3">
+		{#each status.upkeep as job (job.job)}
+			<div class="border-line rounded-2xl border bg-white/70 p-5">
+				<div class="flex items-center justify-between gap-3">
+					<h3 class="font-bold">{UPKEEP_LABELS[job.job] ?? job.job}</h3>
+					<span
+						class={`rounded-full px-2 py-0.5 text-xs font-bold ${
+							job.ok === true
+								? 'bg-moss/15 text-moss'
+								: job.ok === false
+									? 'bg-red-100 text-red-700'
+									: 'bg-gray-100 text-gray-700'
+						}`}
+					>
+						{job.ok === true ? 'OK' : job.ok === false ? 'Failed' : 'Never'}
+					</span>
+				</div>
+				<p class="text-ink-soft mt-3 text-sm">
+					{job.detail ?? 'Not run yet.'}
+				</p>
+				<p class="text-ink-soft mt-2 text-xs">
+					{job.finishedAt
+						? `${relativeTime(job.finishedAt)} · ${job.source === 'automatic' ? 'scheduled' : 'manual'}`
+						: 'No run recorded'}
+				</p>
+			</div>
+		{/each}
 	</div>
 </section>
 
-<p class="mt-6 text-center text-xs text-ink-soft">Read-only diagnostics · refreshes use the same database queries as the server load.</p>
+<section class="border-line bg-cream rounded-3xl border p-6 shadow-sm sm:p-8">
+	<div>
+		<p class="text-accent-deep text-xs font-bold tracking-[0.24em] uppercase">04 · Clusters</p>
+		<h2 class="font-display mt-1 text-3xl font-black">Distribution</h2>
+	</div>
+
+	<div class="mt-6 grid gap-6 lg:grid-cols-2">
+		<div class="border-line rounded-2xl border bg-white/70 p-5">
+			<p class="text-sm font-bold">
+				{formatNumber(clusters.clustered)} assigned · {formatNumber(clusters.unclustered)} unassigned
+			</p>
+			<div class="mt-4 space-y-3">
+				{#each clusters.topClusters as cluster (cluster.clusterId)}
+					{@const largest = Math.max(...clusters.topClusters.map((item) => item.trackCount), 1)}
+					<div>
+						<div class="mb-1 flex justify-between text-xs">
+							<span class="font-mono">Cluster {cluster.clusterId}</span>
+							<span class="text-ink-soft">{formatNumber(cluster.trackCount)}</span>
+						</div>
+						<div class="bg-line h-2 overflow-hidden rounded-full">
+							<div
+								class="bg-accent h-full rounded-full"
+								style={`width: ${progress(cluster.trackCount, largest)}%`}
+							></div>
+						</div>
+					</div>
+				{:else}
+					<p class="text-ink-soft text-sm">No clusters assigned yet.</p>
+				{/each}
+			</div>
+		</div>
+
+		<div class="border-line rounded-2xl border bg-white/70 p-5">
+			<h3 class="text-sm font-bold">How assignments happen</h3>
+			<p class="text-ink-soft mt-3 text-sm">
+				Embedding a track only produces a vector. Category assignment is separate: the full tidy-up
+				assigns embedded but unclustered tracks to the nearest stored centroid, and never changes an
+				existing assignment.
+			</p>
+			<p class="text-ink-soft mt-3 text-sm">
+				{formatNumber(counts.embedded - counts.unclustered)} of {formatNumber(counts.embedded)} embedded
+				tracks have a category.
+			</p>
+		</div>
+	</div>
+</section>

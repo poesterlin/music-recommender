@@ -34,6 +34,13 @@ export default ts.config(
 				parser: ts.parser,
 				svelteConfig
 			}
+		},
+		rules: {
+			// SvelteKit recommends resolve() for base-path correctness, but this
+			// app is always served from the root and every link uses a plain
+			// literal path. Enabling it would mean rewriting all navigation for
+			// no behavioural gain.
+			'svelte/no-navigation-without-resolve': 'off'
 		}
 	}
 );

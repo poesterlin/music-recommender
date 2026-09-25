@@ -71,7 +71,10 @@ function toTrack(cm: any): PlayerTrack | null {
 	return {
 		uri: String(cm.uri),
 		title: String(cm.title ?? 'Unknown'),
-		artist: typeof cm.artist === 'string' ? cm.artist : (cm.artists ?? []).map((a: any) => a.name ?? a).join(', '),
+		artist:
+			typeof cm.artist === 'string'
+				? cm.artist
+				: (cm.artists ?? []).map((a: any) => a.name ?? a).join(', '),
 		album: typeof cm.album === 'string' ? cm.album : (cm.album?.name ?? ''),
 		duration: typeof cm.duration === 'number' ? cm.duration : null,
 		image: cm.image_url ?? images[0]?.url ?? null
@@ -133,14 +136,7 @@ export async function getPlayerState(): Promise<PlayerState | null> {
 	});
 }
 
-export type PlayerAction =
-	| 'play'
-	| 'pause'
-	| 'play_pause'
-	| 'stop'
-	| 'next'
-	| 'previous'
-	| 'clear';
+export type PlayerAction = 'play' | 'pause' | 'play_pause' | 'stop' | 'next' | 'previous' | 'clear';
 
 export type UpNextTrack = {
 	uri: string | null;
