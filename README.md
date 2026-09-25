@@ -177,8 +177,10 @@ installs `embeddings/requirements.txt`, prompts for the key, and runs the
 existing 60-second API worker. The same notebook is downloadable as
 [`web/static/music-recommender-worker.ipynb`](web/static/music-recommender-worker.ipynb).
 
-The worker URL must be reachable from the notebook. Its filesystem is temporary;
-use `EMBEDDING_STATE_FILE` on mounted storage if the job must resume there.
+The worker URL must be reachable from the notebook. The copied cell starts with
+`--dry-run --limit 1`; remove those flags only when you are ready to write
+embeddings. Its filesystem is temporary; use `EMBEDDING_STATE_FILE` on mounted
+storage if the job must resume there.
 
 ## Database and diagnostics
 
