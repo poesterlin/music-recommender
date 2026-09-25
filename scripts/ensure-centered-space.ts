@@ -155,18 +155,8 @@ try {
 			SELECT 1, 'openl3-512', avg("embedding")::vector, count(*)::integer
 			FROM "track"
 			WHERE "embedding" IS NOT NULL
-			HAVING count(*) > 0
+			HAVING count(*) >= 2
 			ON CONFLICT ("version") DO NOTHING;
-
-			DO $block$
-			BEGIN
-				IF NOT EXISTS (
-					SELECT 1 FROM "embedding_space" WHERE "version" = 1
-				) THEN
-					RAISE EXCEPTION 'No raw embeddings are available to create embedding space v1';
-				END IF;
-			END;
-			$block$;
 
 			UPDATE "track"
 			SET "embedding_centered" = center_openl3_embedding(
@@ -176,6 +166,9 @@ try {
 				"embedding_space_version" = 1,
 				"updated_at" = now()
 			WHERE "embedding" IS NOT NULL
+				AND EXISTS (
+					SELECT 1 FROM "embedding_space" WHERE "version" = 1
+				)
 				AND (
 					"embedding_centered" IS NULL
 					OR "embedding_space_version" IS DISTINCT FROM 1
@@ -206,7 +199,12 @@ try {
 				LIMIT 1;
 
 				IF active_mean IS NULL THEN
-					RAISE EXCEPTION 'No embedding space is available to center track %', NEW.uri;
+					-- Fresh installations may receive raw embeddings before
+					-- the centered space exists. Keep the raw vector and let
+					-- the explicit backfill populate derived columns later.
+					NEW.embedding_centered := NULL;
+					NEW.embedding_space_version := NULL;
+					RETURN NEW;
 				END IF;
 
 				NEW.embedding_centered := center_openl3_embedding(NEW.embedding, active_mean);
@@ -235,12 +233,22 @@ try {
 		WHERE "embedding" IS NOT NULL
 	`;
 
-	console.log(
-		`Centered space ready: ${summary.centered_embeddings}/${summary.total_embeddings} embeddings; ` +
-			`${summary.pending_embeddings} pending.`
-	);
-	if (summary.pending_embeddings !== 0) {
-		throw new Error("centered embedding backfill did not complete");
+	if (summary.total_embeddings === 0) {
+		console.log('No raw embeddings yet; centered-space creation is deferred.');
+	} else {
+		console.log(
+			`Centered space ready: ${summary.centered_embeddings}/${summary.total_embeddings} embeddings; ` +
+				`${summary.pending_embeddings} pending.`
+		);
+		if (summary.pending_embeddings !== 0) {
+			if (summary.total_embeddings < 2) {
+				console.warn(
+					'Centered space needs at least two raw embeddings; backfill deferred until more tracks are embedded.'
+				);
+			} else {
+				throw new Error("centered embedding backfill did not complete");
+			}
+		}
 	}
 } finally {
 	await sql.end();

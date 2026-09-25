@@ -1,17 +1,21 @@
-# Local Python embedding worker
+# Python OpenL3 embedding worker
 
-`generate-local-embeddings.py` is the production fallback for filling missing
-OpenL3 vectors from the local audio library.
+The worker has two source modes:
+
+- **local** (default): reads a mounted audio directory and writes PostgreSQL directly;
+- **api**: asks an authenticated worker API for tracks and bounded audio snippets, then uploads vectors over HTTP.
+
+The API mode needs no PostgreSQL URL, Music Assistant token, Home Assistant token, or audio mount. It is suitable for a separate VM, a container, or a Colab runtime.
 
 ## Safety and recovery
 
-- A PostgreSQL advisory lock prevents concurrent writers.
-- Each committed batch advances a durable cursor in `job_run.detail`.
-- Audio and model work happens outside the write transaction.
-- Successful vectors are written with `WHERE embedding IS NULL`, so a manual or
-  newer writer is never overwritten.
-- A failed track is recorded in the bounded job detail and retried on the next
-  invocation; unexpected failures leave the job unfinished so it can resume.
+- Local mode uses a PostgreSQL advisory lock and durable `job_run.detail` cursor.
+- API mode keeps its cursor in the optional state file and relies on the server's
+  idempotent, no-overwrite upload endpoint.
+- Audio and model work happens outside database write transactions.
+- Successful vectors are written only when the target embedding is still empty,
+  so a manual or newer writer is never overwritten.
+- A failed page is not advanced in API mode and is retried on the next run.
 - The centered vector is still derived by the database trigger; this worker
   writes only the raw `embedding` vector.
 
@@ -29,7 +33,40 @@ python embeddings/generate-local-embeddings.py \
   --batch-size 8
 ```
 
-The Compose profile runs the same command. Useful environment variables are:
+## API worker mode
+
+The web service exposes an authenticated broker for remote workers:
+
+- `GET /api/worker/tracks` returns a bounded page of unembedded tracks;
+- `GET /api/worker/audio` returns a short, server-generated audio snippet;
+- `POST /api/worker/embeddings` accepts an idempotent batch of vectors.
+
+Run it with:
+
+```sh
+export WORKER_URL=https://recommender.example.com
+export WORKER_TOKEN='same-token-as-the-web-service'
+python embeddings/worker.py --source-mode api
+```
+
+The worker downloads only the snippet needed for inference. Downloads run in a
+bounded background pool while OpenL3 inference remains single-threaded. Failed
+pages do not advance the saved cursor; successful pages checkpoint a local
+state file when `EMBEDDING_STATE_FILE` is set.
+
+Useful API-mode settings are `EMBEDDING_PREFETCH_WORKERS`,
+`EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
+`EMBEDDING_DOWNLOAD_RETRIES`, and `EMBEDDING_DOWNLOAD_MAX_BYTES`.
+
+The Compose `worker` profile runs this mode against `http://web:3000`:
+
+```sh
+docker compose --profile worker up -d worker
+```
+
+The API must be reachable from the worker, and its PostgreSQL/audio services
+must be reachable from the web service. Keep `WORKER_TOKEN` out of source
+files and shell history where possible.
 
 | Variable | Default | Purpose |
 |---|---:|---|
@@ -46,6 +83,11 @@ The Compose profile runs the same command. Useful environment variables are:
 | `EMBEDDING_TF_INTER_THREADS` | `0` | Optional TensorFlow inter-op thread limit |
 | `EMBEDDING_DB_RETRIES` | `3` | Transient PostgreSQL retry attempts |
 | `EMBEDDING_DB_RETRY_DELAY` | `1.0` | Initial exponential retry delay in seconds |
+
+API mode additionally uses `WORKER_URL`, `WORKER_TOKEN`,
+`EMBEDDING_PREFETCH_WORKERS`, `EMBEDDING_PREFETCH_DEPTH`,
+`EMBEDDING_DOWNLOAD_TIMEOUT`, `EMBEDDING_DOWNLOAD_RETRIES`,
+`EMBEDDING_DOWNLOAD_MAX_BYTES`, and `EMBEDDING_STATE_FILE`.
 
 `--dry-run` performs the file lookup, model work, and profiling without writing
 `job_run` or embeddings. A bounded dry-run may exit with status `2` simply

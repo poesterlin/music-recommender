@@ -53,7 +53,11 @@ def ensure_space(cur):
     )
     track_count, mean_text = cur.fetchone()
     if not track_count or mean_text is None:
-        raise RuntimeError("No raw embeddings are available to center")
+        print("No raw embeddings are available yet; centering backfill deferred")
+        return None, 0
+    if track_count < 2:
+        print("At least two raw embeddings are required; centering deferred")
+        return None, 0
 
     mean = parse_vector(mean_text)
     if len(mean) != 512:
@@ -82,6 +86,11 @@ def main():
     try:
         mean, source_count = ensure_space(cur)
         conn.commit()
+        if mean is None:
+            return
+        if source_count < 2:
+            print("At least two raw embeddings are required; centering deferred")
+            return
 
         read_cur = conn.cursor()
         write_cur = conn.cursor()

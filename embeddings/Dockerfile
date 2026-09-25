@@ -11,4 +11,7 @@ WORKDIR /workspace
 
 COPY index-library.py /workspace/index-library.py
 COPY generate-local-embeddings.py /workspace/generate-local-embeddings.py
+COPY worker.py worker_api.py /workspace/
 COPY migrate-centered-embeddings.py /workspace/migrate-centered-embeddings.py
+
+CMD ["python", "worker.py", "--source-mode", "api"]

@@ -25,6 +25,7 @@ import math
 import os
 import re
 import statistics
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -33,10 +34,15 @@ from typing import Any, Sequence
 
 import librosa
 import numpy as np
-import psycopg2
 import soundfile as sf
 import soxr
-from psycopg2.extras import DictCursor
+
+try:
+    import psycopg2
+    from psycopg2.extras import DictCursor
+except ImportError:  # API mode does not need PostgreSQL bindings.
+    psycopg2 = None  # type: ignore[assignment]
+    DictCursor = None  # type: ignore[assignment]
 
 EMBEDDING_SIZE = 512
 TARGET_SAMPLE_RATE = 48_000
@@ -44,6 +50,12 @@ DEFAULT_DURATION_SECONDS = 60.0
 DEFAULT_BATCH_SIZE = 8
 DEFAULT_LOCK_KEY = 0x4D555331454D4201
 DEFAULT_JOB_NAME = "python-local-embeddings"
+DEFAULT_SOURCE_MODE = "local"
+DEFAULT_WORKER_PREFETCH_WORKERS = 4
+DEFAULT_WORKER_PREFETCH_DEPTH = 4
+DEFAULT_WORKER_DOWNLOAD_TIMEOUT = 60.0
+DEFAULT_WORKER_DOWNLOAD_RETRIES = 3
+DEFAULT_WORKER_DOWNLOAD_MAX_BYTES = 32 * 1024 * 1024
 MAX_FAILURE_DETAILS = 100
 SUPPORTED_EXTENSIONS = (".mp3", ".flac", ".wav", ".m4a", ".ogg")
 openl3: Any = None
@@ -55,6 +67,15 @@ class LockNotAcquired(RuntimeError):
 
 class StopRun(RuntimeError):
     """Raised for a requested fail-fast/max-errors stop."""
+
+
+def require_postgres_bindings() -> None:
+    """Require the optional PostgreSQL dependency for local mode only."""
+    if psycopg2 is None or DictCursor is None:
+        raise RuntimeError(
+            "local embedding mode requires psycopg2; install psycopg2-binary "
+            "or use --source-mode api"
+        )
 
 
 def env_int(name: str, default: int) -> int:
@@ -110,20 +131,36 @@ def nonnegative_int(value: str) -> int:
     return parsed
 
 
-def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+def parse_args(
+    argv: Sequence[str] | None = None, *, default_source_mode: str | None = None
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate local OpenL3 embeddings with a single-writer lease."
+        description="Generate OpenL3 embeddings locally or through the worker API."
+    )
+    source_default = (
+        default_source_mode
+        if default_source_mode is not None
+        else os.getenv("EMBEDDING_SOURCE_MODE", DEFAULT_SOURCE_MODE)
+    )
+    source_default = str(source_default).strip().lower() or DEFAULT_SOURCE_MODE
+    parser.add_argument(
+        "--source-mode",
+        "--source",
+        dest="source_mode",
+        choices=("local", "api"),
+        default=source_default,
+        help="Source mode: local PostgreSQL/filesystem or authenticated worker API",
     )
     parser.add_argument(
         "--database-url",
         default=os.getenv("DATABASE_URL"),
-        help="PostgreSQL URL (defaults to DATABASE_URL)",
+        help="PostgreSQL URL (local mode; defaults to DATABASE_URL)",
     )
     parser.add_argument(
         "--audio-dir",
         type=Path,
         default=Path(os.getenv("AUDIO_DIR", "/music")),
-        help="Root directory containing local audio files",
+        help="Root directory containing local audio files (local mode)",
     )
     parser.add_argument(
         "--duration",
@@ -141,18 +178,18 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--batch-size",
         type=positive_int,
         default=env_int("EMBEDDING_BATCH_SIZE", DEFAULT_BATCH_SIZE),
-        help="Number of tracks fetched and checkpointed per database batch",
+        help="Number of tracks fetched and checkpointed per batch",
     )
     parser.add_argument(
         "--job-name",
         default=os.getenv("EMBEDDING_JOB_NAME", DEFAULT_JOB_NAME),
-        help="job_run name used for the durable checkpoint",
+        help="job_run name used for the local durable checkpoint",
     )
     parser.add_argument(
         "--lock-key",
         type=int,
         default=env_int("EMBEDDING_LOCK_KEY", DEFAULT_LOCK_KEY),
-        help="PostgreSQL bigint advisory-lock key",
+        help="PostgreSQL bigint advisory-lock key (local mode)",
     )
     parser.add_argument(
         "--max-errors",
@@ -164,13 +201,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--db-retries",
         type=positive_int,
         default=env_int("EMBEDDING_DB_RETRIES", 3),
-        help="Retries for transient PostgreSQL errors",
+        help="Retries for transient PostgreSQL errors (local mode)",
     )
     parser.add_argument(
         "--db-retry-delay",
         type=float,
         default=env_float("EMBEDDING_DB_RETRY_DELAY", 1.0),
-        help="Initial exponential retry delay in seconds",
+        help="Initial exponential retry delay in seconds (local mode)",
     )
     parser.add_argument(
         "--fail-fast",
@@ -187,20 +224,83 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--restart",
         action="store_true",
-        help="Ignore an unfinished checkpoint and start a fresh job_run",
+        help="Ignore an unfinished checkpoint and start a fresh run",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Read and profile work without writing job_run or embeddings",
+        help="Read and profile work without writing job_run, embeddings, or state",
+    )
+    parser.add_argument(
+        "--worker-url",
+        default=os.getenv("WORKER_URL"),
+        help="Worker API base URL (API mode; defaults to WORKER_URL)",
+    )
+    parser.add_argument(
+        "--worker-token",
+        default=os.getenv("WORKER_TOKEN"),
+        help="Bearer token for the worker API (prefer WORKER_TOKEN)",
+    )
+    parser.add_argument(
+        "--prefetch-workers",
+        type=positive_int,
+        default=env_int("EMBEDDING_PREFETCH_WORKERS", DEFAULT_WORKER_PREFETCH_WORKERS),
+        help="Maximum network download threads in API mode",
+    )
+    parser.add_argument(
+        "--prefetch-depth",
+        type=positive_int,
+        default=env_int("EMBEDDING_PREFETCH_DEPTH", DEFAULT_WORKER_PREFETCH_DEPTH),
+        help="Maximum queued or downloaded snippets in API mode",
+    )
+    parser.add_argument(
+        "--download-timeout",
+        type=positive_float,
+        default=env_float(
+            "EMBEDDING_DOWNLOAD_TIMEOUT", DEFAULT_WORKER_DOWNLOAD_TIMEOUT
+        ),
+        help="Per-request API/audio timeout in seconds",
+    )
+    parser.add_argument(
+        "--download-retries",
+        type=nonnegative_int,
+        default=env_int(
+            "EMBEDDING_DOWNLOAD_RETRIES", DEFAULT_WORKER_DOWNLOAD_RETRIES
+        ),
+        help="Retries for transient API/audio requests",
+    )
+    parser.add_argument(
+        "--download-max-bytes",
+        type=positive_int,
+        default=env_int(
+            "EMBEDDING_DOWNLOAD_MAX_BYTES", DEFAULT_WORKER_DOWNLOAD_MAX_BYTES
+        ),
+        help="Maximum bytes accepted for one audio snippet",
+    )
+    state_default = os.getenv("EMBEDDING_STATE_FILE") or None
+    parser.add_argument(
+        "--state-file",
+        type=Path,
+        default=Path(state_default).expanduser() if state_default else None,
+        help="Optional API cursor/progress state file",
+    )
+    parser.add_argument(
+        "--after",
+        default=None,
+        help="Optional initial API keyset cursor (ignored when state has one)",
     )
     args = parser.parse_args(argv)
-    if not args.database_url:
-        parser.error("--database-url or DATABASE_URL is required")
+
+    args.source_mode = str(args.source_mode).strip().lower()
+    if args.source_mode not in {"local", "api"}:
+        parser.error("--source-mode must be local or api")
     if args.audio_backend not in {"fast", "librosa"}:
         parser.error("--audio-backend must be fast or librosa")
-    if args.batch_size > 512:
-        parser.error("--batch-size must be 512 or less")
+    if args.batch_size > (32 if args.source_mode == "api" else 512):
+        parser.error(
+            "--batch-size must be 32 or less in API mode" if args.source_mode == "api"
+            else "--batch-size must be 512 or less"
+        )
     if not args.job_name.strip():
         parser.error("--job-name must not be empty")
     if not -(2**63) <= args.lock_key < 2**63:
@@ -209,6 +309,32 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         parser.error("--duration must be positive and finite")
     if args.db_retry_delay < 0 or not math.isfinite(args.db_retry_delay):
         parser.error("--db-retry-delay must be a finite non-negative number")
+    if args.max_errors < 0:
+        parser.error("--max-errors must be zero or greater")
+    if args.source_mode == "api":
+        if args.prefetch_workers < 1 or args.prefetch_workers > 64:
+            parser.error("--prefetch-workers must be between 1 and 64")
+        if args.prefetch_depth < 1 or args.prefetch_depth > 128:
+            parser.error("--prefetch-depth must be between 1 and 128")
+        if args.download_timeout <= 0 or not math.isfinite(args.download_timeout):
+            parser.error("--download-timeout must be positive and finite")
+        if args.download_retries < 0 or args.download_retries > 20:
+            parser.error("--download-retries must be between 0 and 20")
+        if args.download_max_bytes < 1 or args.download_max_bytes > 2 * 1024 * 1024 * 1024:
+            parser.error("--download-max-bytes must be between 1 and 2147483648")
+        if args.after is not None:
+            if not isinstance(args.after, str) or not args.after or len(args.after) > 2048:
+                parser.error(
+                    "--after must be a non-empty string of at most 2048 characters"
+                )
+        if not isinstance(args.worker_url, str) or not args.worker_url.strip():
+            parser.error("--worker-url or WORKER_URL is required in API mode")
+        if not isinstance(args.worker_token, str) or not args.worker_token.strip():
+            parser.error("--worker-token or WORKER_TOKEN is required in API mode")
+        if args.duration > 120:
+            parser.error("--duration must be 120 seconds or less in API mode")
+    elif not args.database_url:
+        parser.error("--database-url or DATABASE_URL is required in local mode")
     return args
 
 
@@ -549,6 +675,7 @@ def retry_db_operation(
     initial_delay: float,
     label: str,
 ) -> Any:
+    require_postgres_bindings()
     retryable = (psycopg2.OperationalError, psycopg2.InterfaceError)
     for attempt in range(1, attempts + 1):
         try:
@@ -573,6 +700,7 @@ def retry_db_operation(
 def connect_database(
     database_url: str, attempts: int, initial_delay: float
 ) -> Any:
+    require_postgres_bindings()
     last_error: BaseException | None = None
     for attempt in range(1, attempts + 1):
         try:
@@ -651,19 +779,19 @@ def start_or_resume_job(
         job_id = int(cursor.fetchone()[0])
         conn.commit()
         return job_id, initial
-    except psycopg2.errors.UndefinedTable as error:
+    except Exception as error:
         conn.rollback()
-        raise RuntimeError(
-            "job_run table is missing; run the database migrations before embedding"
-        ) from error
-    except Exception:
-        conn.rollback()
+        if error.__class__.__name__ == "UndefinedTable":
+            raise RuntimeError(
+                "job_run table is missing; run the database migrations before embedding"
+            ) from error
         raise
     finally:
         cursor.close()
 
 
 def fetch_page(conn: Any, after: str | None, limit: int) -> list[dict[str, Any]]:
+    require_postgres_bindings()
     cursor = conn.cursor(cursor_factory=DictCursor)
     try:
         if after is None:
@@ -830,6 +958,17 @@ def track_failure(
 
 
 def run(args: argparse.Namespace) -> int:
+    if str(getattr(args, "source_mode", DEFAULT_SOURCE_MODE)).strip().lower() == "api":
+        try:
+            from worker_api import run_api_worker
+        except ModuleNotFoundError as error:
+            if error.name != "worker_api":
+                raise
+            from embeddings.worker_api import run_api_worker
+
+        return run_api_worker(sys.modules[__name__], args)
+
+    require_postgres_bindings()
     run_started = time.perf_counter()
     stats = StageStats()
     conn: Any | None = None
@@ -1103,9 +1242,11 @@ def run(args: argparse.Namespace) -> int:
                 pass
 
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(
+    argv: Sequence[str] | None = None, *, default_source_mode: str | None = None
+) -> int:
     try:
-        args = parse_args(argv)
+        args = parse_args(argv, default_source_mode=default_source_mode)
         return run(args)
     except KeyboardInterrupt:
         print("embedding worker interrupted; the unfinished checkpoint is resumable", flush=True)
