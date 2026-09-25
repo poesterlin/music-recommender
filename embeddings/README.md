@@ -57,7 +57,10 @@ python embeddings/worker.py --source-mode api
 The worker downloads only the snippet needed for inference. Downloads run in a
 bounded background pool while OpenL3 inference remains single-threaded. Failed
 pages do not advance the saved cursor; successful pages checkpoint a local
-state file when `EMBEDDING_STATE_FILE` is set.
+state file when `EMBEDDING_STATE_FILE` is set. The web audio endpoint first uses
+canonical filename matching, then a punctuation-insensitive compact match, and
+finally a conservative fuzzy fallback for truncated titles and close typos;
+artist/album context and a uniqueness margin prevent arbitrary matches.
 
 Useful API-mode settings are `EMBEDDING_PREFETCH_WORKERS`,
 `EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
