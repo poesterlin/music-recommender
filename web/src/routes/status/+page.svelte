@@ -55,6 +55,10 @@
 		return total > 0 ? Math.min(100, Math.max(0, (value / total) * 100)) : 0;
 	}
 
+	function formatProgress(value: number, total: number, digits = 1): string {
+		return `${progress(value, total).toFixed(digits)}%`;
+	}
+
 	function jobLabel(state: string): string {
 		return {
 			complete: 'Complete',
@@ -169,7 +173,7 @@
 	<div class="mt-6 rounded-2xl border border-line bg-white/70 p-5">
 		<div class="mb-2 flex items-center justify-between gap-3 text-sm">
 			<span class="font-bold">Embedding progress</span>
-			<span class="text-ink-soft">{formatPercent(progress(counts.embedded, counts.total), 1)}</span>
+			<span class="text-ink-soft">{formatProgress(counts.embedded, counts.total)}</span>
 		</div>
 		<div class="h-3 overflow-hidden rounded-full bg-line">
 			<div
