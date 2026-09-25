@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
+import {
+	getLastRuns,
+	getWorkerStatus,
+	jobDetailMessage,
+	JOB_IDS,
+	type WorkerStatus
+} from './job-log';
 
 type Row = Record<string, unknown>;
 
@@ -54,32 +61,12 @@ export type ClusterQuality = {
 	adjustedRandIndex: number | null;
 };
 
-export type ClusterRun = {
-	id: number;
-	status: string;
-	mode: string;
-	k: number | null;
-	trackCount: number | null;
-	dimensions: number | null;
-	createdAt: string | null;
-	completedAt: string | null;
-	appliedAt: string | null;
-	error: string | null;
-	meanPairwiseAri: number | null;
-	minPairwiseAri: number | null;
-	bestRun: {
-		seed: number | null;
-		iterations: number | null;
-		converged: boolean | null;
-		trainingInertia: number | null;
-		quality: ClusterQuality;
-	} | null;
-	pca: {
-		applied: boolean | null;
-		inputDimensions: number | null;
-		outputDimensions: number | null;
-		explainedVariance: number[];
-	};
+export type UpkeepJob = {
+	job: string;
+	ok: boolean | null;
+	detail: string | null;
+	source: 'automatic' | 'manual';
+	finishedAt: string | null;
 };
 
 export type PipelineStatus = {
@@ -87,13 +74,14 @@ export type PipelineStatus = {
 	embedding: {
 		counts: EmbeddingCounts;
 		space: EmbeddingSpace | null;
+		worker: WorkerStatus;
 		activeJob: EmbeddingJob | null;
 		jobs: EmbeddingJob[];
 	};
-	clustering: {
-		activeRun: ClusterRun | null;
-		latestRun: ClusterRun | null;
-		runs: ClusterRun[];
+	upkeep: UpkeepJob[];
+	clusters: {
+		clustered: number;
+		unclustered: number;
 		topClusters: Array<{ clusterId: number; trackCount: number }>;
 	};
 	errors: string[];
@@ -189,56 +177,21 @@ function mapJob(row: Row): EmbeddingJob {
 	};
 }
 
-function mapClusterRun(row: Row): ClusterRun {
-	const report = objectValue(row.report);
-	const config = objectValue(row.config);
-	const runs = Array.isArray(report.runs) ? report.runs : [];
-	const bestIndex = numberOrNull(report.best_run);
-	const best = bestIndex === null ? undefined : runs[bestIndex];
-	const bestRecord = best && typeof best === 'object' ? objectValue(best) : {};
-	const metrics = objectValue(bestRecord.metrics);
-	const pca = objectValue(report.pca);
-	const bestQuality: ClusterQuality = {
-		clusterCount: numberOrNull(metrics.cluster_count),
-		minClusterSize: numberOrNull(metrics.min_cluster_size),
-		maxClusterSize: numberOrNull(metrics.max_cluster_size),
-		meanClusterSize: numberOrNull(metrics.mean_cluster_size),
-		meanIntraSimilarity: numberOrNull(metrics.mean_intra_similarity),
-		inertia: numberOrNull(metrics.inertia),
-		silhouette: numberOrNull(metrics.silhouette),
-		adjustedRandIndex: numberOrNull(bestRecord.adjusted_rand_index_vs_current)
-	};
-
+function mapUpkeepJob(
+	job: string,
+	row: {
+		ok: boolean | null;
+		detail: string | null;
+		finishedAt: string | null;
+		source: 'automatic' | 'manual';
+	} | null
+): UpkeepJob {
 	return {
-		id: numberOrZero(row.id),
-		status: stringOrNull(row.status) ?? 'unknown',
-		mode: stringOrNull(row.mode) ?? 'benchmark',
-		k: numberOrNull(config.k),
-		trackCount: numberOrNull(row.track_count),
-		dimensions: numberOrNull(row.dimensions),
-		createdAt: dateOrNull(row.created_at),
-		completedAt: dateOrNull(row.completed_at),
-		appliedAt: dateOrNull(row.applied_at),
-		error: stringOrNull(row.error),
-		meanPairwiseAri: numberOrNull(report.mean_pairwise_ari),
-		minPairwiseAri: numberOrNull(report.min_pairwise_ari),
-		bestRun: best
-			? {
-					seed: numberOrNull(bestRecord.seed),
-					iterations: numberOrNull(bestRecord.iterations),
-					converged: booleanOrNull(bestRecord.converged),
-					trainingInertia: numberOrNull(bestRecord.training_inertia),
-					quality: bestQuality
-				}
-			: null,
-		pca: {
-			applied: booleanOrNull(pca.applied),
-			inputDimensions: numberOrNull(pca.input_dimensions),
-			outputDimensions: numberOrNull(pca.output_dimensions),
-			explainedVariance: Array.isArray(pca.explained_variance_ratio)
-				? pca.explained_variance_ratio.map((value) => Number(value)).filter(Number.isFinite)
-				: []
-		}
+		job,
+		ok: row?.ok ?? null,
+		detail: jobDetailMessage(row?.detail ?? null),
+		source: row?.source ?? 'manual',
+		finishedAt: row?.finishedAt ?? null
 	};
 }
 
@@ -247,9 +200,8 @@ function uniqueErrors(values: Array<string | undefined>): string[] {
 }
 
 export async function getPipelineStatus(): Promise<PipelineStatus> {
-	const [countsResult, spaceResult, jobsResult, runsResult, activeResult, topClustersResult] =
-		await Promise.all([
-			readRows<Row>(sql`
+	const [countsResult, spaceResult, jobsResult, topClustersResult] = await Promise.all([
+		readRows<Row>(sql`
 				SELECT
 					count(*)::bigint AS total,
 					count(*) FILTER (WHERE embedding IS NOT NULL)::bigint AS embedded,
@@ -262,37 +214,20 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 					max(updated_at) AS last_updated
 				FROM track
 			`),
-			readRows<Row>(sql`
+		readRows<Row>(sql`
 				SELECT version, model, track_count, created_at
 				FROM embedding_space
 				ORDER BY version DESC
 				LIMIT 1
 			`),
-			readRows<Row>(sql`
+		readRows<Row>(sql`
 				SELECT id, job, started_at, finished_at, ok, detail
 				FROM job_run
 				WHERE job ILIKE '%embedding%'
 				ORDER BY id DESC
 				LIMIT 8
 			`),
-			readRows<Row>(sql`
-				SELECT
-					id, status, mode, config, report, track_count, dimensions,
-					created_at, completed_at, applied_at, error
-				FROM cluster_run
-				ORDER BY id DESC
-				LIMIT 8
-			`),
-			readRows<Row>(sql`
-				SELECT
-					id, status, mode, config, report, track_count, dimensions,
-					created_at, completed_at, applied_at, error
-				FROM cluster_run
-				WHERE status = 'applied'
-				ORDER BY applied_at DESC NULLS LAST, id DESC
-				LIMIT 1
-			`),
-			readRows<Row>(sql`
+		readRows<Row>(sql`
 				SELECT cluster_id, count(*)::bigint AS track_count
 				FROM track
 				WHERE cluster_id >= 0
@@ -300,13 +235,13 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 				ORDER BY track_count DESC, cluster_id ASC
 				LIMIT 8
 			`)
-		]);
+	]);
 
 	const counts = countsResult.rows[0] ?? {};
 	const spaceRow = spaceResult.rows[0];
 	const jobs = jobsResult.rows.map(mapJob);
-	const runs = runsResult.rows.map(mapClusterRun);
-	const activeRun = activeResult.rows[0] ? mapClusterRun(activeResult.rows[0]) : null;
+	const [lastRuns, worker] = await Promise.all([getLastRuns(), getWorkerStatus()]);
+	const upkeep = JOB_IDS.map((job) => mapUpkeepJob(job, lastRuns[job] ?? null));
 
 	return {
 		generatedAt: new Date().toISOString(),
@@ -330,13 +265,14 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 						createdAt: dateOrNull(spaceRow.created_at)
 					}
 				: null,
+			worker,
 			activeJob: jobs[0] ?? null,
 			jobs
 		},
-		clustering: {
-			activeRun,
-			latestRun: runs[0] ?? null,
-			runs,
+		upkeep,
+		clusters: {
+			clustered: numberOrZero(counts.clustered),
+			unclustered: numberOrZero(counts.unclustered),
 			topClusters: topClustersResult.rows.map((row) => ({
 				clusterId: numberOrZero(row.cluster_id),
 				trackCount: numberOrZero(row.track_count)
@@ -346,8 +282,6 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 			countsResult.error && `embedding counts: ${countsResult.error}`,
 			spaceResult.error && `embedding space: ${spaceResult.error}`,
 			jobsResult.error && `embedding jobs: ${jobsResult.error}`,
-			runsResult.error && `clustering runs: ${runsResult.error}`,
-			activeResult.error && `active clustering: ${activeResult.error}`,
 			topClustersResult.error && `cluster distribution: ${topClustersResult.error}`
 		])
 	};

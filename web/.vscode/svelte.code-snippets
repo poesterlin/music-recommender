@@ -1,23 +1,12 @@
 {
 	"component": {
 		"prefix": "component",
-		"body": [
-			"<script lang=\"ts\">",
-			"\tlet { data } = \\$props();",
-			"</script>",
-			"",
-			"$0"
-		],
+		"body": ["<script lang=\"ts\">", "\tlet { data } = \\$props();", "</script>", "", "$0"],
 		"description": "SvelteKit props snippet"
 	},
 	"Svelte Render Children": {
 		"prefix": "slot",
-		"body": [
-			"let { children } = $props();",
-			"",
-			"{@render children()}",
-			"$0"
-		],
+		"body": ["let { children } = $props();", "", "{@render children()}", "$0"],
 		"description": "Svelte Render Children"
 	}
 }

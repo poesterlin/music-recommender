@@ -37,7 +37,10 @@ export const actions: Actions = {
 			return fail(400, { message: 'Enter a valid username and password.' });
 		}
 
-		const [existingUser] = await db.select().from(userTable).where(eq(userTable.username, username));
+		const [existingUser] = await db
+			.select()
+			.from(userTable)
+			.where(eq(userTable.username, username));
 		if (!existingUser || !(await verifyPassword(existingUser.passwordHash, password))) {
 			return fail(400, { message: 'Invalid username or password.' });
 		}
@@ -45,7 +48,10 @@ export const actions: Actions = {
 		const sessionToken = generateSessionToken();
 		const session = await createSession(sessionToken, existingUser.id);
 		setSessionCookie(event, sessionToken, session.expiresAt);
-		await db.update(userTable).set({ lastLogin: new Date() }).where(eq(userTable.id, existingUser.id));
+		await db
+			.update(userTable)
+			.set({ lastLogin: new Date() })
+			.where(eq(userTable.id, existingUser.id));
 		redirect(302, safeRedirectPath(parsed.data.redirect));
 	}
 };

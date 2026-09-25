@@ -75,7 +75,12 @@ body {
 }
 
 .vinyl-label {
-	background: conic-gradient(from 40deg, var(--color-accent), var(--color-gold), var(--color-accent));
+	background: conic-gradient(
+		from 40deg,
+		var(--color-accent),
+		var(--color-gold),
+		var(--color-accent)
+	);
 }
 
 /* outlined ghost type */

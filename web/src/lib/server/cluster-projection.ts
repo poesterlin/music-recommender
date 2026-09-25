@@ -4,7 +4,7 @@ import type {
 	ClusterProjectionCentroid,
 	ClusterProjectionCluster,
 	ClusterProjectionData,
-	ClusterProjectionPoint,
+	ClusterProjectionPoint
 } from '$lib/cluster-projection-types';
 import { db } from './db';
 
@@ -60,7 +60,7 @@ function normalizeAxis(values: number[]): {
 	return {
 		coordinates: values.map((value) => (value - center) / scale),
 		center,
-		scale,
+		scale
 	};
 }
 
@@ -80,7 +80,7 @@ function projectPca(points: InternalPoint[]): {
 			explainedVariance: [],
 			mean: new Float64Array(),
 			components: [],
-			axes: [],
+			axes: []
 		};
 	}
 
@@ -175,13 +175,17 @@ function projectPca(points: InternalPoint[]): {
 		),
 		mean,
 		components,
-		axes: normalizedAxes.map(({ center, scale }) => ({ center, scale })),
+		axes: normalizedAxes.map(({ center, scale }) => ({ center, scale }))
 	};
 }
 
 async function buildProjection(): Promise<ClusterProjectionData> {
-	const { ids: clusterIds, names: clusterNames, matches: clusterMatches, activeRun } =
-		await getActiveClusterMetadata();
+	const {
+		ids: clusterIds,
+		names: clusterNames,
+		matches: clusterMatches,
+		activeRun
+	} = await getActiveClusterMetadata();
 	const clusterIdSql = sql.join(clusterIds, sql`, `);
 
 	const rows = (await db.execute(sql`
@@ -228,7 +232,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 
 	const points: InternalPoint[] = rows.map((row) => ({
 		...row,
-		vector: parseVector(row.embedding_centered),
+		vector: parseVector(row.embedding_centered)
 	}));
 	const pca = projectPca(points);
 
@@ -240,7 +244,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 		clusterId: point.cluster_id,
 		x: pca.coordinates[0]?.[index] ?? 0,
 		y: pca.coordinates[1]?.[index] ?? 0,
-		z: pca.coordinates[2]?.[index] ?? 0,
+		z: pca.coordinates[2]?.[index] ?? 0
 	}));
 
 	const dimensions = points[0]?.vector.length ?? 0;
@@ -266,7 +270,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 			clusterId: centroid.cluster_id,
 			x: coordinates[0] ?? 0,
 			y: coordinates[1] ?? 0,
-			z: coordinates[2] ?? 0,
+			z: coordinates[2] ?? 0
 		};
 	});
 
@@ -310,7 +314,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 		explainedVariance: pca.explainedVariance,
 		clusters,
 		centroids,
-		points: projected,
+		points: projected
 	};
 }
 

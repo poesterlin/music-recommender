@@ -53,7 +53,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			await new Promise((r) => setTimeout(r, 600));
 		} else {
 			return Response.json(
-				{ success: false, error: `pass uris[], volume, seek, shuffle, or action (${ACTIONS.join(', ')})` },
+				{
+					success: false,
+					error: `pass uris[], volume, seek, shuffle, or action (${ACTIONS.join(', ')})`
+				},
 				{ status: 400 }
 			);
 		}

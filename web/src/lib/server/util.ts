@@ -3,7 +3,11 @@ import type { z, ZodObject } from 'zod';
 
 export function assert(condition: unknown, message: string): asserts condition;
 export function assert(condition: unknown, code: number, message: string): asserts condition;
-export function assert(condition: unknown, code: number | string, message?: string): asserts condition {
+export function assert(
+	condition: unknown,
+	code: number | string,
+	message?: string
+): asserts condition {
 	if (!condition && typeof code === 'number') {
 		error(code, message);
 	}

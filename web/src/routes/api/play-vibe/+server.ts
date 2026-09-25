@@ -3,7 +3,12 @@ import { db } from '$lib/server/db';
 import { likedSongsTable, trackTable } from '$lib/server/schema';
 import { getActiveClusterMetadata } from '$lib/server/active-clusters';
 import { recommend, validateTrackUris } from '$lib/server/recomendation-engine';
-import { getActiveSchedule, getVibeClusterIds, listSchedules, setVibeClusterIds } from '$lib/server/vibe-store';
+import {
+	getActiveSchedule,
+	getVibeClusterIds,
+	listSchedules,
+	setVibeClusterIds
+} from '$lib/server/vibe-store';
 import { playSongs } from '$lib/server/webhook';
 import type { RequestHandler } from './$types';
 
@@ -33,10 +38,9 @@ export const POST: RequestHandler = async ({ request }) => {
 		let clusterIds: number[];
 		if (body.useSchedule) {
 			const activeSchedule = await getActiveSchedule();
-			clusterIds =
-				activeSchedule?.clusterIds?.length
-					? [...activeSchedule.clusterIds]
-					: await getVibeClusterIds();
+			clusterIds = activeSchedule?.clusterIds?.length
+				? [...activeSchedule.clusterIds]
+				: await getVibeClusterIds();
 		} else if (Array.isArray(body.clusterIds) && body.clusterIds.length > 0) {
 			clusterIds = await setVibeClusterIds(body.clusterIds);
 		} else {

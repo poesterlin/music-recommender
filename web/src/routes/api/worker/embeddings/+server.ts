@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { recordWorkerProgress } from '$lib/server/job-log';
 import { workerAuthError } from '$lib/server/worker-auth';
 import type { RequestHandler } from './$types';
 
@@ -55,11 +56,16 @@ function vectorLiteral(embedding: number[]): string {
 }
 
 function sameMetadata(row: TrackRow, item: UploadItem): boolean {
-	if (row.name !== item.name || row.album !== item.album || JSON.stringify(row.artist) !== JSON.stringify(item.artist)) {
+	if (
+		row.name !== item.name ||
+		row.album !== item.album ||
+		JSON.stringify(row.artist) !== JSON.stringify(item.artist)
+	) {
 		return false;
 	}
 	if (!item.updatedAt) return true;
-	const rowUpdated = row.updated_at instanceof Date ? row.updated_at.getTime() : Date.parse(row.updated_at);
+	const rowUpdated =
+		row.updated_at instanceof Date ? row.updated_at.getTime() : Date.parse(row.updated_at);
 	const itemUpdated = Date.parse(item.updatedAt);
 	return Number.isFinite(rowUpdated) && Math.abs(rowUpdated - itemUpdated) < 1_000;
 }
@@ -88,11 +94,18 @@ export const POST: RequestHandler = async ({ request }) => {
 		return errorResponse('request body must be valid JSON', 400);
 	}
 
-	if (!Array.isArray(body.embeddings) || body.embeddings.length < 1 || body.embeddings.length > MAX_BATCH) {
+	if (
+		!Array.isArray(body.embeddings) ||
+		body.embeddings.length < 1 ||
+		body.embeddings.length > MAX_BATCH
+	) {
 		return errorResponse(`embeddings must contain 1-${MAX_BATCH} items`, 400);
 	}
 	if (!body.embeddings.every(isValidItem)) {
-		return errorResponse(`each embedding must be a finite ${DIMENSIONS}-value ${MODEL} vector with track metadata`, 400);
+		return errorResponse(
+			`each embedding must be a finite ${DIMENSIONS}-value ${MODEL} vector with track metadata`,
+			400
+		);
 	}
 
 	const items = body.embeddings;
@@ -147,6 +160,15 @@ export const POST: RequestHandler = async ({ request }) => {
 		console.error('Worker embedding upload failed:', error);
 		return errorResponse('could not write embeddings', 500);
 	}
+
+	// The worker never touches the database, so this upload is the only signal
+	// that it is alive. Without it the external worker is indistinguishable
+	// from a stopped one on the status page.
+	void recordWorkerProgress({
+		uploaded: accepted.length,
+		written: accepted.filter((item) => item.status === 'written').length,
+		failed: rejected.length
+	});
 
 	return Response.json(
 		{
