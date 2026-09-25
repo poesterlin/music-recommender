@@ -87,6 +87,7 @@ unattended Compose jobs.
 | `EMBEDDING_DURATION_SECONDS` | `60` | Per-track duration cap |
 | `EMBEDDING_AUDIO_BACKEND` | `fast` | `fast` uses parity-checked soundfile/soxr; `librosa` restores the legacy decoder/resampler path |
 | `EMBEDDING_BATCH_SIZE` | `8` | Keyset page/write batch size |
+| `EMBEDDING_INFER_BATCH_SIZE` | `64` | One-second windows per OpenL3 predict call; raise on a GPU |
 | `EMBEDDING_JOB_NAME` | `python-local-embeddings` | Durable `job_run` name |
 | `EMBEDDING_LOCK_KEY` | fixed bigint | Singleton advisory-lock key |
 | `EMBEDDING_MAX_ERRORS` | `0` | Stop after N failures; zero continues |
@@ -138,6 +139,25 @@ were byte-identical, with M4A correctly falling back to librosa/audioread. A
 60-second dry-run profile on the test host showed approximately 0.10s decode,
 0.03s resampling, 0.6s model load, and 38.5s OpenL3 inference. The inference
 stage, rather than audio I/O, is currently the dominant cost.
+
+### Inference batch size
+
+Because inference dominates, `EMBEDDING_INFER_BATCH_SIZE` (or
+`--infer-batch-size`) controls how many one-second windows are handed to a
+single `model.predict` call. It is unrelated to `EMBEDDING_BATCH_SIZE`, which
+is the keyset page and write batch. Each window is one second of 48 kHz mono
+audio, so a 60-second track produces roughly 596 windows.
+
+The default of `64` replaces OpenL3's own default of `32` and is safe on CPU
+and on a 16 GB GPU. Raise it (`128`, `256`) when a GPU is the bottleneck;
+lower it if a run reports out-of-memory errors. The effective value is
+reported per track as `timings.infer_batch_size` and in the `run_summary`
+events, so a bounded `--dry-run --limit 20` is enough to compare throughput
+before committing to a full run.
+
+Server-side resampling is already in place: `/api/worker/audio` transcodes each
+snippet to mono 48 kHz, which is OpenL3's target rate, so the worker reports
+`"resampler": "none"` in API mode.
 
 See [`benchmark-profile.json`](./benchmark-profile.json) for the recorded read-only
 60-second profile. The worker intentionally does not generate recommendations

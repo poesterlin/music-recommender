@@ -48,6 +48,11 @@ EMBEDDING_SIZE = 512
 TARGET_SAMPLE_RATE = 48_000
 DEFAULT_DURATION_SECONDS = 60.0
 DEFAULT_BATCH_SIZE = 8
+# OpenL3's own default is 32 one-second windows per model.predict call. Each
+# window is one second of 48 kHz mono audio, so the default is safe on CPU and
+# leaves plenty of headroom on a 16 GB GPU; raise it when a GPU is saturated.
+DEFAULT_INFER_BATCH_SIZE = 64
+MAX_INFER_BATCH_SIZE = 1024
 DEFAULT_LOCK_KEY = 0x4D555331454D4201
 DEFAULT_JOB_NAME = "python-local-embeddings"
 DEFAULT_SOURCE_MODE = "local"
@@ -181,6 +186,12 @@ def parse_args(
         help="Number of tracks fetched and checkpointed per batch",
     )
     parser.add_argument(
+        "--infer-batch-size",
+        type=positive_int,
+        default=env_int("EMBEDDING_INFER_BATCH_SIZE", DEFAULT_INFER_BATCH_SIZE),
+        help="One-second windows per OpenL3 model.predict call (higher saturates a GPU)",
+    )
+    parser.add_argument(
         "--job-name",
         default=os.getenv("EMBEDDING_JOB_NAME", DEFAULT_JOB_NAME),
         help="job_run name used for the local durable checkpoint",
@@ -311,6 +322,10 @@ def parse_args(
         parser.error("--db-retry-delay must be a finite non-negative number")
     if args.max_errors < 0:
         parser.error("--max-errors must be zero or greater")
+    if args.infer_batch_size < 1 or args.infer_batch_size > MAX_INFER_BATCH_SIZE:
+        parser.error(
+            f"--infer-batch-size must be between 1 and {MAX_INFER_BATCH_SIZE}"
+        )
     if args.source_mode == "api":
         if args.prefetch_workers < 1 or args.prefetch_workers > 64:
             parser.error("--prefetch-workers must be between 1 and 64")
@@ -550,6 +565,7 @@ def process_audio_file(
     duration: float,
     audio_backend: str,
     stats: StageStats,
+    infer_batch_size: int = DEFAULT_INFER_BATCH_SIZE,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Decode, resample, infer, and mean-pool one local audio file."""
     track_started = time.perf_counter()
@@ -598,11 +614,13 @@ def process_audio_file(
             sample_rate,
             model=model,
             embedding_size=EMBEDDING_SIZE,
+            batch_size=infer_batch_size,
             verbose=0,
         )
     finally:
         timings["inference_seconds"] = time.perf_counter() - started
         stats.add("model_inference", timings["inference_seconds"])
+    timings["infer_batch_size"] = infer_batch_size
 
     if embeddings is None or len(embeddings) == 0:
         raise ValueError("OpenL3 returned no frame embeddings")
@@ -1073,6 +1091,7 @@ def run(args: argparse.Namespace) -> int:
                             args.duration,
                             args.audio_backend,
                             stats,
+                            args.infer_batch_size,
                         )
                         serialize_started = time.perf_counter()
                         literal = vector_literal(embedding)
@@ -1188,6 +1207,7 @@ def run(args: argparse.Namespace) -> int:
                     "processed_total": processed,
                     "failed_total": failed_total,
                     "remaining": remaining,
+                    "infer_batch_size": args.infer_batch_size,
                     "complete": complete,
                 }
             ),

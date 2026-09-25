@@ -1,5 +1,8 @@
+import contextlib
 import importlib.util
+import io
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -41,13 +44,18 @@ class FakeModels:
 
 class FakeOpenL3:
     models = FakeModels()
+    calls = []
 
     @staticmethod
-    def get_audio_embedding(audio, sample_rate, model, embedding_size, verbose):
+    def get_audio_embedding(
+        audio, sample_rate, model, embedding_size, batch_size, verbose
+    ):
         assert sample_rate == 48000
         assert model is FakeOpenL3.model
         assert embedding_size == 512
+        assert batch_size >= 1
         assert verbose == 0
+        FakeOpenL3.calls.append(batch_size)
         return np.ones((3, 512), dtype=np.float32), np.arange(3)
 
 
@@ -141,6 +149,7 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
 
     def test_process_audio_file_profiles_stages_and_reuses_model(self):
         FakeOpenL3.model = object()
+        FakeOpenL3.calls = []
         stats = local_embeddings.StageStats()
         with patch.object(local_embeddings, "librosa", FakeLibrosa), patch.object(
             local_embeddings, "openl3", FakeOpenL3
@@ -154,6 +163,26 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertIn("inference_seconds", timings)
         self.assertIn("audio_decode", stats.summary())
         self.assertIn("model_inference", stats.summary())
+        self.assertEqual(
+            FakeOpenL3.calls, [local_embeddings.DEFAULT_INFER_BATCH_SIZE]
+        )
+        self.assertEqual(
+            timings["infer_batch_size"], local_embeddings.DEFAULT_INFER_BATCH_SIZE
+        )
+
+    def test_process_audio_file_forwards_a_custom_infer_batch_size(self):
+        FakeOpenL3.model = object()
+        FakeOpenL3.calls = []
+        stats = local_embeddings.StageStats()
+        with patch.object(local_embeddings, "librosa", FakeLibrosa), patch.object(
+            local_embeddings, "openl3", FakeOpenL3
+        ):
+            _, timings = local_embeddings.process_audio_file(
+                "fixture.mp3", FakeOpenL3.model, 2.0, "fast", stats, 256
+            )
+
+        self.assertEqual(FakeOpenL3.calls, [256])
+        self.assertEqual(timings["infer_batch_size"], 256)
 
     def test_transient_database_errors_are_retried(self):
         connection = FakeConnection()
@@ -202,6 +231,39 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(args.batch_size, local_embeddings.DEFAULT_BATCH_SIZE)
         self.assertEqual(args.duration, 2.0)
         self.assertFalse(args.dry_run)
+        self.assertEqual(
+            args.infer_batch_size, local_embeddings.DEFAULT_INFER_BATCH_SIZE
+        )
+
+    def test_args_accept_a_raised_infer_batch_size_and_reject_extremes(self):
+        args = local_embeddings.parse_args(
+            [
+                "--database-url",
+                "postgresql://example",
+                "--infer-batch-size",
+                "256",
+            ]
+        )
+        self.assertEqual(args.infer_batch_size, 256)
+
+        for value in ("0", str(local_embeddings.MAX_INFER_BATCH_SIZE + 1)):
+            with self.assertRaises(SystemExit):
+                with contextlib.redirect_stderr(io.StringIO()):
+                    local_embeddings.parse_args(
+                        [
+                            "--database-url",
+                            "postgresql://example",
+                            "--infer-batch-size",
+                            value,
+                        ]
+                    )
+
+    def test_infer_batch_size_reads_the_environment_default(self):
+        with patch.dict(os.environ, {"EMBEDDING_INFER_BATCH_SIZE": "128"}):
+            args = local_embeddings.parse_args(
+                ["--database-url", "postgresql://example"]
+            )
+        self.assertEqual(args.infer_batch_size, 128)
 
 
 if __name__ == "__main__":

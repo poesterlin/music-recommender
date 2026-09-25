@@ -1034,6 +1034,17 @@ def run_api_worker(
             raise ValueError(f"batch size must be between 1 and {MAX_PAGE_SIZE}")
         duration = float(_arg(args, "duration", 60.0))
         audio_backend = str(_arg(args, "audio_backend", "fast"))
+        infer_batch_size = _nonnegative_int(
+            _arg(
+                args,
+                "infer_batch_size",
+                getattr(core, "DEFAULT_INFER_BATCH_SIZE", 64),
+            ),
+            "infer batch size",
+            maximum=int(getattr(core, "MAX_INFER_BATCH_SIZE", 1024)),
+        )
+        if infer_batch_size < 1:
+            raise ValueError("infer batch size must be at least 1")
         prefetch_workers = int(_arg(args, "prefetch_workers", 4))
         prefetch_depth = int(_arg(args, "prefetch_depth", 4))
         max_errors = int(_arg(args, "max_errors", 0))
@@ -1112,6 +1123,7 @@ def run_api_worker(
                                 duration,
                                 audio_backend,
                                 stats,
+                                infer_batch_size,
                             )
                             if hasattr(core, "validate_embedding"):
                                 embedding = core.validate_embedding(embedding)
@@ -1329,6 +1341,7 @@ def run_api_worker(
             "written_this_run": written_this_run,
             "processed_total": processed,
             "failed_total": failed_total,
+            "infer_batch_size": infer_batch_size,
             "complete": bool(complete and not limit_reached),
             "limit_reached": limit_reached,
         }
