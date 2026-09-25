@@ -51,7 +51,7 @@ exercised without a database connection:
 
 ```sh
 docker run --rm --cpus=8 -e MUSIC_EMBEDDING_THREADS=8 \
-  -v /mnt/zfs/music:/music:ro \
+  -v /srv/music:/music:ro \
   -v "$PWD/embedding-rs/models:/models:ro" \
   music-recommender-embedding-rs:test embed \
   --audio '/music/Artist/Album/track.mp3' \

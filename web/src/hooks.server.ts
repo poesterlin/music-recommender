@@ -7,7 +7,6 @@ import {
 	sessionCookieName
 } from '$lib/server/auth';
 import { authenticateApiKey } from '$lib/server/api-keys';
-import { startHaLidarrWatch } from '$lib/server/ha-lidarr-watch';
 
 // App-level startup: seed persisted vibe state and start the WLED
 // visualizer loop. Skipped during prerender/build.
@@ -25,12 +24,6 @@ if (!building) {
 		);
 	} else {
 		console.warn('WLED_IP environment variable is not set; WLED visualization disabled.');
-	}
-
-	try {
-		startHaLidarrWatch();
-	} catch (e) {
-		console.warn('[startup] HA→Lidarr watch failed:', e);
 	}
 }
 

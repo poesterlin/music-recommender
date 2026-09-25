@@ -142,8 +142,6 @@ def load_env_vars():
 
     if "TAILSCALE_DB_HOST" in vars_map:
         host = vars_map.get("TAILSCALE_DB_HOST")
-        if host == "homelab":
-            host = "100.82.130.136"
         db_url = f"postgresql://{vars_map.get('TAILSCALE_DB_USER', 'postgres')}:{vars_map.get('TAILSCALE_DB_PASSWORD', '')}@{host}:{vars_map.get('TAILSCALE_DB_PORT', '5432')}/{vars_map.get('TAILSCALE_DB_NAME', 'music')}"
         os.environ["DATABASE_URL"] = db_url
 

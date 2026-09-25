@@ -1,51 +1,45 @@
 const env = process.env;
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+type LidarrConfig = {
+	url: string;
+	apiKey: string;
+	rootFolderPath: string;
+	qualityProfileId: number;
+	metadataProfileId: number;
+	monitored: boolean;
+};
 
-// ==========================================
-// CONFIGURATION - UPDATE THESE VALUES
-// ==========================================
-const LIDARR_URL = env.LIDARR_URL ?? "http://100.82.130.136:8686"; // e.g., http://192.168.1.50:8686
-const LIDARR_API_KEY = env.LIDARR_API_KEY ?? "2bcd31d0066644629ba7d227ed89a871";
-const ROOT_FOLDER_PATH = env.LIDARR_ROOT_FOLDER_PATH ?? "/music-ingest"; // e.g., /data/media/music
-const QUALITY_PROFILE_ID = Number(env.LIDARR_QUALITY_PROFILE_ID ?? "1");
-const METADATA_PROFILE_ID = Number(env.LIDARR_METADATA_PROFILE_ID ?? "1");
-const MONITORED = (env.LIDARR_MONITORED ?? "true") === "true";
+function lidarrConfig(): LidarrConfig {
+	const url = env.LIDARR_URL?.trim().replace(/\/+$/, '');
+	const apiKey = env.LIDARR_API_KEY?.trim();
+	if (!url || !apiKey) {
+		throw new Error('Lidarr integration is not configured');
+	}
 
-// Add your list of artists here
-export const ARTISTS_TO_ADD = [
-  "Isaiah Rashad",
-  "Smino",
-  "Joey Bada$$",
-  "EarthGang",
-  "Brent Faiyaz",
-  "Omar Apollo",
-  "Sampha",
-  "PinkPantheress",
-  "Kaytranada",
-  "Bicep",
-  "Odesza",
-  "Feid",
-  "Young Miko",
-  "Chappell Roan",
-  "Reneé Rapp",
-  "Tyla",
-  "Carly Rae Jepsen",
-  "Sigrid",
-  "Griff",
-  "Conan Gray",
-  "Gracie Abrams",
-  "Remi Wolf",
-  "Joy Crookes",
-  "Cleo Sol",
-  "Raveena",
-  "Olivia Dean",
-  "Susanne Sundfør",
-  "RY X",
-  "Novo Amor",
-  "Ethel Cain",
-];
-// ==========================================
+	try {
+		new URL(url);
+	} catch {
+		throw new Error('LIDARR_URL must be a valid URL');
+	}
+
+	const qualityProfileId = Number(env.LIDARR_QUALITY_PROFILE_ID ?? '1');
+	const metadataProfileId = Number(env.LIDARR_METADATA_PROFILE_ID ?? '1');
+	if (!Number.isSafeInteger(qualityProfileId) || qualityProfileId < 1) {
+		throw new Error('LIDARR_QUALITY_PROFILE_ID must be a positive integer');
+	}
+	if (!Number.isSafeInteger(metadataProfileId) || metadataProfileId < 1) {
+		throw new Error('LIDARR_METADATA_PROFILE_ID must be a positive integer');
+	}
+
+	return {
+		url,
+		apiKey,
+		rootFolderPath: env.LIDARR_ROOT_FOLDER_PATH?.trim() || '/music-ingest',
+		qualityProfileId,
+		metadataProfileId,
+		monitored: (env.LIDARR_MONITORED ?? 'true').toLowerCase() !== 'false'
+	};
+}
 
 type LidarrAddResult = {
   success: boolean;
@@ -68,7 +62,7 @@ export async function getMusicBrainzId(artistName: string): Promise<string | nul
   try {
     const response = await fetch(url.toString(), {
       headers: {
-        "User-Agent": "LidarrBunImporter/1.0 ( me@example.com )",
+        "User-Agent": "MusicRecommender/1.0 (https://github.com/poesterlin/music-recommender)",
       },
     });
 
@@ -93,10 +87,11 @@ export async function getMusicBrainzId(artistName: string): Promise<string | nul
 
 export async function addArtistToLidarr(artistName: string, mbid: string): Promise<LidarrAddResult> {
   try {
+    const config = lidarrConfig();
     // Step 1: Lookup the exact artist payload format from Lidarr using the MBID
-    const lookupUrl = `${LIDARR_URL}/api/v1/artist/lookup?term=mbid:${mbid}`;
+    const lookupUrl = `${config.url}/api/v1/artist/lookup?term=mbid:${mbid}`;
     const lookupResponse = await fetch(lookupUrl, {
-      headers: { "X-Api-Key": LIDARR_API_KEY },
+      headers: { "X-Api-Key": config.apiKey },
     });
 
     if (!lookupResponse.ok) {
@@ -125,21 +120,21 @@ export async function addArtistToLidarr(artistName: string, mbid: string): Promi
 
     const payload = {
       ...artistPayload,
-      rootFolderPath: ROOT_FOLDER_PATH,
-      qualityProfileId: QUALITY_PROFILE_ID,
-      metadataProfileId: METADATA_PROFILE_ID,
-      monitored: MONITORED,
+      rootFolderPath: config.rootFolderPath,
+      qualityProfileId: config.qualityProfileId,
+      metadataProfileId: config.metadataProfileId,
+      monitored: config.monitored,
       addOptions: {
-        searchForMissingAlbums: MONITORED,
+        searchForMissingAlbums: config.monitored,
       },
     };
 
     // Step 3: POST the complete payload to add the artist
-    const addUrl = `${LIDARR_URL}/api/v1/artist`;
+    const addUrl = `${config.url}/api/v1/artist`;
     const addResponse = await fetch(addUrl, {
       method: "POST",
       headers: {
-        "X-Api-Key": LIDARR_API_KEY,
+        "X-Api-Key": config.apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -184,44 +179,3 @@ export async function addArtistByNameToLidarr(artistName: string): Promise<Lidar
 
   return addArtistToLidarr(artistName, mbid);
 }
-
-export async function importArtistsToLidarr(
-  artists: string[],
-  delayMs = 1500,
-): Promise<{ success: number; failed: number; results: LidarrAddResult[] }> {
-  const results: LidarrAddResult[] = [];
-
-  for (const artist of artists) {
-    const result = await addArtistByNameToLidarr(artist);
-    results.push(result);
-    await sleep(delayMs);
-  }
-
-  return {
-    success: results.filter((r) => r.success).length,
-    failed: results.filter((r) => !r.success).length,
-    results,
-  };
-}
-
-// async function main() {
-//   console.log("Starting Lidarr Artist Import...\n");
-
-//   for (const artist of ARTISTS_TO_ADD) {
-//     console.log(`Processing: ${artist}...`);
-    
-//     const mbid = await getMusicBrainzId(artist);
-    
-//     if (mbid) {
-//       await addArtistToLidarr(artist, mbid);
-//     }
-
-//     // STRICT RATE LIMIT: MusicBrainz allows 1 request per second.
-//     // Do not lower this, or your IP will get temporarily banned.
-//     await sleep(1500);
-//   }
-
-//   console.log("\nFinished importing artists.");
-// }
-
-// main();

@@ -153,8 +153,14 @@ export async function getCurrentTrack(): Promise<CurrentTrack | null> {
 
 async function getCurrentTrackFromHA(): Promise<CurrentTrack | null> {
   try {
+    const entityId = env.HA_PLAYER_ENTITY?.trim();
+    if (!entityId) {
+      logQueueError("HA_PLAYER_ENTITY is not set");
+      return null;
+    }
+
     const raw = JSON.stringify({
-      entity_id: "media_player.living_room"
+      entity_id: entityId
     });
 
     const res = await fetch(

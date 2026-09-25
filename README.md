@@ -234,8 +234,11 @@ versioned service images to GHCR and creates a GitHub release.
   to `127.0.0.1`.
 - The web service must have `ffmpeg` and a read-only music mount to serve worker
   audio snippets.
-- The repository `deploy.sh` targets the original homelab. Use the Compose
-  workflow for another host.
+- `HA_PLAYER_ENTITY` is optional and only enables the Home Assistant
+  now-playing fallback; no media-player watcher runs.
+- The repository `deploy.sh` runs from a checkout on the deployment machine; it
+  fetches the configured branch and rebuilds the local Compose stack. Use the
+  Compose workflow directly for another host.
 - The Rust embedding model artifact is optional and is not committed.
 
 ## Troubleshooting
@@ -251,3 +254,7 @@ versioned service images to GHCR and creates a GitHub release.
 - Slow downloads: increase `EMBEDDING_PREFETCH_WORKERS` only after checking
   server and network limits.
 - Pending embeddings: inspect `/status`, then use a bounded `--dry-run`.
+
+## License
+
+This project is released under the [MIT License](LICENSE).

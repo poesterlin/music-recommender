@@ -253,7 +253,7 @@ volumes:
     driver: local
     driver_opts:
       type: none
-      device: ${MUSIC_LIBRARY_PATH:-/mnt/zfs/music}
+      device: ${MUSIC_LIBRARY_PATH:-/srv/music}
       o: bind
   postgres-data:
   cluster-artifacts:

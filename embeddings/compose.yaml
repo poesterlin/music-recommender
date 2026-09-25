@@ -2,6 +2,6 @@ services:
   processor:
     build: .
     environment:
-      - DATABASE_URL=postgres://postgres:password@100.82.130.136:5433/music
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL before starting this Compose file}
     volumes:
-      - ./mnt/zfs/music:/music:ro
+      - ${AUDIO_DIR:-./music}:/music:ro
