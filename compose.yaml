@@ -46,12 +46,16 @@ services:
       - music
     environment:
       WORKER_TOKEN: "${WORKER_TOKEN:-}"
-    entrypoint: >
-      sh -c "while true; do
-        echo \"[sync-favorites] $$(date): syncing...\";
-        curl -sf -X POST http://web:3000/api/sync-favorites -H "Authorization: Bearer $$WORKER_TOKEN" && echo ok || echo failed;
-        sleep 3600;
-      done"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          echo "[sync-favorites] $$(date): syncing..."
+          curl -sf -X POST http://web:3000/api/sync-favorites \
+            -H "Authorization: Bearer $$WORKER_TOKEN" && echo ok || echo failed
+          sleep 3600
+        done
 
   # Periodic analyzer: index new tracks + assign them to frozen clusters.
   # Existing cluster_ids are never touched (see src/clustering.ts).
@@ -65,12 +69,16 @@ services:
       - music
     environment:
       WORKER_TOKEN: "${WORKER_TOKEN:-}"
-    entrypoint: >
-      sh -c "while true; do
-        echo \"[analyzer] $$(date): analyzing...\";
-        curl -sf -X POST http://web:3000/api/analyze -H "Authorization: Bearer $$WORKER_TOKEN" && echo ok || echo failed;
-        sleep 21600;
-      done"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        while true; do
+          echo "[analyzer] $$(date): analyzing..."
+          curl -sf -X POST http://web:3000/api/analyze \
+            -H "Authorization: Bearer $$WORKER_TOKEN" && echo ok || echo failed
+          sleep 21600
+        done
 
   # Periodic audio embedding generation (OpenL3, CPU). Idempotent: only
   # processes tracks with embedding IS NULL. First run has a backlog
