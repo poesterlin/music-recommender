@@ -14,7 +14,9 @@ API. The Python worker can run beside it or on another machine.
 - Home Assistant for the current library import endpoint
 
 Rust `1.78` or newer is needed for the optional native clustering tools. The
-Python worker needs the packages in `embeddings/requirements.txt`.
+Python worker uses Python 3.11 and the packages in
+`embeddings/requirements.txt`; OpenL3 0.4.2 cannot build on Python 3.12 or
+newer.
 
 ## Install
 

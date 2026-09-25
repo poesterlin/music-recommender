@@ -1,4 +1,5 @@
-# Pinned to the validated OpenL3 reference environment used by the parity fixtures.
+# Pinned to the validated Python 3.11 OpenL3 reference environment used by the parity fixtures.
+# OpenL3 0.4.2 imports the removed stdlib `imp` module and cannot build on Python 3.12+.
 openl3==0.4.2
 tensorflow==2.20.0
 keras==3.13.2

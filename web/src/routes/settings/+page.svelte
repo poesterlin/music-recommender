@@ -11,12 +11,19 @@ import os
 import subprocess
 import sys
 
+if sys.version_info < (3, 11) or sys.version_info >= (3, 12):
+    raise RuntimeError(
+        "The pinned OpenL3 0.4.2 worker requires Python 3.11. "
+        "In Colab choose Runtime > Change runtime type > Python 3.11, "
+        "restart the runtime, and run this cell again."
+    )
+
 repo_url = "https://github.com/poesterlin/music-recommender.git"
 repo_dir = "music-recommender"
 if not os.path.isdir(os.path.join(repo_dir, "embeddings")):
     subprocess.run(["git", "clone", "--depth", "1", repo_url, repo_dir], check=True)
 os.chdir(repo_dir)
-subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", "embeddings/requirements.txt"], check=True)
+subprocess.run([sys.executable, "-m", "pip", "install", "-r", "embeddings/requirements.txt"], check=True)
 
 os.environ["WORKER_URL"] = ${JSON.stringify(data.workerUrl)}
 os.environ["WORKER_TOKEN"] = getpass.getpass("Paste worker API key: ")
@@ -180,7 +187,7 @@ subprocess.run([
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h2 class="text-lg font-bold">Colab / Jupyter worker cell</h2>
-			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. It clones the repository, installs the existing 60-second worker, and runs API mode without a database or music mount.</p>
+			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Use a Python 3.11 notebook runtime: the pinned OpenL3 version cannot build on Python 3.12+. The cell clones the repository, installs the existing 60-second worker, and runs API mode without a database or music mount.</p>
 		</div>
 		<div class="flex gap-2">
 			<button
