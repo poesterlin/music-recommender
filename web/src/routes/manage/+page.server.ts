@@ -1,4 +1,3 @@
-import { ARTISTS_TO_ADD } from '$lib/server/add-artists';
 import { getLastRuns, relativeTime, type LastRun } from '$lib/server/job-log';
 import type { PageServerLoad } from './$types';
 
@@ -7,7 +6,6 @@ export const load: PageServerLoad = async () => {
 		() => ({}) as Record<string, LastRun | null>
 	);
 	return {
-		defaultArtistCount: ARTISTS_TO_ADD.length,
 		lastRuns: Object.fromEntries(
 			Object.entries(lastRuns).map(([job, run]) => [
 				job,

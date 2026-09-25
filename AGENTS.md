@@ -50,8 +50,9 @@ Read-only status and dry-run commands are safe for diagnostics.
 
 The Compose file expects the external Traefik network (`TRAEFIK_NETWORK`,
 default `traefik_web`) and uses the `DOMAIN` variable for routing. The
-repository `deploy.sh` is specific to the original homelab; use the Compose
-workflow for a new host.
+repository `deploy.sh` runs from a checkout on the deployment machine. It
+fetches the configured branch and rebuilds the local Compose stack; use the
+Compose workflow directly for a new host.
 
 Before exposing the service, run:
 

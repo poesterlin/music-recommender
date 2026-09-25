@@ -44,21 +44,11 @@
 		lidarrMsg = json.message ?? (ok ? 'Done' : 'Failed');
 		if (lidarrOk) artistName = '';
 	}
-
-	async function importDefaults() {
-		if (!confirm(`Add all ${data.defaultArtistCount} default artists to Lidarr?`)) return;
-		running = 'Importing default artists';
-		const { ok, data: json } = await post<{ imported?: string[]; failed?: string[] }>(
-			'/api/lidarr/import-default-artists'
-		);
-		running = null;
-		if (ok) toastStore.show(`Imported ${json.imported?.length ?? 0}, failed ${json.failed?.length ?? 0}`);
-	}
 </script>
 
 <PageHeader
 	title="Manage"
-	description="Housekeeping: pull in new music, refresh your likes, and tell Lidarr which artists to watch. Run a job when something's missing — each one remembers its last result below."
+	description="Housekeeping: pull in new music, refresh your likes, and optionally add artists to Lidarr. Run a job when something's missing — each one remembers its last result below."
 />
 
 <div class="grid gap-6 lg:grid-cols-2">
@@ -98,12 +88,12 @@
 	</section>
 
 	<section class="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-		<h2 class="text-lg font-bold text-gray-900">Artists to watch</h2>
-		<p class="mb-4 text-sm text-gray-500">Lidarr watches these artists and their new releases show up in your library automatically.</p>
+		<h2 class="text-lg font-bold text-gray-900">Add to Lidarr</h2>
+		<p class="mb-4 text-sm text-gray-500">Optionally add an artist to Lidarr so new releases can be fetched into your library.</p>
 		<div class="flex flex-wrap gap-2">
 			<input
 				class="min-w-52 flex-1 rounded-xl border border-gray-300 px-3 py-2"
-				placeholder="Artist name (e.g. Sampha)"
+				placeholder="Artist name"
 				bind:value={artistName}
 				onkeydown={(e) => e.key === 'Enter' && addArtist()}
 			/>
@@ -112,12 +102,5 @@
 		{#if lidarrMsg}
 			<p class="mt-2 text-sm {lidarrOk ? 'text-green-600' : 'text-red-600'}">{lidarrMsg}</p>
 		{/if}
-		<button
-			class="mt-4 rounded-xl bg-gray-600 px-5 py-2 font-semibold text-white hover:bg-gray-700 disabled:opacity-50"
-			disabled={running !== null}
-			onclick={importDefaults}
-		>
-			Import default list ({data.defaultArtistCount} artists)
-		</button>
 	</section>
 </div>
