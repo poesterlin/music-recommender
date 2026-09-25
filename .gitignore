@@ -46,6 +46,8 @@ artifacts/
 *.py[cod]
 
 embeddings/embeddings_updates.sql
+embeddings/cluster_stats.json
+embeddings/music_*.html
 /server/
 embedding-rs/models/*.onnx
 embedding-rs/models/*.bin

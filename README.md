@@ -240,6 +240,8 @@ versioned service images to GHCR and creates a GitHub release.
   fetches the configured branch and rebuilds the local Compose stack. Use the
   Compose workflow directly for another host.
 - The Rust embedding model artifact is optional and is not committed.
+- Generated cluster statistics and music-map HTML files are local artifacts and
+  are intentionally ignored.
 
 ## Troubleshooting
 
