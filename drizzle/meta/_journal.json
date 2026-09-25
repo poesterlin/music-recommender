@@ -29,6 +29,48 @@
       "when": 1788901532846,
       "tag": "0003_messy_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790205615854,
+      "tag": "0004_centered-embedding-space",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790207890776,
+      "tag": "0005_centroid-space-version",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790208016000,
+      "tag": "0006_centered_embedding_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790257383082,
+      "tag": "0007_same_wallow",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790259290464,
+      "tag": "0008_safe_slapstick",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790264453899,
+      "tag": "0009_goofy_falcon",
+      "breakpoints": true
     }
   ]
 }

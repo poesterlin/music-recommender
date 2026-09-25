@@ -1,22 +1,23 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { likedSongsTable, trackTable } from '$lib/server/schema';
-import { CLUSTER_NAMES } from '$lib/clusters';
+import { getActiveClusterMetadata } from '$lib/server/active-clusters';
 import { recommend, validateTrackUris } from '$lib/server/recomendation-engine';
 import { getActiveSchedule, getVibeClusterIds, listSchedules, setVibeClusterIds } from '$lib/server/vibe-store';
 import { playSongs } from '$lib/server/webhook';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
-	const [clusterIds, schedules, active] = await Promise.all([
+	const [clusterIds, schedules, active, clusterMetadata] = await Promise.all([
 		getVibeClusterIds(),
 		listSchedules(),
-		getActiveSchedule()
+		getActiveSchedule(),
+		getActiveClusterMetadata()
 	]);
 	return Response.json({
 		success: true,
 		clusterIds,
-		names: CLUSTER_NAMES,
+		names: clusterMetadata.names,
 		schedules,
 		activeSchedule: active
 	});
@@ -57,7 +58,6 @@ export const POST: RequestHandler = async ({ request }) => {
 		const recommendations = await recommend({
 			seedUris: seeds.map((s) => s.uri),
 			limit: 50,
-			annPool: 800,
 			alphaNow: 0.8,
 			maxPerArtist: 4,
 			clusterIds
@@ -65,6 +65,12 @@ export const POST: RequestHandler = async ({ request }) => {
 
 		if (recommendations.length > 0) {
 			const tracks = await validateTrackUris(recommendations);
+			if (tracks.length === 0) {
+				return Response.json(
+					{ success: false, error: 'No playable recommendations found' },
+					{ status: 500 }
+				);
+			}
 			await playSongs(tracks.map((t) => t.uri));
 			return Response.json({ success: true, tracks });
 		} else {

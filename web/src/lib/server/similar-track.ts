@@ -23,7 +23,7 @@ async function fetchRelatedTracks(
   const [track] = await db
     .select({
       uri: trackTable.uri,
-      embedding: trackTable.embedding,
+      embedding: trackTable.embeddingCentered,
       name: trackTable.name,
       artists: trackTable.artist,
     })
@@ -39,7 +39,7 @@ async function fetchRelatedTracks(
   }
 
   const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embedding,
+    trackTable.embeddingCentered,
     track.embedding
   )})`;
 
@@ -86,7 +86,7 @@ async function findArtists(uri: string) {
   const [track] = await db
     .select({
       artists: trackTable.artist,
-      embedding: avg(trackTable.embedding),
+      embedding: avg(trackTable.embeddingCentered),
     })
     .from(trackTable)
     .groupBy(trackTable.artist)
@@ -105,7 +105,7 @@ async function findArtists(uri: string) {
 async function findAlbum(uri: string) {
   const [track] = await db
     .select({
-      embedding: avg(trackTable.embedding),
+      embedding: avg(trackTable.embeddingCentered),
       album: trackTable.album,
     })
     .from(trackTable)
@@ -134,7 +134,7 @@ async function findSongsFromSimilarArtists(
   }
 
   const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embedding,
+    trackTable.embeddingCentered,
     embedding
   )})`;
 
@@ -167,7 +167,7 @@ async function findSimilarAlbums(
   const { embedding } = await findAlbum(uri);
 
   const similarity = sql<number>`1 - (${cosineDistance(
-    trackTable.embedding,
+    trackTable.embeddingCentered,
     embedding
   )})`;
 
@@ -301,7 +301,7 @@ export async function skipArtists(artists: string[]) {
 export async function likeTrack(uri: string, source?: string) {
   // 1. Verify the track exists and has an embedding
   const [dbTrack] = await db
-    .select({ uri: trackTable.uri, embedding: trackTable.embedding })
+    .select({ uri: trackTable.uri, embedding: trackTable.embeddingCentered })
     .from(trackTable)
     .where(eq(trackTable.uri, uri));
 
@@ -337,7 +337,7 @@ export async function getRandomTrack() {
       uri: trackTable.uri,
     })
     .from(trackTable)
-    .where(isNotNull(trackTable.embedding))
+    .where(isNotNull(trackTable.embeddingCentered))
     .orderBy(() => sql`random()`)
     .limit(1);
 

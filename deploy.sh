@@ -5,6 +5,11 @@
 # Requires a clean working tree (commit first). Remote .env is untouched
 # because it is git-ignored and never committed.
 #
+# Database changes use the idempotent additive centered-space guard below.
+# Other schema changes must be added to an explicit, tested migration/guard.
+# Do not replace it with `drizzle-kit push --force`: an older checkout can
+# otherwise remove columns that are present only in the newer schema.
+#
 # Usage: ./deploy.sh
 set -euo pipefail
 
@@ -21,16 +26,16 @@ if [ -n "$(git status --porcelain)" ]; then
   exit 1
 fi
 
-echo "==> 1/4 DB migrations (drizzle push, uses local .env DATABASE_URL)"
-bunx drizzle-kit push --force
+echo "==> 1/5 ensuring additive centered-embedding schema (no destructive push)"
+bun run db:ensure-centered
 
-echo "==> 2/4 pushing $BRANCH to origin"
+echo "==> 2/5 pushing $BRANCH to origin"
 git push origin "$BRANCH"
 
-echo "==> 3/4 pulling on homelab"
+echo "==> 3/5 pulling on homelab"
 ssh "$REMOTE" "set -e; cd $REMOTE_DIR && git fetch origin && git checkout $BRANCH --quiet && git pull --ff-only origin $BRANCH && git status --short"
 
-echo "==> 4/4 rebuild + restart on homelab (drop retired-service orphans)"
+echo "==> 4/5 rebuilding + restarting on homelab (drop retired-service orphans)"
 ssh "$REMOTE" "cd $REMOTE_DIR && docker compose up -d --build --remove-orphans"
 
 echo "==> waiting for healthy ($REMOTE_HEALTH_URL)"

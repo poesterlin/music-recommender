@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "recorded": "2026-09-25",
+  "worker": "python-openl3",
+  "model": "openl3_audio_mel256_music",
+  "embedding_size": 512,
+  "fixture": {
+    "path": "Jonas Blue/Together/01 - Always Be There.mp3",
+    "duration_seconds": 60,
+    "frames": 597
+  },
+  "fast_audio_profile": {
+    "audio_backend": "fast",
+    "decoder": "soundfile",
+    "resampler": "soxr",
+    "model_load_seconds": 0.3916265380103141,
+    "decode_seconds": 0.08835037500830367,
+    "resample_seconds": 0.021288832009304315,
+    "inference_seconds": 41.132845890999306,
+    "pool_seconds": 0.00022176100173965096,
+    "track_total_seconds": 41.24282205902273
+  },
+  "legacy_audio_profile": {
+    "audio_backend": "librosa",
+    "decoder": "librosa",
+    "resampler": "librosa",
+    "model_load_seconds": 0.8158547430066392,
+    "decode_seconds": 16.756388114008587,
+    "resample_seconds": 0.03729093598667532,
+    "inference_seconds": 37.248237675987184,
+    "pool_seconds": 0.000162690004799515,
+    "track_total_seconds": 54.042200637981296
+  },
+  "parity": {
+    "reference": "embedding-rs/fixtures/reference-60s.json",
+    "cosine": 1.0,
+    "max_absolute_error": 0.0,
+    "mean_absolute_error": 0.0,
+    "bitwise_equal": true
+  },
+  "notes": [
+    "Single read-only profile runs; host CPU contention affects wall-clock inference time.",
+    "The fast soundfile/soxr path was separately compared with librosa on representative MP3, FLAC, and M4A inputs.",
+    "The fast path removes the large-array librosa decode/mono overhead; OpenL3 inference remains the dominant cost.",
+    "Use --audio-backend librosa as an explicit rollback path."
+  ]
+}

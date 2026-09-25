@@ -1,4 +1,4 @@
-import { index, vector, pgTable, text, timestamp, boolean, integer, serial } from "drizzle-orm/pg-core";
+import { index, uniqueIndex, vector, pgTable, text, timestamp, boolean, integer, serial, jsonb, real } from "drizzle-orm/pg-core";
 
 export const trackTable = pgTable(
   "track",
@@ -8,6 +8,8 @@ export const trackTable = pgTable(
     artist: text("artist").array().notNull(),
     album: text("album").notNull(),
     embedding: vector("embedding", { dimensions: 512 }),
+    embeddingCentered: vector("embedding_centered", { dimensions: 512 }),
+    embeddingSpaceVersion: integer("embedding_space_version"),
     createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
     updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
     skip: boolean("skip").default(false),
@@ -17,6 +19,10 @@ export const trackTable = pgTable(
     index("embeddingIndex").using(
       "hnsw",
       table.embedding.op("vector_cosine_ops")
+    ),
+    index("embeddingCenteredIndex").using(
+      "hnsw",
+      table.embeddingCentered.op("vector_cosine_ops")
     ),
   ]
 );
@@ -37,6 +43,16 @@ export const skippedArtistsTable = pgTable("skipped_artists", {
   name: text("name").primaryKey(),
 });
 
+// Versioned centering space for OpenL3 embeddings. Raw embeddings are kept
+// unchanged; retrieval and clustering use the L2-normalized centered vector.
+export const embeddingSpaceTable = pgTable("embedding_space", {
+  version: integer("version").primaryKey(),
+  model: text("model").notNull(),
+  meanEmbedding: vector("mean_embedding", { dimensions: 512 }).notNull(),
+  trackCount: integer("track_count").notNull(),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+});
+
 // Frozen centroids for stable incremental clustering.
 // Computed once from current assignments (see backfill), then only
 // new tracks are assigned to the nearest centroid - existing
@@ -44,9 +60,74 @@ export const skippedArtistsTable = pgTable("skipped_artists", {
 export const clusterCentroidTable = pgTable("cluster_centroid", {
   clusterId: integer("cluster_id").primaryKey(),
   embedding: vector("embedding", { dimensions: 512 }),
+  embeddingSpaceVersion: integer("embedding_space_version").notNull().default(1),
   trackCount: integer("track_count").default(0),
   updatedAt: timestamp("updated_at", { mode: "string" }).defaultNow(),
 });
+
+// Rust/CLI benchmark runs and their explicit apply audit. Assignment artifacts
+// remain external until a confirmed apply records the live transition.
+export const clusterRunTable = pgTable("cluster_run", {
+  id: serial("id").primaryKey(),
+  status: text("status").notNull().default("completed"),
+  mode: text("mode").notNull().default("benchmark"),
+  config: jsonb("config").notNull(),
+  report: jsonb("report"),
+  reportPath: text("report_path"),
+  assignmentsPath: text("assignments_path"),
+  trackCount: integer("track_count"),
+  dimensions: integer("dimensions"),
+  error: text("error"),
+  createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+  completedAt: timestamp("completed_at", { mode: "string" }),
+  appliedAt: timestamp("applied_at", { mode: "string" }),
+});
+
+export const clusterRunAssignmentTable = pgTable(
+  "cluster_run_assignment",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id").notNull(),
+    uri: text("uri").notNull(),
+    clusterId: integer("cluster_id").notNull(),
+    previousClusterId: integer("previous_cluster_id"),
+    createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+  },
+  (table) => [uniqueIndex("cluster_run_assignment_run_uri_idx").on(table.runId, table.uri)],
+);
+
+export const clusterCentroidBackupTable = pgTable(
+  "cluster_centroid_backup",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id").notNull(),
+    clusterId: integer("cluster_id").notNull(),
+    embedding: vector("embedding", { dimensions: 512 }),
+    trackCount: integer("track_count"),
+    embeddingSpaceVersion: integer("embedding_space_version"),
+    createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+  },
+  (table) => [uniqueIndex("cluster_centroid_backup_run_cluster_idx").on(table.runId, table.clusterId)],
+);
+
+export const clusterRunMatchTable = pgTable(
+  "cluster_run_match",
+  {
+    id: serial("id").primaryKey(),
+    runId: integer("run_id").notNull(),
+    clusterId: integer("cluster_id").notNull(),
+    legacyClusterId: integer("legacy_cluster_id").notNull(),
+    legacyName: text("legacy_name").notNull(),
+    displayName: text("display_name").notNull(),
+    overlapCount: integer("overlap_count").notNull(),
+    newClusterCount: integer("new_cluster_count").notNull(),
+    legacyClusterCount: integer("legacy_cluster_count").notNull(),
+    confidence: real("confidence").notNull(),
+    relatedLegacyIds: integer("related_legacy_ids").array().notNull(),
+    createdAt: timestamp("created_at", { mode: "string" }).defaultNow(),
+  },
+  (table) => [uniqueIndex("cluster_run_match_run_cluster_idx").on(table.runId, table.clusterId)],
+);
 
 // Singleton key-value store for persisted UI state (e.g. vibe picks)
 export const vibeStateTable = pgTable("vibe_state", {

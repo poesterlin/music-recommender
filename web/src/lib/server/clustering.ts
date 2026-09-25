@@ -1,7 +1,9 @@
 import { kmeans } from 'ml-kmeans';
 import { trackTable, clusterCentroidTable } from './schema';
 import { db } from './db';
-import { isNotNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
+
+const EMBEDDING_SPACE_VERSION = 1;
 
 type TrackWithEmbedding = {
   uri: string;
@@ -181,7 +183,7 @@ export async function batchUpdateClusters(
 
     try {
       const values = sql.join(
-        chunk.map((update) => sql`(${update.uri}, ${update.clusterId})`),
+        chunk.map((update) => sql`(${update.uri}::text, ${update.clusterId}::integer)`),
         sql`, `
       );
 
@@ -201,7 +203,7 @@ export async function batchUpdateClusters(
       );
     } catch (error) {
       console.error(`Error in chunk starting at ${i}:`, error);
-      // You can decide whether to 'continue' to the next chunk or 'throw'
+      throw error;
     }
   }
 
@@ -213,7 +215,12 @@ export async function batchUpdateClusters(
 // centroids are frozen in cluster_centroid. New tracks are assigned to
 // the nearest centroid; existing cluster_ids are never touched.
 
-export type Centroid = { clusterId: number; embedding: number[]; trackCount: number };
+export type Centroid = {
+  clusterId: number;
+  embedding: number[];
+  trackCount: number;
+  embeddingSpaceVersion: number;
+};
 
 function l2normalize(vec: number[]): number[] {
   const n = Math.sqrt(vec.reduce((s, x) => s + x * x, 0)) || 1;
@@ -227,13 +234,17 @@ function cosineSim(a: number[], b: number[]): number {
 }
 
 export async function loadCentroids(): Promise<Centroid[]> {
-  const rows = await db.select().from(clusterCentroidTable);
+  const rows = await db
+    .select()
+    .from(clusterCentroidTable)
+    .where(eq(clusterCentroidTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION));
   return rows
     .filter((r) => Array.isArray(r.embedding) && r.embedding.length > 0)
     .map((r) => ({
       clusterId: r.clusterId,
       embedding: l2normalize(r.embedding as number[]),
       trackCount: r.trackCount ?? 0,
+      embeddingSpaceVersion: r.embeddingSpaceVersion,
     }));
 }
 
@@ -244,9 +255,14 @@ export async function loadCentroids(): Promise<Centroid[]> {
  */
 export async function backfillCentroidsFromAssignments(): Promise<Centroid[]> {
   const rows = await db
-    .select({ clusterId: trackTable.clusterId, embedding: trackTable.embedding })
+    .select({ clusterId: trackTable.clusterId, embedding: trackTable.embeddingCentered })
     .from(trackTable)
-    .where(isNotNull(trackTable.embedding));
+    .where(
+      and(
+        isNotNull(trackTable.embeddingCentered),
+        eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION)
+      )
+    );
 
   const sums = new Map<number, { sum: number[]; count: number }>();
   for (const row of rows) {
@@ -266,16 +282,32 @@ export async function backfillCentroidsFromAssignments(): Promise<Centroid[]> {
   const centroids: Centroid[] = [];
   for (const [cid, acc] of sums) {
     const mean = acc.sum.map((s) => s / acc.count);
-    centroids.push({ clusterId: cid, embedding: l2normalize(mean), trackCount: acc.count });
+    centroids.push({
+      clusterId: cid,
+      embedding: l2normalize(mean),
+      trackCount: acc.count,
+      embeddingSpaceVersion: EMBEDDING_SPACE_VERSION,
+    });
   }
 
   for (const c of centroids) {
     await db
       .insert(clusterCentroidTable)
-      .values({ clusterId: c.clusterId, embedding: c.embedding, trackCount: c.trackCount })
+      .values({
+        clusterId: c.clusterId,
+        embedding: c.embedding,
+        trackCount: c.trackCount,
+        embeddingSpaceVersion: c.embeddingSpaceVersion,
+        updatedAt: new Date().toISOString(),
+      })
       .onConflictDoUpdate({
         target: clusterCentroidTable.clusterId,
-        set: { embedding: c.embedding, trackCount: c.trackCount },
+        set: {
+          embedding: c.embedding,
+          trackCount: c.trackCount,
+          embeddingSpaceVersion: c.embeddingSpaceVersion,
+          updatedAt: new Date().toISOString(),
+        },
       });
   }
   console.log(`Backfilled ${centroids.length} centroids from current assignments.`);
@@ -292,9 +324,11 @@ export async function assignNewTracksToClusters(centroids?: Centroid[]): Promise
   if (!cents.length) throw new Error("No centroids stored - run backfill or full clustering first.");
 
   const pending = await db
-    .select({ uri: trackTable.uri, embedding: trackTable.embedding })
+    .select({ uri: trackTable.uri, embedding: trackTable.embeddingCentered })
     .from(trackTable)
-    .where(sql`${trackTable.embedding} IS NOT NULL AND (${trackTable.clusterId} = -1 OR ${trackTable.clusterId} IS NULL)`);
+    .where(sql`${trackTable.embeddingCentered} IS NOT NULL
+      AND ${trackTable.embeddingSpaceVersion} = ${EMBEDDING_SPACE_VERSION}
+      AND (${trackTable.clusterId} = -1 OR ${trackTable.clusterId} IS NULL)`);
 
   if (!pending.length) {
     console.log("No unclustered embedded tracks - nothing to do.");
@@ -329,8 +363,17 @@ async function runFullClustering(k = 60) {
     uri: trackTable.uri,
     name: trackTable.name,
     artist: trackTable.artist,
-    embedding: trackTable.embedding,
-  }).from(trackTable).limit(100000).orderBy(sql`random()`).where(isNotNull(trackTable.embedding));
+    embedding: trackTable.embeddingCentered,
+  })
+    .from(trackTable)
+    .limit(100000)
+    .orderBy(sql`random()`)
+    .where(
+      and(
+        isNotNull(trackTable.embeddingCentered),
+        eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION)
+      )
+    );
   const clusteringResult = clusterLibrary(allTracks, k);
 
   console.log("Cluster Seeds:");
@@ -365,4 +408,5 @@ if (import.meta.main) {
     console.error(`Unknown mode: ${mode}. Use: full [k] | backfill | incremental`);
     process.exit(1);
   }
+  process.exit(0);
 }

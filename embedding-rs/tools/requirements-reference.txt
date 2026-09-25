@@ -1,0 +1,13 @@
+# Development/reference only; the Rust runtime does not install these packages.
+openl3==0.4.2
+kapre==0.4.1
+librosa==0.11.0
+numpy==2.4.6
+scipy==1.17.1
+soundfile==0.14.0
+soxr==1.1.0
+resampy==0.2.2
+audioread==3.1.0
+tensorflow==2.20.0
+keras==3.13.2
+tf2onnx==1.17.0

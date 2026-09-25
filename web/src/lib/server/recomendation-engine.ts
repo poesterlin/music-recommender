@@ -1,5 +1,6 @@
 import {
   and,
+  arrayOverlaps,
   cosineDistance,
   desc,
   eq,
@@ -50,6 +51,11 @@ const temperature = 0.07;   // Lowered: makes recommendations more precise
 const lambda = 0.85;       // Increased: favors relevance over forced diversity
 const beta = 0.95;         // Increased: query stays truer to the current flow
 const noiseScale = 0.005;   // Reduced: less "drifting" away from the vibe
+const defaultAnnPool = 400;
+const minPoolPerTrack = 6;
+const maxPoolSize = 600;
+const maxSeedUris = 10;
+const scoreJitter = 0.002;
 
 // ---------- Optimized Utilities ----------
 
@@ -58,26 +64,48 @@ function l2norm(v: number[]): number[] {
   return v.map((x) => x / n);
 }
 
-function softmaxSample(scores: number[], temperature = 0.1): number {
-  const t = Math.max(1e-6, temperature);
-  // Subtract max for numerical stability
-  const maxScore = Math.max(...scores);
-  const exps = scores.map((s) => Math.exp((s - maxScore) / t));
-  const sum = exps.reduce((a, b) => a + b, 0);
-  let r = Math.random() * sum;
-  for (let i = 0; i < exps.length; i++) {
-    r -= exps[i];
-    if (r <= 0) return i;
-  }
-  return exps.length - 1;
+function l2normFloat32(v: number[]): Float32Array {
+  let magnitudeSquared = 0;
+  for (let i = 0; i < v.length; i++) magnitudeSquared += v[i] * v[i];
+  const magnitude = Math.sqrt(magnitudeSquared) || 1;
+  const out = new Float32Array(v.length);
+  for (let i = 0; i < v.length; i++) out[i] = v[i] / magnitude;
+  return out;
 }
 
-function addNoiseNorm(v: number[], scale = 0.01): number[] {
-  const out = v.slice();
-  for (let i = 0; i < out.length; i++) {
-    out[i] += (Math.random() * 2 - 1) * scale;
+function dot(a: Float32Array, b: ArrayLike<number>): number {
+  let value = 0;
+  for (let i = 0; i < a.length; i++) value += a[i] * b[i];
+  return value;
+}
+
+function softmaxSample(scores: Float64Array, count: number, temperature = 0.1): number {
+  const t = Math.max(1e-6, temperature);
+  let maxScore = -Infinity;
+  for (let i = 0; i < count; i++) maxScore = Math.max(maxScore, scores[i]);
+
+  let sum = 0;
+  for (let i = 0; i < count; i++) {
+    scores[i] = Math.exp((scores[i] - maxScore) / t);
+    sum += scores[i];
   }
-  return l2norm(out);
+
+  let sample = Math.random() * sum;
+  for (let i = 0; i < count; i++) {
+    sample -= scores[i];
+    if (sample <= 0) return i;
+  }
+  return count - 1;
+}
+
+function addNoiseNorm(v: number[], scale = 0.01): void {
+  let magnitudeSquared = 0;
+  for (let i = 0; i < v.length; i++) {
+    v[i] += (Math.random() * 2 - 1) * scale;
+    magnitudeSquared += v[i] * v[i];
+  }
+  const magnitude = Math.sqrt(magnitudeSquared) || 1;
+  for (let i = 0; i < v.length; i++) v[i] /= magnitude;
 }
 
 // ---------- Types ----------
@@ -104,16 +132,28 @@ export function invalidateLikedCache() {
 }
 
 export async function recommend(opts: RecommendOpts = {}) {
-  const {
+  let {
     seedUris = [],
     limit = 30,
-    annPool = 1000,
+    annPool = defaultAnnPool,
     maxPerArtist = 2,
     excludeUris = [],
     alphaNow = 0.85,
     clusterIds = [],
     excludeChristmas = true,
   } = opts;
+
+  limit = Number.isSafeInteger(limit) ? Math.max(1, Math.min(100, limit)) : 30;
+  annPool = Number.isSafeInteger(annPool) ? Math.max(100, annPool) : defaultAnnPool;
+  maxPerArtist = Number.isSafeInteger(maxPerArtist)
+    ? Math.max(1, Math.min(10, maxPerArtist))
+    : 2;
+  alphaNow = Number.isFinite(alphaNow) ? Math.max(0, Math.min(1, alphaNow)) : 0.85;
+  seedUris = [...new Set(seedUris.filter((uri) => typeof uri === "string" && uri.length <= 2048))]
+    .slice(0, maxSeedUris);
+  excludeUris = [...new Set(excludeUris.filter((uri) => typeof uri === "string" && uri.length <= 2048))]
+    .slice(0, 500);
+  clusterIds = [...new Set(clusterIds)].slice(0, 60);
 
   // 1. SESSION RESET: Keep tracking internal to the function call
   const artistCounts = new Map<string, number>();
@@ -128,16 +168,18 @@ export async function recommend(opts: RecommendOpts = {}) {
     return penaltyGlobal * globalCount + penaltyStreak * streakOver;
   }
 
-  // Set SQL seed for jitter consistency
-  await db.execute(sql`SELECT setseed(${Math.random()})`);
+  const poolSize = Math.min(maxPoolSize, Math.max(annPool, limit * minPoolPerTrack));
 
-  // 2. Efficiently fetch Skip Lists
+  // 2. Load skip lists and apply them in SQL so they do not consume
+  // candidate-pool slots that cannot be played.
   const [skippedArtists, skippedSongs] = await Promise.all([
     db.select({ name: skippedArtistsTable.name }).from(skippedArtistsTable),
     db.select({ uri: skippedSongsTable.uri }).from(skippedSongsTable)
   ]);
-  const skipArtistSet = new Set(skippedArtists.map(x => x.name));
-  const skipTrackSet = new Set(skippedSongs.map(x => x.uri));
+  const skipArtistNames = skippedArtists.map((artist) => artist.name);
+  const sqlExcludedUris = [
+    ...new Set([...excludeUris, ...seedUris, ...skippedSongs.map((track) => track.uri)].filter(Boolean))
+  ];
 
   // 3. Build Query Vector (q)
   if (!cachedLikedCentroid || Date.now() - lastCentroidUpdate > 1000 * 60 * 5) {
@@ -158,43 +200,64 @@ export async function recommend(opts: RecommendOpts = {}) {
   if (s && c) {
     q = l2norm(s.map((val, i) => alphaNow * val + (1 - alphaNow) * c[i]));
   } else {
-    q = s || c || (await getRandomEmbedding());
+    // Never let per-playlist drift mutate the shared liked-profile cache.
+    q = s ? s : c ? [...c] : await getRandomEmbedding();
   }
 
   if (!q) return [];
 
-  // 4. Fetch Candidates (ANN Pool)
-  const simFloor = 0.45;
-  const similarity = sql<number>`1 - (${cosineDistance(trackTable.embedding, q)})`;
-  
-  const pool = await db
-    .select({
-      uri: trackTable.uri,
-      name: trackTable.name,
-      artists: trackTable.artist,
-      album: trackTable.album,
-      embedding: trackTable.embedding,
-      similarity,
-    })
-    .from(trackTable)
-    .where(
-      and(
-        isNotNull(trackTable.embedding),
-        notInArray(trackTable.uri, [...excludeUris, ""]),
-        sql<boolean>`${similarity} > ${simFloor}`,
-        clusterIds.length > 0 ? inArray(trackTable.clusterId, clusterIds) : sql`TRUE`
+  // 4. Fetch the nearest candidates. A pure vector ordering is important:
+  // adding SQL jitter here prevents PostgreSQL from using the HNSW index.
+  // Centered same-cluster pairs average about 0.51 while cross-cluster pairs
+  // average near zero, so 0.20 keeps related candidates without collapsing
+  // the pool to near-duplicates.
+  const simFloor = 0.2;
+  const similarity = sql<number>`1 - (${cosineDistance(trackTable.embeddingCentered, q)})`;
+  const selectedClusterIds = clusterIds.filter(
+    (clusterId) => Number.isInteger(clusterId) && clusterId >= -1
+  );
+
+  const pool = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select set_config('hnsw.ef_search', ${String(poolSize)}, true)`
+    );
+    await tx.execute(
+      sql`select set_config('hnsw.iterative_scan', 'strict_order', true)`
+    );
+
+    return tx
+      .select({
+        uri: trackTable.uri,
+        name: trackTable.name,
+        artists: trackTable.artist,
+        album: trackTable.album,
+        embedding: trackTable.embeddingCentered,
+        similarity,
+      })
+      .from(trackTable)
+      .where(
+        and(
+          isNotNull(trackTable.embeddingCentered),
+          sqlExcludedUris.length > 0
+            ? notInArray(trackTable.uri, sqlExcludedUris)
+            : undefined,
+          skipArtistNames.length > 0
+            ? sql`not ${arrayOverlaps(trackTable.artist, skipArtistNames)}`
+            : undefined,
+          sql<boolean>`${similarity} > ${simFloor}`,
+          selectedClusterIds.length > 0
+            ? inArray(trackTable.clusterId, selectedClusterIds)
+            : undefined
+        )
       )
-    )
-    .orderBy(sql`(${similarity} + random() * 0.02) DESC`)
-    .limit(annPool);
+      .orderBy(cosineDistance(trackTable.embeddingCentered, q))
+      .limit(poolSize);
+  });
 
   // 5. Pre-normalize Pool and Filter Skips (Optimization)
   const poolN = pool
     .filter((p) => {
       if (!Array.isArray(p.embedding)) return false;
-      // Filter out skipped artists and tracks
-      if (skipTrackSet.has(p.uri)) return false;
-      if (p.artists.some(a => skipArtistSet.has(a))) return false;
 
       // Filter out Christmas tracks if requested
       if (excludeChristmas) {
@@ -207,50 +270,56 @@ export async function recommend(opts: RecommendOpts = {}) {
       return true;
     })
     .map((p) => ({
-      ...p,
-      normVec: l2norm(p.embedding as number[]),
-      maxSimToSelected: -1 // Track max similarity to any selected song for MMR
+      uri: p.uri,
+      name: p.name,
+      artists: p.artists,
+      album: p.album,
+      similarity: p.similarity,
+      normVec: l2normFloat32(p.embedding as number[]),
+      maxSimToSelected: -1
     }));
 
   const selected: typeof poolN = [];
+  const scores = new Float64Array(poolN.length);
+  const validIndices = new Int32Array(poolN.length);
 
   // 6. MMR Selection Loop (Optimized to O(N * K))
   while (selected.length < limit && poolN.length) {
-    const scores: number[] = [];
-    const validIndices: number[] = [];
+    let validCount = 0;
 
     for (let i = 0; i < poolN.length; i++) {
       const cand = poolN[i];
+      const currentArtistCount = cand.artists.reduce((max, a) =>
+        Math.max(max, artistCounts.get(a) ?? 0),
+        0
+      );
 
-      const currentArtistCount = cand.artists.reduce((max, a) => 
-        Math.max(max, artistCounts.get(a) ?? 0), 0);
-      
       if (currentArtistCount >= maxPerArtist) continue;
 
-      let rel = 0;
-      for (let k = 0; k < q.length; k++) rel += cand.normVec[k] * q[k];
-
-      const div = selected.length === 0 ? 0 : cand.maxSimToSelected;
-      const mmrScore = lambda * rel - (1 - lambda) * div;
+      const relevance = dot(cand.normVec, q);
+      const diversity = selected.length === 0 ? 0 : cand.maxSimToSelected;
+      const mmrScore = lambda * relevance - (1 - lambda) * diversity;
       const penalty = softArtistPenalty(cand.artists);
-      
-      scores.push(mmrScore - penalty);
-      validIndices.push(i);
+
+      scores[validCount] = mmrScore - penalty + Math.random() * scoreJitter;
+      validIndices[validCount] = i;
+      validCount++;
     }
 
-    if (validIndices.length === 0) break;
+    if (validCount === 0) break;
 
-    const selectedIdx = softmaxSample(scores, temperature);
+    const selectedIdx = softmaxSample(scores, validCount, temperature);
     const poolIdx = validIndices[selectedIdx];
     const chosen = poolN.splice(poolIdx, 1)[0];
 
     selected.push(chosen);
-    
+
     // Update maxSimToSelected for all remaining candidates in O(N)
     for (const cand of poolN) {
-      let sim = 0;
-      for (let k = 0; k < q.length; k++) sim += cand.normVec[k] * chosen.normVec[k];
-      if (sim > cand.maxSimToSelected) cand.maxSimToSelected = sim;
+      const similarityToChosen = dot(cand.normVec, chosen.normVec);
+      if (similarityToChosen > cand.maxSimToSelected) {
+        cand.maxSimToSelected = similarityToChosen;
+      }
     }
 
     for (const a of chosen.artists) {
@@ -265,7 +334,7 @@ export async function recommend(opts: RecommendOpts = {}) {
     for (let i = 0; i < q.length; i++) {
       q[i] = beta * q[i] + (1 - beta) * drift[i];
     }
-    q = addNoiseNorm(q, noiseScale);
+    addNoiseNorm(q, noiseScale);
   }
 
   return selected.map((t) => ({
@@ -424,23 +493,33 @@ export async function validateTrackUris(
 
 async function getLikedEmbeddings(): Promise<number[][]> {
   const rows = await db
-    .select({ embedding: trackTable.embedding })
+    .select({ embedding: trackTable.embeddingCentered })
     .from(likedSongsTable)
     .innerJoin(trackTable, eq(likedSongsTable.uri, trackTable.uri))
-    .where(isNotNull(trackTable.embedding));
+    .where(isNotNull(trackTable.embeddingCentered));
   return rows.map((r) => r.embedding as number[]);
 }
 
 async function getTracksByUris(uris: string[]) {
   if (!uris.length) return [];
-  return db.select().from(trackTable).where(inArray(trackTable.uri, uris));
+  return db
+    .select({
+      uri: trackTable.uri,
+      name: trackTable.name,
+      artists: trackTable.artist,
+      album: trackTable.album,
+      clusterId: trackTable.clusterId,
+      embedding: trackTable.embeddingCentered,
+    })
+    .from(trackTable)
+    .where(inArray(trackTable.uri, uris));
 }
 
 async function getRandomEmbedding(): Promise<number[] | null> {
   const [rnd] = await db
-    .select({ embedding: trackTable.embedding })
+    .select({ embedding: trackTable.embeddingCentered })
     .from(trackTable)
-    .where(isNotNull(trackTable.embedding))
+    .where(isNotNull(trackTable.embeddingCentered))
     .orderBy(sql`random()`)
     .limit(1);
   return rnd?.embedding ? l2norm(rnd.embedding) : null;

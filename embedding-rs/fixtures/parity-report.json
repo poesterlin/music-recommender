@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "reference": {
+    "openl3": "0.4.2",
+    "kapre": "0.4.1",
+    "librosa": "0.11.0",
+    "numpy": "2.4.6",
+    "model": "openl3_audio_mel256_music",
+    "embedding_size": 512
+  },
+  "model_artifact_sha256": "f50c60a338efa08b4d15688ec7757c460f56b23537fdadfc2b5b4aa3475ea2ec",
+  "results": {
+    "synthetic_frontend": {
+      "correlation": 0.9999999989,
+      "mean_absolute_error_db": 0.0003535,
+      "max_absolute_error_db": 0.0711
+    },
+    "short_fixture_set": {
+      "fixture_count": 21,
+      "minimum_cosine": 0.999999987716,
+      "maximum_absolute_error": 0.00258,
+      "average_absolute_error": 0.000039
+    },
+    "onnxruntime_short_fixture_set": {
+      "fixture_count": 21,
+      "minimum_cosine": 0.9999999877173669,
+      "maximum_absolute_error": 0.0025801658630371094,
+      "average_absolute_error": 0.00003891013671991892
+    },
+    "full_60_second_fixture": {
+      "path": "Jonas Blue/Together/01 - Always Be There.mp3",
+      "frames": 597,
+      "cosine": 0.9999999999762491,
+      "maximum_absolute_error": 0.00011348724365234375,
+      "mean_absolute_error": 0.000009387440513819456,
+      "python_cpu_runtime_seconds": 27.87,
+      "rust_cpu_runtime_seconds": 56.46,
+      "rust_slower_factor": 2.03,
+      "rust_sequential_frontend_runtime_seconds": 82.13,
+      "rust_parallel_frontend_runtime_seconds": 6.08
+    },
+    "onnxruntime_full_60_second_fixture": {
+      "path": "Jonas Blue/Together/01 - Always Be There.mp3",
+      "frames": 597,
+      "cosine": 0.9999999999762857,
+      "maximum_absolute_error": 0.00011348724365234375,
+      "mean_absolute_error": 0.000009384180884808302,
+      "cpu_runtime_seconds": 37.850,
+      "decode_seconds": 0.101638295,
+      "model_load_seconds": 0.089896517,
+      "inference_seconds": 37.65848466
+    }
+  },
+  "live_worker_dry_run": {
+    "performed": true,
+    "writes": false,
+    "preflight_model": "openl3-512",
+    "preflight_version": 1,
+    "preflight_track_count": 25910,
+    "known_unembedded_uris_embedded": 2
+  }
+}

@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { trackTable } from '$lib/server/schema';
-import { CLUSTER_NAMES } from '$lib/clusters';
+import { getActiveClusterMetadata } from '$lib/server/active-clusters';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -19,16 +19,16 @@ export const load: PageServerLoad = async () => {
 			.orderBy(sql`random()`)
 			.limit(400);
 
+		const { ids: clusterIds, names: clusterNames, activeRun } =
+			await getActiveClusterMetadata();
+
 		const seen = new Map<number, (typeof samples)[number]>();
 		for (const s of samples) {
 			if (s.clusterId !== null && !seen.has(s.clusterId)) seen.set(s.clusterId, s);
 		}
 		// Every known cluster gets a card — even without an indexed preview
 		// track, so numbering never has mystery gaps.
-		const clusters = Object.keys(CLUSTER_NAMES)
-			.map(Number)
-			.sort((a, b) => a - b)
-			.map((id) => {
+		const clusters = clusterIds.map((id) => {
 				const s = seen.get(id);
 				return {
 					clusterId: id,
@@ -38,8 +38,8 @@ export const load: PageServerLoad = async () => {
 					album: s?.album ?? ''
 				};
 			});
-		return { clusters };
+		return { clusters, clusterNames, activeRun };
 	} catch {
-		return { clusters: [] };
+		return { clusters: [], clusterNames: {}, activeRun: null };
 	}
 };
