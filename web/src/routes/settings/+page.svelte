@@ -28,21 +28,34 @@ else:
 
 os.environ["WORKER_URL"] = ${JSON.stringify(data.workerUrl)}
 os.environ["WORKER_TOKEN"] = getpass.getpass("Paste worker API key: ")
-completed = subprocess.run([
-    sys.executable,
-    "embeddings/worker.py",
-    "--source-mode",
-    "api",
-    "--duration",
-    "60",
-    "--dry-run",
-    "--limit",
-    "1",
-])
-if completed.returncode == 2:
+env = os.environ.copy()
+env["PYTHONUNBUFFERED"] = "1"
+process = subprocess.Popen(
+    [
+        sys.executable,
+        "embeddings/worker.py",
+        "--source-mode",
+        "api",
+        "--duration",
+        "60",
+        "--dry-run",
+        "--limit",
+        "1",
+    ],
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    bufsize=1,
+    env=env,
+)
+assert process.stdout is not None
+for line in process.stdout:
+    print(line, end="", flush=True)
+returncode = process.wait()
+if returncode == 2:
     print("Dry run completed; pending tracks remain (expected exit code 2).")
-elif completed.returncode != 0:
-    raise subprocess.CalledProcessError(completed.returncode, completed.args)`);
+elif returncode != 0:
+    raise subprocess.CalledProcessError(returncode, process.args)`);
 
 	async function copyText(value: string, kind: 'secret' | 'notebook') {
 		try {
@@ -195,7 +208,7 @@ elif completed.returncode != 0:
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h2 class="text-lg font-bold">Colab / Jupyter worker cell</h2>
-			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Python 3.11 is recommended. On Python 3.12+, the cell applies a packaging-only compatibility patch for the pinned OpenL3/resampy source releases; model code and versions remain unchanged. The cell runs a one-track dry run by default; exit code 2 is expected when unembedded tracks remain. Remove `--dry-run` and `--limit 1` only when you are ready to write embeddings.</p>
+			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Python 3.11 is recommended. On Python 3.12+, the cell applies a packaging-only compatibility patch for the pinned OpenL3/resampy source releases; model code and versions remain unchanged. Worker JSON events are streamed line-by-line into the cell output. The cell runs a one-track dry run by default; exit code 2 is expected when unembedded tracks remain. Remove `--dry-run` and `--limit 1` only when you are ready to write embeddings.</p>
 		</div>
 		<div class="flex gap-2">
 			<button
