@@ -28,7 +28,7 @@ else:
 
 os.environ["WORKER_URL"] = ${JSON.stringify(data.workerUrl)}
 os.environ["WORKER_TOKEN"] = getpass.getpass("Paste worker API key: ")
-subprocess.run([
+completed = subprocess.run([
     sys.executable,
     "embeddings/worker.py",
     "--source-mode",
@@ -38,7 +38,11 @@ subprocess.run([
     "--dry-run",
     "--limit",
     "1",
-], check=True)`);
+])
+if completed.returncode == 2:
+    print("Dry run completed; pending tracks remain (expected exit code 2).")
+elif completed.returncode != 0:
+    raise subprocess.CalledProcessError(completed.returncode, completed.args)`);
 
 	async function copyText(value: string, kind: 'secret' | 'notebook') {
 		try {
@@ -191,7 +195,7 @@ subprocess.run([
 	<div class="flex flex-wrap items-start justify-between gap-3">
 		<div>
 			<h2 class="text-lg font-bold">Colab / Jupyter worker cell</h2>
-			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Python 3.11 is recommended. On Python 3.12+, the cell applies a packaging-only compatibility patch for the pinned OpenL3/resampy source releases; model code and versions remain unchanged. The cell runs a one-track dry run by default. Remove `--dry-run` and `--limit 1` only when you are ready to write embeddings.</p>
+			<p class="mt-1 max-w-2xl text-sm text-ink-soft">Create a Worker key above, copy this cell into a notebook, and paste the key when prompted. Python 3.11 is recommended. On Python 3.12+, the cell applies a packaging-only compatibility patch for the pinned OpenL3/resampy source releases; model code and versions remain unchanged. The cell runs a one-track dry run by default; exit code 2 is expected when unembedded tracks remain. Remove `--dry-run` and `--limit 1` only when you are ready to write embeddings.</p>
 		</div>
 		<div class="flex gap-2">
 			<button
