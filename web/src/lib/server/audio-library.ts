@@ -35,7 +35,11 @@ function refreshSeconds(): number {
 
 function normalized(value: unknown): string {
 	if (typeof value !== 'string') return '';
+	// Metadata and local filenames often differ only by diacritics (for example,
+	// "Obtener un sí" versus "Obtener un si").
 	return value
+		.normalize('NFKD')
+		.replace(/\p{M}/gu, '')
 		.normalize('NFKC')
 		.replace(/\u2026/g, '...')
 		.replace(/[^\p{L}\p{N}]+/gu, ' ')
