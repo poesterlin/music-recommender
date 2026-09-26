@@ -14,6 +14,7 @@
 		embedded: boolean;
 		skipped: boolean;
 		createdAt: string | null;
+		similarity: number | null;
 	};
 	type Group = {
 		key: string;
@@ -23,6 +24,8 @@
 		keeper: Copy;
 		victims: Copy[];
 		clusters: number[];
+		similarity: number | null;
+		mixedAudio: boolean;
 	};
 	type Summary = {
 		groups: Group[];
@@ -30,7 +33,7 @@
 		duplicateCount: number;
 		alreadySkipped: number;
 		pendingCount: number;
-		losslyEmbeddedKept: boolean;
+		mixedAudioGroups: number;
 	};
 
 	let summary = $state<Summary | null>(null);
@@ -43,6 +46,12 @@
 		loading = true;
 		const { ok, data } = await api<Summary>('/api/duplicates?limit=200');
 		summary = ok ? data : null;
+		// Preselect only the unambiguous duplicates. Groups whose copies turn
+		// out to be different recordings are a judgement call and start
+		// unselected so a bulk prune cannot quietly drop real tracks.
+		if (ok) {
+			selection = new SvelteSet(data.groups.filter((g) => !g.mixedAudio).map((g) => g.key));
+		}
 		loading = false;
 	}
 
@@ -50,10 +59,9 @@
 		void load();
 	});
 
+	const selectable = $derived((summary?.groups ?? []).filter((g) => !g.mixedAudio));
 	const allSelected = $derived(
-		summary !== null &&
-			summary.groups.length > 0 &&
-			summary.groups.every((g) => selection.has(g.key))
+		selectable.length > 0 && selectable.every((g) => selection.has(g.key))
 	);
 
 	function toggle(key: string) {
@@ -67,9 +75,7 @@
 	}
 
 	function selectAll(on: boolean) {
-		selection = on
-			? new SvelteSet((summary?.groups ?? []).map((g) => g.key))
-			: new SvelteSet<string>();
+		selection = on ? new SvelteSet(selectable.map((g) => g.key)) : new SvelteSet<string>();
 	}
 
 	async function act(action: 'skip' | 'restore') {
@@ -176,12 +182,20 @@
 			</div>
 		</div>
 
-		{#if !summary.losslyEmbeddedKept}
+		{#if summary.mixedAudioGroups > 0}
 			<p class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
 				<IconAlertTriangle size={16} class="mt-0.5 shrink-0" />
-				Some duplicates carry an embedding the kept copy does not. Skipping them discards that work.
+				<span>
+					{summary.mixedAudioGroups} of {summary.groupCount.toLocaleString()} groups share a name and
+					album but sound different, so they are not true duplicates. They are left unselected — review
+					them before pruning.
+				</span>
 			</p>
 		{/if}
+		<p class="text-ink-soft mt-4 text-sm">
+			Pruning keeps one copy per group and folds the rest of the group's embeddings into it, so no
+			embedding work is thrown away.
+		</p>
 
 		<p class="text-faded mt-4 text-xs">
 			Showing the {summary.groups.length.toLocaleString()} largest of
@@ -215,6 +229,11 @@
 						{:else}
 							<p class="text-faded">cluster {group.clusters[0] ?? '—'}</p>
 						{/if}
+						{#if group.mixedAudio}
+							<p class="font-bold text-amber-700">different audio</p>
+						{:else if group.similarity !== null}
+							<p class="text-faded">match {group.similarity.toFixed(3)}</p>
+						{/if}
 					</div>
 					<span class="text-faded text-xs tabular-nums"
 						>{group.victims.filter((v) => v.skipped).length}/{group.victims.length} skipped</span
@@ -243,6 +262,7 @@
 								<p class="text-faded mt-0.5 truncate text-xs">
 									{victim.uri.replace('library://track/', '#')}
 									{#if victim.embedded}· embedded{/if}
+									{#if victim.similarity !== null}· match {victim.similarity.toFixed(3)}{/if}
 								</p>
 							</div>
 						{/each}
