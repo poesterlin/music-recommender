@@ -13,7 +13,9 @@ export const GET: RequestHandler = async ({ url }) => {
 			album: trackTable.album
 		})
 		.from(trackTable)
-		.where(sql`${trackTable.clusterId} = ${clusterId}`)
+		.where(
+			sql`${trackTable.clusterId} = ${clusterId} AND COALESCE(${trackTable.skip}, FALSE) = FALSE`
+		)
 		.orderBy(sql`random()`)
 		.limit(30);
 
