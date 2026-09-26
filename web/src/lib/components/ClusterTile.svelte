@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IconPencil, IconPlayerPlayFilled } from '@tabler/icons-svelte';
+	import { IconMusic, IconPencil, IconPlayerPlayFilled } from '@tabler/icons-svelte';
 	import { coverUrl } from '$lib/cover-image';
 
 	let {
@@ -86,7 +86,8 @@
 		<p class="font-display text-sm leading-snug font-black">{name}</p>
 		<div class="mt-auto flex items-center justify-between gap-2 pt-1.5">
 			{#if trackCount}
-				<span class="text-faded text-[11px] tabular-nums">
+				<span class="text-faded inline-flex items-center gap-1 text-[11px] tabular-nums">
+					<IconMusic size={12} />
 					{new Intl.NumberFormat().format(trackCount)}
 				</span>
 			{:else}
