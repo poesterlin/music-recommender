@@ -48,16 +48,24 @@
 		if (confirmText && !confirm(confirmText)) return;
 		running = label;
 		const { ok, data: json } = await post<{
-			count?: number;
+			added?: number;
+			existing?: number;
+			fetched?: number;
+			failed?: number;
 			indexed?: number;
 			assigned?: number;
 		}>(path);
 		running = null;
 		if (ok) {
-			const detail = [json.count, json.indexed, json.assigned]
-				.filter((n) => n !== undefined)
-				.join(' / ');
-			toastStore.show(`${label} finished${detail ? ` (${detail})` : ''}`);
+			// Report what changed, not how big the library is. A routine run
+			// should read as "nothing new", not as a 52k-track import.
+			const parts: string[] = [];
+			if (json.added !== undefined) {
+				parts.push(json.added > 0 ? `${json.added} new` : 'no new tracks');
+			}
+			if (json.indexed !== undefined) parts.push(`${json.indexed} indexed`);
+			if (json.assigned !== undefined) parts.push(`${json.assigned} sorted`);
+			toastStore.show(`${label} finished${parts.length ? ` (${parts.join(', ')})` : ''}`);
 		} else {
 			toastStore.show(`${label} failed`);
 		}
