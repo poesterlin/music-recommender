@@ -29,6 +29,21 @@ export type ActiveClusterMetadata = {
 	} | null;
 };
 
+/**
+ * True when a stored display_name was chosen by a person.
+ *
+ * A clustering run starts by carrying the previous generation's names forward
+ * through the match script, which appends a provenance marker. Those are not
+ * human labels and must not be presented as if they were — the numbering they
+ * were written against can shift between runs. Anything carrying the marker,
+ * or left blank as an explicit reset, is treated as unnamed.
+ */
+export function isHumanNamed(displayName: string | null | undefined): boolean {
+	const value = (displayName ?? '').trim();
+	if (!value) return false;
+	return !/\s·\sold\s+#\d+(\s\(\d+%\))?$/.test(value);
+}
+
 export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata> {
 	let activeRun: ActiveClusterMetadata['activeRun'] = null;
 	try {
@@ -98,15 +113,14 @@ export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata>
 				.map(Number)
 				.filter((id) => Number.isInteger(id))
 				.sort((a, b) => a - b);
-	// An empty display_name is an explicit "reset", so a run-backed cluster
-	// falls back to the generic label rather than to the legacy hand-written
-	// map. The legacy map is only correct for a pre-run generation whose
-	// numbering it was written against; reusing it after a re-cluster silently
-	// mislabels every cluster.
+	// A carried-over or blank name falls back to the generic label. The legacy
+	// hand-written map is only correct for a pre-run generation whose numbering
+	// it was written against; reusing it after a re-cluster silently mislabels
+	// every cluster.
 	const names = Object.fromEntries(
 		ids.map((id) => {
 			const stored = matches[id]?.displayName ?? '';
-			if (stored.trim()) return [id, stored];
+			if (isHumanNamed(stored)) return [id, stored.trim()];
 			if (activeRun) return [id, `Cluster ${id}`];
 			return [id, CLUSTER_NAMES[id] ?? `Cluster ${id}`];
 		})

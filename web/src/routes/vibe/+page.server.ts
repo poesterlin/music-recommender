@@ -1,7 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { trackTable } from '$lib/server/schema';
-import { getActiveClusterMetadata } from '$lib/server/active-clusters';
+import { getActiveClusterMetadata, isHumanNamed } from '$lib/server/active-clusters';
 import { getActiveSchedule, getVibeClusterIds, listSchedules } from '$lib/server/vibe-store';
 import { getClusterCovers, getClusterTrackCounts } from '$lib/server/cover-image';
 import type { PageServerLoad } from './$types';
@@ -53,7 +53,7 @@ export const load: PageServerLoad = async () => {
 		// Only clusters with a human-supplied name are flagged as named, so the
 		// tile badge means "someone chose this" rather than "a name exists".
 		namedIds: Object.values(clusterMetadata.matches)
-			.filter((m) => m.displayName.trim().length > 0)
+			.filter((m) => isHumanNamed(m.displayName))
 			.map((m) => m.clusterId),
 		trackCounts: counts,
 		covers,

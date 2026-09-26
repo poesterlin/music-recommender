@@ -34,19 +34,23 @@
 	let saving = $state(false);
 	let playing = $state(false);
 	let draft = $state(currentName);
-	let loaded = $state<string | null>(null);
+	let named = $state(false);
 
 	$effect(() => {
 		const id = clusterId;
-		loaded = null;
+		named = false;
 		loading = true;
 		void (async () => {
-			const { ok, data } = await api<{ evidence: Evidence; displayName: string | null }>(
-				`/api/clusters/${id}/evidence`
-			);
+			const { ok, data } = await api<{
+				evidence: Evidence;
+				displayName: string | null;
+				humanNamed: boolean;
+			}>(`/api/clusters/${id}/evidence`);
 			evidence = ok ? data.evidence : null;
-			draft = (ok && data.displayName?.trim()) || currentName;
-			loaded = ok ? (data.displayName ?? '') : '';
+			// Only prefill from a name a person actually chose; a carried-over
+			// legacy name would silently become the new label on save.
+			draft = (ok && data.humanNamed && data.displayName?.trim()) || currentName;
+			named = ok ? data.humanNamed : false;
 			loading = false;
 		})();
 	});
@@ -75,6 +79,7 @@
 		});
 		saving = false;
 		if (ok) {
+			named = true;
 			onnamed(clusterId, name);
 			toastStore.show(`Cluster #${clusterId} named`);
 		}
@@ -89,6 +94,7 @@
 		});
 		saving = false;
 		if (ok) {
+			named = false;
 			onnamed(clusterId, '');
 			toastStore.show(`Cluster #${clusterId} reset`);
 		}
@@ -155,7 +161,7 @@
 						<IconCheck size={15} />
 						{saving ? 'Saving…' : 'Save'}
 					</button>
-					{#if loaded}
+					{#if named}
 						<button
 							type="button"
 							class="text-ink-soft hover:bg-ink/5 rounded-lg px-3 py-2 text-sm font-bold transition"
@@ -164,8 +170,6 @@
 						>
 							Reset
 						</button>
-					{/if}
-					{#if loaded}
 						<span class="text-faded text-xs">named in this run</span>
 					{:else}
 						<span class="text-faded text-xs">not named yet</span>
