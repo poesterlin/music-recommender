@@ -216,7 +216,7 @@ function victimUris(keys: string[]) {
 		)
 		SELECT uri FROM numbered
 		WHERE rn > 1
-			AND (gname || '|' || gartist || '|' || galbum) = ANY(${keys}::text[])
+			AND (gname || '|' || gartist || '|' || galbum) IN ${keys}
 	`;
 }
 
@@ -263,7 +263,7 @@ export async function applyDuplicateSkip(keys: string[]): Promise<number> {
 					embedding, embedding IS NOT NULL AS embedded
 				FROM track
 			) n
-			WHERE (n.gname || '|' || n.gartist || '|' || n.galbum) = ANY(${keys}::text[])
+			WHERE (n.gname || '|' || n.gartist || '|' || n.galbum) IN ${keys}
 		),
 		keepers AS (
 			SELECT DISTINCT ON (gname || '|' || gartist || '|' || galbum)

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
-	import { IconAlertTriangle, IconCopy, IconRestore } from '@tabler/icons-svelte';
+	import { IconAlertTriangle, IconBolt, IconCopy, IconRestore } from '@tabler/icons-svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api } from '$lib/api';
@@ -42,17 +42,83 @@
 	let expanded = new SvelteSet<string>();
 	let selection = new SvelteSet<string>();
 
+	// Bulk state. The plan is fetched up front so the confirmation quotes
+	// exact numbers rather than an estimate.
+	let bulk = $state<{ groups: number; copies: number } | null>(null);
+	let bulkProgress = $state<{ affected: number; done: boolean } | null>(null);
+
 	async function load() {
 		loading = true;
-		const { ok, data } = await api<Summary>('/api/duplicates?limit=200');
-		summary = ok ? data : null;
+		const [scan, plan] = await Promise.all([
+			api<Summary>('/api/duplicates?limit=200'),
+			api<{ groups: number; copies: number }>('/api/duplicates/bulk', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'plan' })
+			})
+		]);
+		summary = scan.ok ? scan.data : null;
+		bulk = plan.ok ? plan.data : null;
 		// Preselect only the unambiguous duplicates. Groups whose copies turn
 		// out to be different recordings are a judgement call and start
 		// unselected so a bulk prune cannot quietly drop real tracks.
-		if (ok) {
-			selection = new SvelteSet(data.groups.filter((g) => !g.mixedAudio).map((g) => g.key));
+		if (scan.ok) {
+			selection = new SvelteSet(scan.data.groups.filter((g) => !g.mixedAudio).map((g) => g.key));
 		}
 		loading = false;
+	}
+
+	/**
+	 * Prune every unambiguous group in bounded server-side batches.
+	 *
+	 * Paging 200 groups at a time through the browser would take over a hundred
+	 * rounds on a library this size, so the server derives the keeper and
+	 * victim sets itself. Each call is idempotent, so a run that is interrupted
+	 * can simply be repeated.
+	 */
+	async function pruneAllSafe() {
+		if (!bulk) return;
+		if (
+			!confirm(
+				`Prune ${bulk.copies.toLocaleString()} duplicate copies across ` +
+					`${bulk.groups.toLocaleString()} groups?\n\n` +
+					`Only groups whose copies are the same recording are included. ` +
+					`Each group's embeddings are folded into one copy, which is then ` +
+					`skipped. This can be undone from the Restore button.`
+			)
+		) {
+			return;
+		}
+		working = true;
+		bulkProgress = { affected: 0, done: false };
+		let guard = 0;
+		while (!bulkProgress.done && guard < 200) {
+			guard += 1;
+			const { ok, data } = await api<{
+				affected?: number;
+				done?: boolean;
+				error?: string;
+			}>('/api/duplicates/bulk', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action: 'prune', limit: 4000 })
+			});
+			if (!ok) {
+				toastStore.show(data.error ?? 'Bulk prune failed');
+				break;
+			}
+			bulkProgress = {
+				affected: (bulkProgress?.affected ?? 0) + (data.affected ?? 0),
+				done: data.done !== false
+			};
+		}
+		working = false;
+		const total = bulkProgress?.affected ?? 0;
+		if (bulkProgress?.done) {
+			toastStore.show(`Pruned ${total.toLocaleString()} duplicate copies`);
+			bulkProgress = null;
+			await load();
+		}
 	}
 
 	$effect(() => {
@@ -157,6 +223,18 @@
 				</div>
 			</div>
 			<div class="flex flex-wrap gap-2">
+				{#if bulk && bulk.copies > 0}
+					<button
+						class="bg-moss text-cream hover:bg-moss/90 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:opacity-50"
+						disabled={working}
+						onclick={pruneAllSafe}
+					>
+						<IconBolt size={15} />
+						{bulkProgress
+							? `Pruning… ${bulkProgress.affected.toLocaleString()} skipped`
+							: `Prune all ${bulk.copies.toLocaleString()} safe copies`}
+					</button>
+				{/if}
 				<button
 					class="border-ink/20 text-ink-soft hover:bg-ink/5 rounded-lg px-3 py-2 text-sm font-bold transition"
 					onclick={() => selectAll(!allSelected)}
@@ -194,7 +272,8 @@
 		{/if}
 		<p class="text-ink-soft mt-4 text-sm">
 			Pruning keeps one copy per group and folds the rest of the group's embeddings into it, so no
-			embedding work is thrown away.
+			embedding work is thrown away. Use <b>Prune all</b> to clear every safe group at once, or select
+			groups below to prune them individually.
 		</p>
 
 		<p class="text-faded mt-4 text-xs">

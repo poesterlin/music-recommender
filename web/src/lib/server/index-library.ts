@@ -116,7 +116,7 @@ async function countExisting(rows: Staged[]): Promise<number> {
 	const existing = (await db.execute(sql`
 		SELECT count(*)::int AS n
 		FROM track
-		WHERE uri = ANY(${uris}::text[])
+		WHERE uri IN ${uris}
 	`)) as unknown as Array<{ n: number }>;
 	return Number(existing[0]?.n ?? 0);
 }
