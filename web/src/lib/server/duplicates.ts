@@ -78,6 +78,12 @@ export const SAME_RECORDING_THRESHOLD = 0.99;
  * The keeper is the copy that already has an embedding, so the expensive
  * OpenL3 work survives. Remaining ties break on created_at, then uri, which
  * makes the result stable across runs.
+ *
+ * The scan deliberately does not restrict to clustered tracks. Roughly a third
+ * of the duplicate population is still unclustered because it is waiting on the
+ * analyzer, and those copies would otherwise stay invisible and unpruned, then
+ * be assigned to a cluster after the cleanup had already run. Keeper selection
+ * does not need a cluster, so nothing is lost by including them.
  */
 const GROUP_SQL = sql`
 	WITH grouped AS (
@@ -89,7 +95,6 @@ const GROUP_SQL = sql`
 			embedding, embedding_centered,
 			embedding IS NOT NULL AS embedded
 		FROM track
-		WHERE cluster_id IS NOT NULL AND cluster_id >= 0
 	),
 	numbered AS (
 		SELECT g.*,
@@ -200,7 +205,7 @@ function victimUris(keys: string[]) {
 				lower(btrim(name)) AS gname, lower(artist[1]) AS gartist,
 				lower(btrim(album)) AS galbum, uri,
 				embedding IS NOT NULL AS embedded, created_at
-			FROM track WHERE cluster_id IS NOT NULL AND cluster_id >= 0
+			FROM track
 		),
 		numbered AS (
 			SELECT *, row_number() OVER (
@@ -257,7 +262,6 @@ export async function applyDuplicateSkip(keys: string[]): Promise<number> {
 					lower(btrim(album)) AS galbum, uri, created_at,
 					embedding, embedding IS NOT NULL AS embedded
 				FROM track
-				WHERE cluster_id IS NOT NULL AND cluster_id >= 0
 			) n
 			WHERE (n.gname || '|' || n.gartist || '|' || n.galbum) = ANY(${keys}::text[])
 		),

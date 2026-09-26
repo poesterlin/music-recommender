@@ -35,6 +35,9 @@ type Row = {
  * far better summary than the cluster as a whole, which is diluted by
  * boundary cases.
  *
+ * Pruned duplicates are excluded, so a name is never chosen from evidence that
+ * is about to disappear.
+ *
  * Sampled so this stays cheap enough for an on-demand request over 29k
  * vectors; the API is single-user and read-only.
  */
@@ -48,7 +51,9 @@ export async function getClusterEvidence(
 		const countRows = (await db.execute(sql`
 			SELECT count(*)::bigint AS n
 			FROM track
-			WHERE cluster_id = ${clusterId} AND embedding_centered IS NOT NULL
+			WHERE cluster_id = ${clusterId}
+				AND embedding_centered IS NOT NULL
+				AND COALESCE(skip, FALSE) = FALSE
 		`)) as unknown as Array<{ n: number }>;
 		const trackCount = Number(countRows[0]?.n ?? 0);
 		if (trackCount === 0) return null;
@@ -63,7 +68,9 @@ export async function getClusterEvidence(
 			FROM (
 				SELECT cluster_id, uri, name, artist, album_image, embedding_centered
 				FROM track
-				WHERE cluster_id = ${clusterId} AND embedding_centered IS NOT NULL
+				WHERE cluster_id = ${clusterId}
+					AND embedding_centered IS NOT NULL
+					AND COALESCE(skip, FALSE) = FALSE
 				ORDER BY random()
 				LIMIT ${sampleSize}
 			) t

@@ -279,6 +279,13 @@ Groups whose copies are not the same recording are flagged and left unselected.
 A name and album can point at genuinely different audio, so those are a
 judgement call rather than a duplicate.
 
+The scan covers clustered and unclustered tracks alike. Restricting it to
+clustered rows hid roughly two thirds of the duplicate population, which is
+waiting on the analyzer and would otherwise be pulled into a cluster *after* a
+cleanup had already run. Keeper selection does not need a cluster, so nothing is
+lost by including them. Pruning an unembedded duplicate also stops the worker
+spending GPU time on it later.
+
 `track.skip` is the maintenance flag. It is honoured by the embedding worker,
 the worker audio endpoint, recommendation and similar-track queries, cluster
 assignment, centroid backfill, and the cluster sample endpoint. The separate
