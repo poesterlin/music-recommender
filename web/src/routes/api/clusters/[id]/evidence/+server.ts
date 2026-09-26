@@ -1,4 +1,5 @@
 import { getClusterEvidence } from '$lib/server/cluster-evidence';
+import { isHumanNamed } from '$lib/server/active-clusters';
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import type { RequestHandler } from './$types';
@@ -44,5 +45,10 @@ export const GET: RequestHandler = async ({ params }) => {
 		}
 	}
 
-	return Response.json({ evidence, runId, displayName });
+	return Response.json({
+		evidence,
+		runId,
+		displayName,
+		humanNamed: isHumanNamed(displayName)
+	});
 };
