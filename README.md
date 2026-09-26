@@ -268,8 +268,27 @@ track appears several times and inflates the clusters it lands in.
 artist, and album name. Version variants carry their marker in the track name
 (`Live at…`, `Remastered`), so they form separate groups and are never touched.
 The copy that already has an embedding is kept so the OpenL3 work survives, and
-the rest are marked skipped, which excludes them from recommendations,
-clustering, and the worker.
+the rest are marked skipped.
+
+Pruning a group averages every copy's embedding into the one that is kept, so
+the GPU work behind a duplicate is absorbed rather than discarded. Writing the
+merged vector fires the centering trigger, so the derived vector is recomputed
+and cannot drift.
+
+Groups whose copies are not the same recording are flagged and left unselected.
+A name and album can point at genuinely different audio, so those are a
+judgement call rather than a duplicate.
+
+`track.skip` is the maintenance flag. It is honoured by the embedding worker,
+the worker audio endpoint, recommendation and similar-track queries, cluster
+assignment, centroid backfill, and the cluster sample endpoint. The separate
+`skipped_songs` table is the listener's own "don't play this" list, and both are
+respected.
+
+A skipped track keeps its existing `cluster_id`. Pruning changes what is
+recommended and what the next clustering run sees; it does not retroactively
+re-assign tracks that were already clustered. Re-run the full tidy-up
+afterwards to re-cluster on the pruned set.
 
 The scan and the cleanup derive their keeper from the same ordering, so they
 cannot disagree. Skipped rows are not touched by the indexing upsert, so

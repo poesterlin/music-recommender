@@ -256,7 +256,9 @@ export async function backfillCentroidsFromAssignments(): Promise<Centroid[]> {
 		.where(
 			and(
 				isNotNull(trackTable.embeddingCentered),
-				eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION)
+				eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION),
+				// A pruned duplicate should not drag its centroid.
+				sql`COALESCE(${trackTable.skip}, FALSE) = FALSE`
 			)
 		);
 
@@ -324,6 +326,7 @@ export async function assignNewTracksToClusters(centroids?: Centroid[]): Promise
 		.select({ uri: trackTable.uri, embedding: trackTable.embeddingCentered })
 		.from(trackTable).where(sql`${trackTable.embeddingCentered} IS NOT NULL
       AND ${trackTable.embeddingSpaceVersion} = ${EMBEDDING_SPACE_VERSION}
+      AND COALESCE(${trackTable.skip}, FALSE) = FALSE
       AND (${trackTable.clusterId} = -1 OR ${trackTable.clusterId} IS NULL)`);
 
 	if (!pending.length) {
@@ -363,14 +366,16 @@ async function runFullClustering(k = 60) {
 			embedding: trackTable.embeddingCentered
 		})
 		.from(trackTable)
-		.limit(100000)
-		.orderBy(sql`random()`)
 		.where(
 			and(
 				isNotNull(trackTable.embeddingCentered),
-				eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION)
+				eq(trackTable.embeddingSpaceVersion, EMBEDDING_SPACE_VERSION),
+				// Pruned duplicates must not bias the centroids or claim a slot.
+				sql`COALESCE(${trackTable.skip}, FALSE) = FALSE`
 			)
-		);
+		)
+		.orderBy(sql`random()`)
+		.limit(100000);
 	const clusteringResult = clusterLibrary(allTracks, k);
 
 	console.log('Cluster Seeds:');

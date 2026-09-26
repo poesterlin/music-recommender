@@ -171,7 +171,7 @@ async function findRandomSongOfArtist(artist: string, limit: number) {
 			similarity: sql<number>`1`
 		})
 		.from(trackTable)
-		.where(eq(trackTable.artist, [artist]))
+		.where(and(eq(trackTable.artist, [artist]), sql`COALESCE(${trackTable.skip}, FALSE) = FALSE`))
 		.orderBy(() => sql`random()`)
 		.limit(limit);
 

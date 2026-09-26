@@ -246,6 +246,12 @@ export async function recommend(opts: RecommendOpts = {}) {
 			.where(
 				and(
 					isNotNull(trackTable.embeddingCentered),
+					// `track.skip` is the maintenance flag set by duplicate cleanup
+					// and other library pruning. `skippedSongsTable` is the
+					// listener's own "don't play this" list, which is a different
+					// intent. Both must be honoured, or pruned tracks keep coming
+					// back in recommendations.
+					sql`COALESCE(${trackTable.skip}, FALSE) = FALSE`,
 					sqlExcludedUris.length > 0 ? notInArray(trackTable.uri, sqlExcludedUris) : undefined,
 					skipArtistNames.length > 0
 						? sql`not ${arrayOverlaps(trackTable.artist, skipArtistNames)}`
@@ -528,7 +534,9 @@ async function getRandomEmbedding(): Promise<number[] | null> {
 	const [rnd] = await db
 		.select({ embedding: trackTable.embeddingCentered })
 		.from(trackTable)
-		.where(isNotNull(trackTable.embeddingCentered))
+		.where(
+			and(isNotNull(trackTable.embeddingCentered), sql`COALESCE(${trackTable.skip}, FALSE) = FALSE`)
+		)
 		.orderBy(sql`random()`)
 		.limit(1);
 	return rnd?.embedding ? l2norm(rnd.embedding) : null;
