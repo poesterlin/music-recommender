@@ -89,6 +89,12 @@
 <div class="mb-6 flex flex-wrap gap-2">
 	<a
 		class="border-ink/15 hover:bg-ink/5 rounded-xl border bg-white px-4 py-2 text-sm font-bold"
+		href="/manage/duplicates"
+	>
+		Duplicates
+	</a>
+	<a
+		class="border-ink/15 hover:bg-ink/5 rounded-xl border bg-white px-4 py-2 text-sm font-bold"
 		href="/manage/access"
 	>
 		API keys

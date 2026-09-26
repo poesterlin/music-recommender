@@ -258,6 +258,24 @@ Cover art is fetched from Music Assistant during indexing and stored as an
 imageproxy path on `track.album_image`. The browser never contacts the media
 server directly; images are proxied through `/api/cover`.
 
+## Duplicates
+
+Music Assistant can hold more than one library entry for a single real album,
+with adjacent ids for the same album name. Indexing stores both, so the same
+track appears several times and inflates the clusters it lands in.
+
+**Manage → Duplicates** lists groups sharing a normalised track name, first
+artist, and album name. Version variants carry their marker in the track name
+(`Live at…`, `Remastered`), so they form separate groups and are never touched.
+The copy that already has an embedding is kept so the OpenL3 work survives, and
+the rest are marked skipped, which excludes them from recommendations,
+clustering, and the worker.
+
+The scan and the cleanup derive their keeper from the same ordering, so they
+cannot disagree. Skipped rows are not touched by the indexing upsert, so
+re-indexing does not undo a cleanup. Both actions are reversible from the same
+page.
+
 ## Troubleshooting
 
 - `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with
