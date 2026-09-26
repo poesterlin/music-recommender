@@ -3,6 +3,7 @@ import { db } from '$lib/server/db';
 import { trackTable } from '$lib/server/schema';
 import { getActiveClusterMetadata } from '$lib/server/active-clusters';
 import { getActiveSchedule, getVibeClusterIds, listSchedules } from '$lib/server/vibe-store';
+import { getClusterCovers, getClusterTrackCounts } from '$lib/server/cover-image';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -36,13 +37,26 @@ export const load: PageServerLoad = async () => {
 		}
 	}
 
+	const [counts, covers] = await Promise.all([
+		getClusterTrackCounts().catch(() => ({}) as Record<number, number>),
+		getClusterCovers().catch(
+			() => ({}) as Record<number, { primary: string; secondary: string | null }>
+		)
+	]);
+
 	return {
 		vibeClusterIds: clusterIds,
 		vibeSchedules: schedules,
 		activeSchedule,
 		availableClusterIds: clusterMetadata.ids,
 		clusterNames: clusterMetadata.names,
-		// Every known cluster gets a card, so numbering never has mystery gaps.
+		// Only clusters with a human-supplied name are flagged as named, so the
+		// tile badge means "someone chose this" rather than "a name exists".
+		namedIds: Object.values(clusterMetadata.matches)
+			.filter((m) => m.displayName.trim().length > 0)
+			.map((m) => m.clusterId),
+		trackCounts: counts,
+		covers,
 		clusters: clusterMetadata.ids.map((id) => {
 			const sample = seen.get(id);
 			return {

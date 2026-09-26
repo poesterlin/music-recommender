@@ -55,6 +55,24 @@ function splitArtists(artistName: string): string[] {
 	return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
+/**
+ * Keep only the imageproxy path from a Music Assistant cover URL.
+ *
+ * The upstream host is a private LAN address, so storing the full URL would
+ * bake deployment-specific detail into the database and break whenever the
+ * host changes. The path is stable; the host is re-applied at render time.
+ */
+function imageProxyPath(image: string | undefined): string | null {
+	if (!image) return null;
+	try {
+		const url = new URL(image);
+		if (!url.pathname.startsWith('/imageproxy/')) return null;
+		return url.pathname;
+	} catch {
+		return null;
+	}
+}
+
 export async function indexLibrary(): Promise<number> {
 	const env = process.env;
 
@@ -123,7 +141,8 @@ export async function indexLibrary(): Promise<number> {
 			name: track.name,
 			uri: track.uri,
 			artist: artistNames,
-			album: track.album.name
+			album: track.album.name,
+			albumImage: imageProxyPath(track.album.image)
 		} satisfies typeof trackTable.$inferInsert;
 	});
 
@@ -139,6 +158,8 @@ export async function indexLibrary(): Promise<number> {
 					target: trackTable.uri,
 					set: {
 						artist: sql`EXCLUDED.artist`,
+						album: sql`EXCLUDED.album`,
+						albumImage: sql`EXCLUDED.album_image`,
 						updatedAt: sql`CURRENT_TIMESTAMP`
 					}
 				});

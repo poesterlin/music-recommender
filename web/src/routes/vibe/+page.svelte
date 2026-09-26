@@ -196,7 +196,13 @@
 		{#if saveStatus}<span class="text-sm text-gray-500">{saveStatus}</span>{/if}
 	</div>
 {:else if tab === 'browse'}
-	<ClusterBrowser clusters={data.clusters} clusterNames={data.clusterNames} />
+	<ClusterBrowser
+		clusters={data.clusters}
+		clusterNames={data.clusterNames}
+		covers={data.covers}
+		trackCounts={data.trackCounts}
+		namedIds={data.namedIds}
+	/>
 {:else}
 	<VibeScheduleEditor
 		bind:schedules

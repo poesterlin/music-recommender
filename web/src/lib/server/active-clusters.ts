@@ -98,12 +98,18 @@ export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata>
 				.map(Number)
 				.filter((id) => Number.isInteger(id))
 				.sort((a, b) => a - b);
+	// An empty display_name is an explicit "reset", so a run-backed cluster
+	// falls back to the generic label rather than to the legacy hand-written
+	// map. The legacy map is only correct for a pre-run generation whose
+	// numbering it was written against; reusing it after a re-cluster silently
+	// mislabels every cluster.
 	const names = Object.fromEntries(
-		ids.map((id) => [
-			id,
-			matches[id]?.displayName ??
-				(activeRun ? `K${activeRun.k} Cluster ${id}` : (CLUSTER_NAMES[id] ?? `Cluster ${id}`))
-		])
+		ids.map((id) => {
+			const stored = matches[id]?.displayName ?? '';
+			if (stored.trim()) return [id, stored];
+			if (activeRun) return [id, `Cluster ${id}`];
+			return [id, CLUSTER_NAMES[id] ?? `Cluster ${id}`];
+		})
 	) as Record<number, string>;
 
 	return { ids, names, matches, activeRun };
