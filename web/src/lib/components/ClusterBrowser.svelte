@@ -1,14 +1,19 @@
 <script lang="ts">
 	import TrackList from '$lib/components/TrackList.svelte';
+	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
+	import ClusterTile from '$lib/components/ClusterTile.svelte';
+	import ClusterNamePanel from '$lib/components/ClusterNamePanel.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api, post } from '$lib/api';
-	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
 
 	type PreviewTrack = { uri: string; name: string; artists: string[]; album: string };
 
 	let {
 		clusters,
-		clusterNames
+		clusterNames,
+		covers = {},
+		trackCounts = {},
+		namedIds = []
 	}: {
 		clusters: Array<{
 			clusterId: number;
@@ -18,17 +23,25 @@
 			album: string;
 		}>;
 		clusterNames: Record<number, string>;
+		covers?: Record<number, { primary: string | null; secondary: string | null }>;
+		trackCounts?: Record<number, number>;
+		namedIds?: number[];
 	} = $props();
 
+	let names = $state<Record<number, string>>({ ...clusterNames });
+	let naming = $state<number | null>(null);
 	let title = $state('');
 	let tracks = $state<PreviewTrack[]>([]);
 	let loading = $state(false);
 	let playing = $state(false);
 
+	const named = $derived(new Set(namedIds));
+
 	function clusterName(clusterId: number): string {
-		return clusterNames[clusterId] ?? `Cluster ${clusterId}`;
+		return names[clusterId] ?? `Cluster ${clusterId}`;
 	}
 
+	/** Preview a random sample without leaving the grid. */
 	async function sample(clusterId: number) {
 		loading = true;
 		playing = false;
@@ -48,36 +61,37 @@
 		playing = false;
 		if (ok) toastStore.show(`Playing ${tracks.length} tracks`);
 	}
+
+	function applyName(clusterId: number, name: string) {
+		names = { ...names, [clusterId]: name.trim() || `Cluster ${clusterId}` };
+	}
 </script>
 
-<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
 	{#each clusters as c (c.clusterId)}
-		<button
-			class="rounded-2xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:border-blue-400 hover:shadow disabled:opacity-60"
-			disabled={!c.uri}
-			onclick={() => sample(c.clusterId)}
-		>
-			<p class="text-xs font-medium text-gray-400">#{c.clusterId}</p>
-			<p class="mt-0.5 font-bold text-blue-700">{clusterName(c.clusterId)}</p>
-			{#if c.name}
-				<p class="mt-2 truncate text-sm text-gray-600">{c.name}</p>
-				<p class="truncate text-xs text-gray-400 italic">{c.artists.join(', ')}</p>
-			{:else}
-				<p class="mt-2 text-sm text-gray-400 italic">No tracks indexed yet.</p>
-			{/if}
-		</button>
+		<ClusterTile
+			clusterId={c.clusterId}
+			name={clusterName(c.clusterId)}
+			trackCount={trackCounts[c.clusterId] ?? null}
+			covers={covers[c.clusterId] ?? { primary: null, secondary: null }}
+			named={named.has(c.clusterId)}
+			onselect={(id) => (naming = id)}
+			onpreview={sample}
+		/>
 	{:else}
-		<p class="text-sm text-gray-400">No clusters yet — run the full tidy-up.</p>
+		<p class="text-faded col-span-full py-8 text-center text-sm">
+			No clusters yet. Run the full tidy-up from Manage.
+		</p>
 	{/each}
 </div>
 
 {#if title}
-	<section class="mt-8 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<h2 class="text-lg font-bold text-gray-900">{title}</h2>
+	<section class="animate-rise mt-8">
+		<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+			<h2 class="font-display text-xl font-black">{title}</h2>
 			{#if tracks.length > 0}
 				<button
-					class="rounded-xl bg-green-600 px-5 py-2 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
+					class="bg-moss text-cream hover:bg-moss/90 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:opacity-50"
 					disabled={playing}
 					onclick={playSample}
 				>
@@ -85,17 +99,24 @@
 				</button>
 			{/if}
 		</div>
-		<div class="mt-4">
-			{#if loading}
-				<p class="text-sm text-gray-400">Picking tracks…</p>
-			{:else}
-				<TrackList {tracks} emptyText="No tracks in this cluster." />
-			{/if}
-		</div>
+		{#if loading}
+			<p class="text-faded text-sm">Picking tracks…</p>
+		{:else}
+			<TrackList {tracks} emptyText="No tracks in this cluster." />
+		{/if}
 	</section>
 {/if}
 
-<section class="mt-8">
-	<h2 class="mb-3 text-lg font-bold text-gray-900">Atlas</h2>
+<section class="mt-10">
+	<h2 class="font-display mb-3 text-xl font-black">Atlas</h2>
 	<ClusterAtlas />
 </section>
+
+{#if naming !== null}
+	<ClusterNamePanel
+		clusterId={naming}
+		currentName={clusterName(naming)}
+		onclose={() => (naming = null)}
+		onnamed={applyName}
+	/>
+{/if}

@@ -244,6 +244,20 @@ versioned service images to GHCR and creates a GitHub release.
 - Generated cluster statistics and music-map HTML files are local artifacts and
   are intentionally ignored.
 
+## Naming clusters
+
+Clusters are named by hand, on the Vibe → Browse tab. Click a tile to open the
+naming panel: it shows the tracks nearest that cluster's centroid, the artists
+that dominate them, and their cover art. Those central tracks are what the
+cluster actually sounds like, so the name follows from them. Names are stored
+per clustering run in `cluster_run_match.display_name`, so re-running clustering
+without naming the new generation falls back to plain `Cluster N` labels rather
+than reusing names written against a different set of clusters.
+
+Cover art is fetched from Music Assistant during indexing and stored as an
+imageproxy path on `track.album_image`. The browser never contacts the media
+server directly; images are proxied through `/api/cover`.
+
 ## Troubleshooting
 
 - `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with

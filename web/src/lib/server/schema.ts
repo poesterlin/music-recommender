@@ -65,6 +65,9 @@ export const trackTable = pgTable(
 		name: text('name').notNull(),
 		artist: text('artist').array().notNull(),
 		album: text('album').notNull(),
+		// Music Assistant imageproxy path (no host, no size query). Stored so
+		// the UI can render cover art without a live MA round trip per tile.
+		albumImage: text('album_image'),
 		embedding: vector('embedding', { dimensions: 512 }),
 		embeddingCentered: vector('embedding_centered', { dimensions: 512 }),
 		embeddingSpaceVersion: integer('embedding_space_version'),
