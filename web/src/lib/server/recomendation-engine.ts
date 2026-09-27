@@ -604,12 +604,14 @@ async function persistRenames(renames: Array<{ from: string; to: string }>): Pro
 			renames.map((r) => sql`(${r.from}::text, ${r.to}::text)`),
 			sql`, `
 		);
+		// The column names are old_uri/new_uri rather than from/to because `from`
+		// is reserved, and an alias using it is a syntax error.
 		await db.execute(sql`
 			UPDATE track AS t
-			SET uri = v.to
-			FROM (VALUES ${values}) AS v(from, to)
-			WHERE t.uri = v.from
-				AND NOT EXISTS (SELECT 1 FROM track x WHERE x.uri = v.to)
+			SET uri = v.new_uri
+			FROM (VALUES ${values}) AS v(old_uri, new_uri)
+			WHERE t.uri = v.old_uri
+				AND NOT EXISTS (SELECT 1 FROM track x WHERE x.uri = v.new_uri)
 		`);
 	} catch (error) {
 		// A repair that cannot be applied must never fail the recommendation.
