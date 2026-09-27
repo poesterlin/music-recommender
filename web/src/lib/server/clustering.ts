@@ -357,7 +357,23 @@ export async function assignNewTracksToClusters(centroids?: Centroid[]): Promise
 	return updates.length;
 }
 
-async function runFullClustering(k = 60) {
+export type FullClusteringResult = {
+	k: number;
+	tracks: number;
+	centroids: number;
+	sizes: number[];
+	smallest: number;
+	largest: number;
+};
+
+/**
+ * Rewrite every cluster_id from scratch at `k`, then freeze the new centroids.
+ *
+ * This renumbers everything, so it must not run when an applied cluster_run
+ * already exists: names are keyed to that generation and would end up attached
+ * to the wrong clusters. The first-run setup guards against that.
+ */
+export async function runFullClustering(k = 60): Promise<FullClusteringResult> {
 	const allTracks = await db
 		.select({
 			uri: trackTable.uri,
@@ -391,7 +407,24 @@ async function runFullClustering(k = 60) {
 	// 3. Run the chunked update
 	await batchUpdateClusters(updates, 150);
 	// Freeze the new layout so future runs can be incremental
-	await backfillCentroidsFromAssignments();
+	const centroids = await backfillCentroidsFromAssignments();
+
+	// The seed track is the closest member to each centroid, so a seed's index
+	// is that centroid's cluster id. Counting by seed position is wrong: it
+	// assumes every cluster kept a seed, which an empty cluster does not.
+	const sizes = new Array(centroids.length).fill(0);
+	for (const update of updates) {
+		if (update.clusterId >= 0 && update.clusterId < sizes.length) sizes[update.clusterId]++;
+	}
+	const sorted = [...sizes].sort((a, b) => a - b);
+	return {
+		k: centroids.length,
+		tracks: updates.length,
+		centroids: centroids.length,
+		sizes: sorted,
+		smallest: sorted[0] ?? 0,
+		largest: sorted[sorted.length - 1] ?? 0
+	};
 }
 
 if (import.meta.main) {
