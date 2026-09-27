@@ -8,11 +8,16 @@ import {
 } from '$lib/server/auth';
 import { authenticateApiKey } from '$lib/server/api-keys';
 
-// App-level startup: seed persisted vibe state. Skipped during
-// prerender/build.
+// App-level startup: seed persisted vibe state, and start warming the Music
+// Assistant library snapshot. Skipped during prerender/build.
 if (!building) {
 	void import('$lib/server/vibe-store').then(({ ensureVibeSeeded }) =>
 		ensureVibeSeeded().catch((e) => console.warn('[startup] vibe seed failed:', e))
+	);
+	// Paging MA's library takes ~14s, so it must never be awaited by a request.
+	// Refreshing it on a timer keeps URI validation accurate and instant.
+	void import('$lib/server/recomendation-engine').then(({ startMABackgroundRefresh }) =>
+		startMABackgroundRefresh()
 	);
 }
 
