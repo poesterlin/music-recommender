@@ -36,6 +36,9 @@
 	let loading = $state(false);
 	let playing = $state(false);
 	let working = $state(false);
+	// Which cluster the visible sample came from, so its tile can show a
+	// turning record rather than every tile looking the same.
+	let playingClusterId = $state<number | null>(null);
 
 	const named = $derived(new Set(namedIds));
 
@@ -47,6 +50,7 @@
 	async function sample(clusterId: number) {
 		loading = true;
 		playing = false;
+		playingClusterId = clusterId;
 		title = `#${clusterId} ${clusterName(clusterId)}`;
 		tracks = [];
 		const { ok, data: json } = await api<{ tracks: PreviewTrack[] }>(
@@ -120,6 +124,7 @@
 			trackCount={trackCounts[c.clusterId] ?? null}
 			covers={covers[c.clusterId] ?? { primary: null, secondary: null }}
 			named={named.has(c.clusterId)}
+			playing={playingClusterId === c.clusterId && tracks.length > 0}
 			onselect={(id) => (naming = id)}
 			onpreview={sample}
 		/>

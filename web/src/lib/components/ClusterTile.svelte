@@ -9,6 +9,7 @@
 		covers,
 		named = false,
 		selected = false,
+		playing = false,
 		onselect,
 		onpreview
 	}: {
@@ -19,12 +20,17 @@
 		/** True when a human has named this cluster. */
 		named?: boolean;
 		selected?: boolean;
+		/** True while a sample from this cluster is playing. */
+		playing?: boolean;
 		onselect: (clusterId: number) => void;
 		onpreview?: (clusterId: number) => void;
 	} = $props();
 
 	const primary = $derived(coverUrl(covers.primary, 256));
 	const secondary = $derived(coverUrl(covers.secondary, 256));
+	// While a sample plays the record turns at speed; otherwise it only creeps
+	// when revealed, so a grid of 51 tiles is not a wall of spinning discs.
+	const turn = $derived(playing ? 'animate-vinyl' : 'group-hover:animate-vinyl-idle');
 </script>
 
 <button
@@ -42,20 +48,52 @@
 			? 'border-accent ring-accent/40 shadow-lg ring-2'
 			: 'border-ink/15 shadow-[0_6px_14px_-8px_rgba(29,21,14,0.5)]'}"
 	>
-		<!-- Vinyl sliding out of the sleeve and spinning. Pure CSS, GPU only. -->
-		<div
-			class="pointer-events-none absolute top-1/2 left-1/2 z-0 aspect-square w-[86%] -translate-x-1/2 -translate-y-1/2 rounded-full
-				bg-[repeating-radial-gradient(circle_at_center,#1d150e_0_2px,#3a2c20_2px_3px)]
-				opacity-0
-				shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-opacity duration-300 group-hover:opacity-100"
-			style="transform: translate(-50%,-50%) rotate(0deg); transition: opacity .3s"
-		>
+		<!--
+			The record, built from three nested elements on purpose. Centring,
+			sliding out of the sleeve, and spinning all write `transform`, so each
+			owns its own element: one element cannot do two of them at once. It also
+			means no element carries two competing translate utilities, whose
+			precedence Tailwind decides by its own sort order rather than by the
+			order they appear in the attribute.
+		-->
+		<div class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
 			<div
-				class="absolute inset-[38%] rounded-full bg-[#e8490f] shadow-[inset_0_0_0_2px_rgba(29,21,14,0.5)] group-hover:animate-[spin_2.4s_linear_infinite]"
-			></div>
+				class="relative aspect-square w-[86%] transition-transform duration-500 ease-out
+					group-hover:translate-x-[34%] {playing ? 'translate-x-[34%]' : ''}"
+			>
+				<div
+					class="relative size-full rounded-full opacity-0 transition-opacity duration-300
+						group-hover:opacity-100 {playing ? 'opacity-100' : ''} {turn} motion-reduce:animate-none"
+				>
+					<!-- Grooves: tight concentric rings, the thing that reads as "vinyl". -->
+					<div
+						class="absolute inset-0 rounded-full
+						bg-[repeating-radial-gradient(circle_at_center,#171009_0_1.5px,#2c2117_1.5px_3px)]
+						shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07),inset_0_0_26px_rgba(0,0,0,0.85)]"
+					></div>
+					<!--
+					Light orbiting with the disc. Because it lives inside the spinning
+					element, the highlight travels around the record and sells the
+					rotation far better than moving grooves alone.
+				-->
+					<div
+						class="absolute inset-0 rounded-full
+						bg-[conic-gradient(from_0deg,rgba(255,255,255,0.16)_0deg,rgba(255,255,255,0)_55deg,rgba(255,255,255,0)_180deg,rgba(255,255,255,0.13)_205deg,rgba(255,255,255,0)_260deg,rgba(255,255,255,0)_360deg)]"
+					></div>
+					<!-- Raised paper label, bevelled like a pasted centre. -->
+					<div
+						class="absolute inset-[36%] rounded-full bg-[#e8490f] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(120,30,4,0.55),0_0_0_1px_rgba(29,21,14,0.45)]"
+					>
+						<!-- Spindle hole. Small, but it is the detail that says "record". -->
+						<div
+							class="absolute inset-[42%] rounded-full bg-[#0d0906] shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)]"
+						></div>
+					</div>
+				</div>
+			</div>
 		</div>
 
-		<!-- Artwork sits in front; it slides right on hover to reveal the record. -->
+		<!-- Artwork sits in front; it slides left on hover to reveal the record. -->
 		<div class="bg-line/40 relative aspect-square w-full overflow-hidden">
 			{#if primary}
 				<img
@@ -63,7 +101,7 @@
 					alt=""
 					loading="lazy"
 					class="relative z-10 size-full object-cover shadow-[0_2px_8px_rgba(0,0,0,0.35)]
-					transition-transform duration-500 ease-out group-hover:translate-x-[14%] group-hover:scale-[1.06]"
+					transition-transform duration-500 ease-out group-hover:-translate-x-[12%] group-hover:scale-[1.06]"
 				/>
 			{:else}
 				<div class="text-faded bg-cream/70 absolute inset-0 z-10 flex items-center justify-center">
@@ -86,12 +124,45 @@
 				class="pointer-events-none absolute inset-0 z-30 bg-[linear-gradient(115deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(0,0,0,0.12)_100%)]"
 			></div>
 
+			<!--
+				Spine highlight down the leading edge, so the sleeve reads as card
+				with thickness rather than a flat image.
+			-->
+			<div
+				class="pointer-events-none absolute inset-y-0 left-0 z-30 w-[7px] bg-[linear-gradient(90deg,rgba(255,255,255,0.30),rgba(255,255,255,0)_78%)]"
+			></div>
+			<!-- Light from above, and wear along the bottom edge. -->
+			<div
+				class="pointer-events-none absolute inset-0 z-30 shadow-[inset_0_1px_0_rgba(255,255,255,0.28),inset_0_-2px_6px_rgba(29,21,14,0.22)]"
+			></div>
+
 			{#if named}
 				<span
 					class="bg-moss text-cream absolute top-1.5 left-1.5 z-40 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase shadow"
 				>
 					Named
 				</span>
+			{/if}
+
+			{#if playing}
+				<!-- Equaliser bars, so a playing tile is obvious in a grid of 51. -->
+				<div
+					class="absolute top-1.5 right-1.5 z-40 flex h-4 items-end gap-[2px]"
+					aria-hidden="true"
+				>
+					{#each [0, 1, 2, 3] as bar (bar)}
+						<!--
+							The class supplies the keyframes; the inline style only staggers
+							each bar. Naming the animation inline instead leaves Tailwind with
+							no reference to the utility, and it drops the keyframes.
+						-->
+						<span
+							class="bg-accent animate-vinyl-pulse w-[3px] origin-bottom rounded-sm motion-reduce:animate-none"
+							style="height: {45 + ((bar * 37) % 55)}%; animation-duration: {0.5 +
+								bar * 0.19}s; animation-delay: {bar * 0.11}s"
+						></span>
+					{/each}
+				</div>
 			{/if}
 		</div>
 	</div>
