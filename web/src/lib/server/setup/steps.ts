@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db';
+import { trackTable } from '../schema';
 import { deriveClusterCount, type KDerivation } from './derive-k';
 import { createGeneration, inspectGeneration } from './generation';
 import { runFullClustering } from '../clustering';
@@ -47,20 +48,15 @@ export type Counts = {
 };
 
 export async function counts(): Promise<Counts> {
-	const rows = (await db.execute(sql`
-		SELECT
-			count(*)::int AS total,
-			count(embedding_centered) FILTER (WHERE COALESCE(skip, FALSE) = FALSE)::int AS clusterable,
-			count(*) FILTER (WHERE album_image IS NOT NULL)::int AS covered,
-			count(DISTINCT cluster_id) FILTER (WHERE cluster_id >= 0)::int AS clusters
-		FROM track
-	`)) as unknown as Array<{
-		total: number;
-		clusterable: number;
-		covered: number;
-		clusters: number;
-	}>;
-	const row = rows[0];
+	const [row] = await db
+		.select({
+			total: sql<number>`count(*)::int`,
+			// Embedded and not pruned: exactly the rows full clustering reads.
+			clusterable: sql<number>`count(embedding_centered) FILTER (WHERE COALESCE(skip, FALSE) = FALSE)::int`,
+			covered: sql<number>`count(*) FILTER (WHERE album_image IS NOT NULL)::int`,
+			clusters: sql<number>`count(DISTINCT cluster_id) FILTER (WHERE cluster_id >= 0)::int`
+		})
+		.from(trackTable);
 	return {
 		total: row?.total ?? 0,
 		// clusterable is already the embedded-and-not-skipped count.

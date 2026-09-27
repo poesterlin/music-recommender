@@ -1,18 +1,10 @@
-import { sql } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { getActiveRunId } from '$lib/server/active-clusters';
+import { clusterRunMatchTable } from '$lib/server/schema';
 import type { RequestHandler } from './$types';
 
 const MAX_NAME_LENGTH = 120;
-
-async function activeRunId(): Promise<number | null> {
-	const rows = (await db.execute(sql`
-		SELECT id FROM cluster_run
-		WHERE status = 'applied'
-		ORDER BY applied_at DESC NULLS LAST, id DESC
-		LIMIT 1
-	`)) as unknown as Array<{ id: number }>;
-	return rows[0]?.id ?? null;
-}
 
 function readName(body: unknown): string | null | undefined {
 	if (!body || typeof body !== 'object') return undefined;
@@ -26,28 +18,36 @@ function readName(body: unknown): string | null | undefined {
 	return trimmed;
 }
 
+function parseClusterId(raw: string | undefined): number | null {
+	const clusterId = Number(raw);
+	return Number.isInteger(clusterId) && clusterId >= 0 ? clusterId : null;
+}
+
 export const GET: RequestHandler = async ({ params }) => {
-	const clusterId = Number(params.id);
-	if (!Number.isInteger(clusterId) || clusterId < 0) {
+	const clusterId = parseClusterId(params.id);
+	if (clusterId === null) {
 		return Response.json({ error: 'cluster id must be a non-negative integer' }, { status: 400 });
 	}
-	const runId = await activeRunId();
+	const runId = await getActiveRunId();
 	if (runId === null) {
 		return Response.json({ error: 'no applied clustering run to name' }, { status: 409 });
 	}
-	const rows = (await db.execute(sql`
-		SELECT display_name FROM cluster_run_match
-		WHERE run_id = ${runId} AND cluster_id = ${clusterId}
-	`)) as unknown as Array<{ display_name: string }>;
-	if (rows.length === 0) {
+	const [row] = await db
+		.select({ displayName: clusterRunMatchTable.displayName })
+		.from(clusterRunMatchTable)
+		.where(
+			and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
+		)
+		.limit(1);
+	if (!row) {
 		return Response.json({ error: 'cluster is not part of the active run' }, { status: 404 });
 	}
-	return Response.json({ name: rows[0].display_name, runId });
+	return Response.json({ name: row.displayName, runId });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
-	const clusterId = Number(params.id);
-	if (!Number.isInteger(clusterId) || clusterId < 0) {
+	const clusterId = parseClusterId(params.id);
+	if (clusterId === null) {
 		return Response.json({ error: 'cluster id must be a non-negative integer' }, { status: 400 });
 	}
 
@@ -66,24 +66,26 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 
 	try {
-		const runId = await activeRunId();
+		const runId = await getActiveRunId();
 		if (runId === null) {
 			return Response.json({ error: 'no applied clustering run to name' }, { status: 409 });
 		}
-		// null restores the generic label by clearing the override.
-		const result =
-			name === null
-				? await db.execute(sql`
-				UPDATE cluster_run_match SET display_name = ''
-				WHERE run_id = ${runId} AND cluster_id = ${clusterId}
-			`)
-				: await db.execute(sql`
-				UPDATE cluster_run_match SET display_name = ${name}
-				WHERE run_id = ${runId} AND cluster_id = ${clusterId}
-			`);
 
-		const count = Array.isArray(result) ? result.length : 0;
-		if (count === 0) {
+		// null restores the generic label by clearing the override.
+		//
+		// RETURNING is what makes the 404 below trustworthy. This used to be a raw
+		// UPDATE, which db.execute hands back as an empty array, so the row count
+		// was always 0 and every rename answered 404 — while the write itself
+		// succeeded, leaving the caller told it had failed when it had not.
+		const updated = await db
+			.update(clusterRunMatchTable)
+			.set({ displayName: name ?? '' })
+			.where(
+				and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
+			)
+			.returning({ clusterId: clusterRunMatchTable.clusterId });
+
+		if (updated.length === 0) {
 			return Response.json({ error: 'cluster is not part of the active run' }, { status: 404 });
 		}
 		return Response.json({ ok: true, name, runId });

@@ -1,13 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { asc, desc, eq, sql } from 'drizzle-orm';
 import { CLUSTER_NAMES } from '$lib/clusters';
 import { db } from './db';
-
-type ActiveRunRow = {
-	id: number;
-	k: number;
-	track_count: number | null;
-	status: string;
-};
+import { clusterRunTable, clusterRunMatchTable } from './schema';
 
 export type ActiveClusterMatch = {
 	clusterId: number;
@@ -44,27 +38,43 @@ export function isHumanNamed(displayName: string | null | undefined): boolean {
 	return !/\s·\sold\s+#\d+(\s\(\d+%\))?$/.test(value);
 }
 
+/**
+ * The run whose cluster ids and names are currently live, or null.
+ *
+ * "Latest applied run" was spelled out as its own query in three places, which
+ * is three chances to order it slightly differently. `desc()` on a nullable
+ * column also needs care: `applied_at DESC` alone would put a NULL first,
+ * which is why the id is the tiebreaker rather than an afterthought.
+ */
+export async function getActiveRunId(): Promise<number | null> {
+	const [row] = await db
+		.select({ id: clusterRunTable.id })
+		.from(clusterRunTable)
+		.where(eq(clusterRunTable.status, 'applied'))
+		.orderBy(desc(clusterRunTable.appliedAt), desc(clusterRunTable.id))
+		.limit(1);
+	return row?.id ?? null;
+}
+
 export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata> {
 	let activeRun: ActiveClusterMetadata['activeRun'] = null;
 	try {
-		const rows = (await db.execute(sql`
-			SELECT
-				id,
-				(config->>'k')::integer AS k,
-				track_count,
-				status
-			FROM cluster_run
-			WHERE status = 'applied'
-			ORDER BY applied_at DESC NULLS LAST, id DESC
-			LIMIT 1
-		`)) as unknown as ActiveRunRow[];
-		const row = rows[0];
+		const [row] = await db
+			.select({
+				id: clusterRunTable.id,
+				k: sql<number | null>`(cluster_run.config->>'k')::integer`,
+				trackCount: clusterRunTable.trackCount
+			})
+			.from(clusterRunTable)
+			.where(eq(clusterRunTable.status, 'applied'))
+			.orderBy(desc(clusterRunTable.appliedAt), desc(clusterRunTable.id))
+			.limit(1);
 		if (row?.k && row.k > 0) {
 			activeRun = {
 				id: row.id,
 				k: row.k,
-				trackCount: row.track_count,
-				status: row.status
+				trackCount: row.trackCount,
+				status: 'applied'
 			};
 		}
 	} catch {
@@ -76,29 +86,23 @@ export async function getActiveClusterMetadata(): Promise<ActiveClusterMetadata>
 	const matches: Record<number, ActiveClusterMatch> = {};
 	if (activeRun) {
 		try {
-			const rows = (await db.execute(sql`
-				SELECT
-					cluster_id,
-					legacy_cluster_id,
-					legacy_name,
-					display_name,
-					confidence
-				FROM cluster_run_match
-				WHERE run_id = ${activeRun.id}
-				ORDER BY cluster_id
-			`)) as unknown as Array<{
-				cluster_id: number;
-				legacy_cluster_id: number;
-				legacy_name: string;
-				display_name: string;
-				confidence: number;
-			}>;
+			const rows = await db
+				.select({
+					clusterId: clusterRunMatchTable.clusterId,
+					legacyClusterId: clusterRunMatchTable.legacyClusterId,
+					legacyName: clusterRunMatchTable.legacyName,
+					displayName: clusterRunMatchTable.displayName,
+					confidence: clusterRunMatchTable.confidence
+				})
+				.from(clusterRunMatchTable)
+				.where(eq(clusterRunMatchTable.runId, activeRun.id))
+				.orderBy(asc(clusterRunMatchTable.clusterId));
 			for (const row of rows) {
-				matches[row.cluster_id] = {
-					clusterId: row.cluster_id,
-					legacyClusterId: row.legacy_cluster_id,
-					legacyName: row.legacy_name,
-					displayName: row.display_name,
+				matches[row.clusterId] = {
+					clusterId: row.clusterId,
+					legacyClusterId: row.legacyClusterId,
+					legacyName: row.legacyName,
+					displayName: row.displayName,
 					confidence: Number(row.confidence)
 				};
 			}

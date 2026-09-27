@@ -1,5 +1,6 @@
-import { sql } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { clusterRunMatchTable } from '$lib/server/schema';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params }) => {
@@ -9,23 +10,11 @@ export const GET: RequestHandler = async ({ params }) => {
 	}
 
 	try {
-		const matches = await db.execute(sql`
-			SELECT
-				run_id,
-				cluster_id,
-				legacy_cluster_id,
-				legacy_name,
-				display_name,
-				overlap_count,
-				new_cluster_count,
-				legacy_cluster_count,
-				confidence,
-				related_legacy_ids,
-				created_at
-			FROM cluster_run_match
-			WHERE run_id = ${id}
-			ORDER BY cluster_id
-		`);
+		const matches = await db
+			.select()
+			.from(clusterRunMatchTable)
+			.where(eq(clusterRunMatchTable.runId, id))
+			.orderBy(asc(clusterRunMatchTable.clusterId));
 		return Response.json({ runId: id, matches });
 	} catch (error) {
 		console.error('Cluster run match lookup failed:', error);

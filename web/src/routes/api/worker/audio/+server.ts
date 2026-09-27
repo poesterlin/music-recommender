@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
-import { sql } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 import { db } from '$lib/server/db';
+import { trackTable } from '$lib/server/schema';
 import { findLocalAudioFile, AudioFileNotFoundError } from '$lib/server/audio-library';
 import { workerAuthError } from '$lib/server/worker-auth';
 import type { RequestHandler } from './$types';
@@ -9,12 +10,6 @@ import type { RequestHandler } from './$types';
 const DEFAULT_SECONDS = 60;
 const MAX_SECONDS = 120;
 const FFMPEG_PATH = process.env.FFMPEG_PATH ?? 'ffmpeg';
-
-type TrackRow = {
-	name: string;
-	artist: string[];
-	album: string;
-};
 
 function secondsFromRequest(value: string | null): number {
 	const parsed = Number(value ?? DEFAULT_SECONDS);
@@ -35,12 +30,15 @@ export const GET: RequestHandler = async ({ request, url }) => {
 	const seconds = secondsFromRequest(url.searchParams.get('seconds'));
 
 	try {
-		const rows = (await db.execute(sql`
-			SELECT name, artist, album
-			FROM track
-			WHERE uri = ${uri} AND (skip IS NULL OR skip = FALSE)
-		`)) as TrackRow[];
-		const track = rows[0];
+		const [track] = await db
+			.select({
+				name: trackTable.name,
+				artist: trackTable.artist,
+				album: trackTable.album
+			})
+			.from(trackTable)
+			.where(and(eq(trackTable.uri, uri), or(isNull(trackTable.skip), eq(trackTable.skip, false))))
+			.limit(1);
 		if (!track) return streamError('track not found', 404);
 
 		const path = await findLocalAudioFile({

@@ -1,6 +1,7 @@
-import { sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from './db';
-import { isHumanNamed } from './active-clusters';
+import { clusterRunMatchTable } from './schema';
+import { getActiveRunId, isHumanNamed } from './active-clusters';
 
 /** How many dominant artists make up a name. Three is enough to be unique. */
 const NAME_ARTISTS = 3;
@@ -104,7 +105,7 @@ export async function suggestClusterNames(): Promise<AutoName[]> {
 	});
 }
 
-/** Write the derived names for the given clusters. Returns how many changed. */
+/** Write the derived names for the given clusters. Returns how many rows changed. */
 export async function applyAutoNames(clusterIds: number[]): Promise<number> {
 	if (clusterIds.length === 0) return 0;
 	const suggestions = await suggestClusterNames();
@@ -113,19 +114,24 @@ export async function applyAutoNames(clusterIds: number[]): Promise<number> {
 	);
 	if (wanted.size === 0) return 0;
 
-	const runId = (
-		(await db.execute(sql`
-			SELECT id FROM cluster_run WHERE status = 'applied'
-			ORDER BY applied_at DESC NULLS LAST, id DESC LIMIT 1
-		`)) as unknown as Array<{ id: number }>
-	)[0]?.id;
-	if (runId === null || runId === undefined) return 0;
+	const runId = await getActiveRunId();
+	if (runId === null) return 0;
 
+	// One statement per cluster, because each row gets a *different* name. That
+	// needs a VALUES join (`UPDATE ... FROM (VALUES ...)`) to batch, which the
+	// query builder cannot express — so this stays a loop. What it no longer does
+	// is hand-assemble SQL, and it reports rows actually changed rather than
+	// names it intended to write.
+	let changed = 0;
 	for (const [clusterId, name] of wanted) {
-		await db.execute(sql`
-			UPDATE cluster_run_match SET display_name = ${name}
-			WHERE run_id = ${runId} AND cluster_id = ${clusterId}
-		`);
+		const updated = await db
+			.update(clusterRunMatchTable)
+			.set({ displayName: name })
+			.where(
+				and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
+			)
+			.returning({ clusterId: clusterRunMatchTable.clusterId });
+		changed += updated.length;
 	}
-	return wanted.size;
+	return changed;
 }
