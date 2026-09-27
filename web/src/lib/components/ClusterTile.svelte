@@ -29,65 +29,89 @@
 
 <button
 	type="button"
-	class="group border-ink/10 hover:border-ink/25 bg-cream relative flex w-full flex-col overflow-hidden rounded-2xl border text-left transition-all hover:-translate-y-0.5 hover:shadow-lg {selected
-		? 'border-accent shadow-md'
-		: 'shadow-sm'}"
+	class="group relative block w-full cursor-pointer text-left [perspective:900px]"
 	onclick={() => onselect(clusterId)}
 	aria-pressed={selected}
 >
-	<div class="bg-line/40 relative aspect-square w-full overflow-hidden">
-		{#if primary}
-			<img
-				src={primary}
-				alt=""
-				loading="lazy"
-				class="size-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-			/>
-		{:else}
-			<div class="text-faded flex size-full items-center justify-center">
-				<svg
-					viewBox="0 0 24 24"
-					class="size-1/3"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="1.25"
+	<!-- Sleeve. Lifts and tilts toward the viewer on hover, depresses on press. -->
+	<div
+		class="relative overflow-hidden rounded-xl border transition-all duration-300 ease-out
+			group-hover:-translate-y-1.5 group-hover:rotate-[-1.1deg] group-hover:shadow-[0_18px_30px_-12px_rgba(29,21,14,0.55)]
+			group-active:translate-y-0 group-active:scale-[0.985] group-active:shadow-[0_4px_10px_-6px_rgba(29,21,14,0.5)]
+			{selected
+			? 'border-accent ring-accent/40 shadow-lg ring-2'
+			: 'border-ink/15 shadow-[0_6px_14px_-8px_rgba(29,21,14,0.5)]'}"
+	>
+		<!-- Vinyl sliding out of the sleeve and spinning. Pure CSS, GPU only. -->
+		<div
+			class="pointer-events-none absolute top-1/2 left-1/2 z-0 aspect-square w-[86%] -translate-x-1/2 -translate-y-1/2 rounded-full
+				bg-[repeating-radial-gradient(circle_at_center,#1d150e_0_2px,#3a2c20_2px_3px)]
+				opacity-0
+				shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)] transition-opacity duration-300 group-hover:opacity-100"
+			style="transform: translate(-50%,-50%) rotate(0deg); transition: opacity .3s"
+		>
+			<div
+				class="absolute inset-[38%] rounded-full bg-[#e8490f] shadow-[inset_0_0_0_2px_rgba(29,21,14,0.5)] group-hover:animate-[spin_2.4s_linear_infinite]"
+			></div>
+		</div>
+
+		<!-- Artwork sits in front; it slides right on hover to reveal the record. -->
+		<div class="bg-line/40 relative aspect-square w-full overflow-hidden">
+			{#if primary}
+				<img
+					src={primary}
+					alt=""
+					loading="lazy"
+					class="relative z-10 size-full object-cover shadow-[0_2px_8px_rgba(0,0,0,0.35)]
+					transition-transform duration-500 ease-out group-hover:translate-x-[14%] group-hover:scale-[1.06]"
+				/>
+			{:else}
+				<div class="text-faded bg-cream/70 absolute inset-0 z-10 flex items-center justify-center">
+					<IconMusic size={44} stroke={1} />
+				</div>
+			{/if}
+
+			{#if secondary}
+				<img
+					src={secondary}
+					alt=""
+					loading="lazy"
+					class="border-cream absolute right-1.5 bottom-1.5 z-20 size-1/4 rounded-md border-2 object-cover shadow-[0_4px_10px_rgba(0,0,0,0.45)]
+					transition-transform duration-500 ease-out group-hover:-translate-y-1 group-hover:scale-105"
+				/>
+			{/if}
+
+			<!-- Glossy sheen across the sleeve, as on a shrink-wrapped record. -->
+			<div
+				class="pointer-events-none absolute inset-0 z-30 bg-[linear-gradient(115deg,rgba(255,255,255,0.22)_0%,rgba(255,255,255,0)_42%,rgba(0,0,0,0.12)_100%)]"
+			></div>
+
+			{#if named}
+				<span
+					class="bg-moss text-cream absolute top-1.5 left-1.5 z-40 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase shadow"
 				>
-					<circle cx="12" cy="12" r="9" />
-					<circle cx="12" cy="12" r="2.5" />
-				</svg>
-			</div>
-		{/if}
-
-		{#if secondary}
-			<img
-				src={secondary}
-				alt=""
-				loading="lazy"
-				class="border-cream absolute right-2 bottom-2 size-1/4 rounded-lg border-2 object-cover shadow-lg transition-transform duration-500 group-hover:translate-x-0.5"
-			/>
-		{/if}
-
-		{#if named}
-			<span
-				class="bg-moss text-cream absolute top-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide uppercase shadow-sm"
-			>
-				Named
-			</span>
-		{/if}
+					Named
+				</span>
+			{/if}
+		</div>
 	</div>
 
-	<div class="flex flex-1 flex-col gap-1 p-3">
+	<!-- Label card below, like the track listing on a sleeve back. -->
+	<div
+		class="border-ink/10 bg-cream mt-2.5 rounded-lg border px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]
+			transition-transform duration-300 ease-out group-hover:-translate-y-1"
+	>
 		<div class="flex items-baseline gap-1.5">
 			<span class="text-faded font-mono text-[11px]">#{clusterId}</span>
 			{#if !named}
-				<IconPencil size={12} class="text-faded opacity-0 transition group-hover:opacity-100" />
+				<IconPencil size={11} class="text-faded opacity-0 transition group-hover:opacity-100" />
 			{/if}
 		</div>
-		<p class="font-display text-sm leading-snug font-black">{name}</p>
-		<div class="mt-auto flex items-center justify-between gap-2 pt-1.5">
+		<p class="font-display text-[13px] leading-snug font-black">{name}</p>
+		<div class="mt-1.5 flex items-center justify-between gap-2">
 			{#if trackCount}
 				<span class="text-faded inline-flex items-center gap-1 text-[11px] tabular-nums">
-					<IconMusic size={12} />
+					<IconMusic size={11} />
 					{new Intl.NumberFormat().format(trackCount)}
 				</span>
 			{:else}
@@ -111,7 +135,7 @@
 					}}
 					aria-label="Preview a sample from cluster {clusterId}"
 				>
-					<IconPlayerPlayFilled size={12} />
+					<IconPlayerPlayFilled size={11} />
 					Preview
 				</span>
 			{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IconCheck, IconPlayerPlayFilled, IconX } from '@tabler/icons-svelte';
+	import { IconCheck, IconPlayerPlayFilled, IconWand, IconX } from '@tabler/icons-svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { coverUrl } from '$lib/cover-image';
 	import { toastStore } from '$lib/client/toast.svelte';
@@ -35,6 +35,7 @@
 	let playing = $state(false);
 	let draft = $state(currentName);
 	let named = $state(false);
+	let suggested = $state<string | null>(null);
 
 	$effect(() => {
 		const id = clusterId;
@@ -52,6 +53,13 @@
 			// would let someone save the placeholder as if it were a real name.
 			draft = (ok && data.humanNamed && data.displayName?.trim()) || '';
 			named = ok ? data.humanNamed : false;
+			// Offer a derived name so the field never has to be typed into.
+			const { ok: nameOk, data: nameData } = await api<{
+				suggestions: Array<{ clusterId: number; name: string; named: boolean }>;
+			}>('/api/clusters/names');
+			suggested = nameOk
+				? (nameData.suggestions.find((s) => s.clusterId === id)?.name ?? null)
+				: null;
 			loading = false;
 		})();
 	});
@@ -64,6 +72,24 @@
 			note: `centrality ${t.similarity.toFixed(3)}`
 		}))
 	);
+
+	async function useSuggested() {
+		if (!suggested) return;
+		saving = true;
+		// api() already surfaces the server's error message via a toast.
+		const { ok } = await api(`/api/clusters/${clusterId}/name`, {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name: suggested })
+		});
+		saving = false;
+		if (ok) {
+			draft = suggested;
+			named = true;
+			onnamed(clusterId, suggested);
+			toastStore.show(`Cluster #${clusterId} named`);
+		}
+	}
 
 	async function save() {
 		const name = draft.trim();
@@ -172,6 +198,17 @@
 							Reset
 						</button>
 						<span class="text-faded text-xs">named in this run</span>
+					{:else if suggested}
+						<button
+							type="button"
+							class="bg-moss text-cream hover:bg-moss/90 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-bold transition disabled:opacity-50"
+							disabled={saving}
+							onclick={useSuggested}
+						>
+							<IconWand size={15} />
+							Use “{suggested}”
+						</button>
+						<span class="text-faded text-xs">from its dominant artists</span>
 					{:else}
 						<span class="text-faded text-xs">not named yet</span>
 					{/if}

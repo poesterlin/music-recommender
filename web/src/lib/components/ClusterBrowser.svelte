@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { IconWand } from '@tabler/icons-svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
 	import ClusterTile from '$lib/components/ClusterTile.svelte';
@@ -34,6 +35,7 @@
 	let tracks = $state<PreviewTrack[]>([]);
 	let loading = $state(false);
 	let playing = $state(false);
+	let working = $state(false);
 
 	const named = $derived(new Set(namedIds));
 
@@ -65,7 +67,50 @@
 	function applyName(clusterId: number, name: string) {
 		names = { ...names, [clusterId]: name.trim() || `Cluster ${clusterId}` };
 	}
+
+	/**
+	 * Name every cluster that has no human name yet, from its dominant artists.
+	 * The server derives the names, so this is one request rather than 51.
+	 */
+	async function nameEverything() {
+		working = true;
+		const { ok, data } = await api<{ named?: number; error?: string }>('/api/clusters/names', {
+			method: 'PUT',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ onlyUnnamed: true })
+		});
+		working = false;
+		if (ok) {
+			const { data: fresh } = await api<{
+				suggestions: Array<{ clusterId: number; name: string }>;
+			}>('/api/clusters/names');
+			if (fresh) {
+				const next = { ...names };
+				for (const s of fresh.suggestions) next[s.clusterId] = s.name;
+				names = next;
+			}
+			toastStore.show(`Named ${data.named ?? 0} clusters`);
+		} else {
+			toastStore.show(data.error ?? 'Could not name the clusters');
+		}
+	}
 </script>
+
+<div class="mb-5 flex flex-wrap items-center gap-3">
+	<button
+		class="bg-ink text-cream hover:bg-ink-soft inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold transition disabled:opacity-50"
+		disabled={working}
+		onclick={nameEverything}
+	>
+		<IconWand size={16} />
+		{working ? 'Naming…' : 'Name them all'}
+	</button>
+	<p class="text-faded max-w-2xl text-sm">
+		Derives a name for every unnamed cluster from the artists that dominate it. A single artist is
+		not enough, since one act can span several clusters, so the top three are used. Change any of
+		them by clicking the tile.
+	</p>
+</div>
 
 <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
 	{#each clusters as c (c.clusterId)}
