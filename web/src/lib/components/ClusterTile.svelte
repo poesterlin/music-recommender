@@ -39,7 +39,12 @@
 	onclick={() => onselect(clusterId)}
 	aria-pressed={selected}
 >
-	<!-- Sleeve. Lifts and tilts toward the viewer on hover, depresses on press. -->
+	<!--
+		One object, not two. The cover and the label are a single card with a fold
+		between them, the way a J-card sleeve opens to show its track listing. They
+		used to sit in a gap and lift independently, which read as a card and a
+		caption floating apart rather than as one thing you could pick up.
+	-->
 	<div
 		class="relative overflow-hidden rounded-xl border transition-all duration-300 ease-out
 			group-hover:-translate-y-1.5 group-hover:rotate-[-1.1deg] group-hover:shadow-[0_18px_30px_-12px_rgba(29,21,14,0.55)]
@@ -48,53 +53,54 @@
 			? 'border-accent ring-accent/40 shadow-lg ring-2'
 			: 'border-ink/15 shadow-[0_6px_14px_-8px_rgba(29,21,14,0.5)]'}"
 	>
-		<!--
-			The record, built from three nested elements on purpose. Centring,
-			sliding out of the sleeve, and spinning all write `transform`, so each
-			owns its own element: one element cannot do two of them at once. It also
-			means no element carries two competing translate utilities, whose
-			precedence Tailwind decides by its own sort order rather than by the
-			order they appear in the attribute.
-		-->
-		<div class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
-			<div
-				class="relative aspect-square w-[86%] transition-transform duration-500 ease-out
-					group-hover:translate-x-[34%] {playing ? 'translate-x-[34%]' : ''}"
-			>
+		<!-- Cover. Clipped to its own square so the record cannot escape downward. -->
+		<div class="bg-line/40 relative aspect-square w-full overflow-hidden">
+			<!--
+				The record, built from three nested elements on purpose. Centring,
+				sliding out of the sleeve, and spinning all write `transform`, so each
+				owns its own element: one element cannot do two of them at once. It
+				also means no element carries two competing translate utilities, whose
+				precedence Tailwind decides by its own sort order rather than by the
+				order they appear in the attribute.
+			-->
+			<div class="pointer-events-none absolute inset-0 z-0 flex items-center justify-center">
 				<div
-					class="relative size-full rounded-full opacity-0 transition-opacity duration-300
-						group-hover:opacity-100 {playing ? 'opacity-100' : ''} {turn} motion-reduce:animate-none"
+					class="relative aspect-square w-[86%] transition-transform duration-500 ease-out
+						group-hover:translate-x-[34%] {playing ? 'translate-x-[34%]' : ''}"
 				>
-					<!-- Grooves: tight concentric rings, the thing that reads as "vinyl". -->
 					<div
-						class="absolute inset-0 rounded-full
-						bg-[repeating-radial-gradient(circle_at_center,#171009_0_1.5px,#2c2117_1.5px_3px)]
-						shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07),inset_0_0_26px_rgba(0,0,0,0.85)]"
-					></div>
-					<!--
-					Light orbiting with the disc. Because it lives inside the spinning
-					element, the highlight travels around the record and sells the
-					rotation far better than moving grooves alone.
-				-->
-					<div
-						class="absolute inset-0 rounded-full
-						bg-[conic-gradient(from_0deg,rgba(255,255,255,0.16)_0deg,rgba(255,255,255,0)_55deg,rgba(255,255,255,0)_180deg,rgba(255,255,255,0.13)_205deg,rgba(255,255,255,0)_260deg,rgba(255,255,255,0)_360deg)]"
-					></div>
-					<!-- Raised paper label, bevelled like a pasted centre. -->
-					<div
-						class="absolute inset-[36%] rounded-full bg-[#e8490f] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(120,30,4,0.55),0_0_0_1px_rgba(29,21,14,0.45)]"
+						class="relative size-full rounded-full opacity-0 transition-opacity duration-300
+						group-hover:opacity-100 {playing ? 'opacity-100' : ''} {turn} motion-reduce:animate-none"
 					>
-						<!-- Spindle hole. Small, but it is the detail that says "record". -->
+						<!-- Grooves: tight concentric rings, the thing that reads as "vinyl". -->
 						<div
-							class="absolute inset-[42%] rounded-full bg-[#0d0906] shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)]"
+							class="absolute inset-0 rounded-full
+							bg-[repeating-radial-gradient(circle_at_center,#171009_0_1.5px,#2c2117_1.5px_3px)]
+							shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07),inset_0_0_26px_rgba(0,0,0,0.85)]"
 						></div>
+						<!--
+						Light orbiting with the disc. Because it lives inside the spinning
+						element, the highlight travels around the record and sells the
+						rotation far better than moving grooves alone.
+					-->
+						<div
+							class="absolute inset-0 rounded-full
+							bg-[conic-gradient(from_0deg,rgba(255,255,255,0.16)_0deg,rgba(255,255,255,0)_55deg,rgba(255,255,255,0)_180deg,rgba(255,255,255,0.13)_205deg,rgba(255,255,255,0)_260deg,rgba(255,255,255,0)_360deg)]"
+						></div>
+						<!-- Raised paper label, bevelled like a pasted centre. -->
+						<div
+							class="absolute inset-[36%] rounded-full bg-[#e8490f] shadow-[inset_0_1px_0_rgba(255,255,255,0.35),inset_0_-2px_4px_rgba(120,30,4,0.55),0_0_0_1px_rgba(29,21,14,0.45)]"
+						>
+							<!-- Spindle hole. Small, but it is the detail that says "record". -->
+							<div
+								class="absolute inset-[42%] rounded-full bg-[#0d0906] shadow-[inset_0_1px_2px_rgba(0,0,0,0.9)]"
+							></div>
+						</div>
 					</div>
 				</div>
 			</div>
-		</div>
 
-		<!-- Artwork sits in front; it slides left on hover to reveal the record. -->
-		<div class="bg-line/40 relative aspect-square w-full overflow-hidden">
+			<!-- Artwork sits in front; it slides left on hover to reveal the record. -->
 			{#if primary}
 				<img
 					src={primary}
@@ -165,51 +171,61 @@
 				</div>
 			{/if}
 		</div>
-	</div>
 
-	<!-- Label card below, like the track listing on a sleeve back. -->
-	<div
-		class="border-ink/10 bg-cream mt-2.5 rounded-lg border px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]
-			transition-transform duration-300 ease-out group-hover:-translate-y-1"
-	>
-		<div class="flex items-baseline gap-1.5">
-			<span class="text-faded font-mono text-[11px]">#{clusterId}</span>
-			{#if !named}
-				<IconPencil size={11} class="text-faded opacity-0 transition group-hover:opacity-100" />
-			{/if}
-		</div>
-		<p class="font-display text-[13px] leading-snug font-black">{name}</p>
-		<div class="mt-1.5 flex items-center justify-between gap-2">
-			{#if trackCount}
-				<span class="text-faded inline-flex items-center gap-1 text-[11px] tabular-nums">
-					<IconMusic size={11} />
-					{new Intl.NumberFormat().format(trackCount)}
-				</span>
-			{:else}
-				<span></span>
-			{/if}
-			{#if onpreview}
-				<span
-					role="button"
-					tabindex="0"
-					class="text-faded hover:bg-ink/5 hover:text-ink inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold transition"
-					onclick={(e) => {
-						e.stopPropagation();
-						onpreview(clusterId);
-					}}
-					onkeydown={(e) => {
-						if (e.key === 'Enter' || e.key === ' ') {
-							e.preventDefault();
+		<!--
+			The fold. A dark crease with a lit edge below it, so the label reads as
+			the other panel of the same card rather than a separate box tucked
+			underneath.
+		-->
+		<div
+			class="pointer-events-none relative z-20 h-[3px] shrink-0 bg-[linear-gradient(180deg,rgba(29,21,14,0.34)_0%,rgba(29,21,14,0.10)_55%,rgba(255,255,255,0.45)_100%)]"
+		></div>
+
+		<!-- Label panel, hinged to the cover. -->
+		<div class="bg-cream relative px-2.5 pt-2 pb-2">
+			<!-- Shadow the cover casts down onto the label. -->
+			<div
+				class="pointer-events-none absolute inset-x-0 top-0 h-2.5 bg-[linear-gradient(180deg,rgba(29,21,14,0.20),rgba(29,21,14,0))]"
+			></div>
+			<div class="relative flex items-baseline gap-1.5">
+				<span class="text-faded font-mono text-[11px]">#{clusterId}</span>
+				{#if !named}
+					<IconPencil size={11} class="text-faded opacity-0 transition group-hover:opacity-100" />
+				{/if}
+			</div>
+			<p class="font-display relative text-[13px] leading-snug font-black">{name}</p>
+			<div class="relative mt-1.5 flex items-center justify-between gap-2">
+				{#if trackCount}
+					<span class="text-faded inline-flex items-center gap-1 text-[11px] tabular-nums">
+						<IconMusic size={11} />
+						{new Intl.NumberFormat().format(trackCount)}
+					</span>
+				{:else}
+					<span></span>
+				{/if}
+				{#if onpreview}
+					<span
+						role="button"
+						tabindex="0"
+						class="text-faded hover:bg-ink/5 hover:text-ink inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold transition"
+						onclick={(e) => {
 							e.stopPropagation();
 							onpreview(clusterId);
-						}
-					}}
-					aria-label="Preview a sample from cluster {clusterId}"
-				>
-					<IconPlayerPlayFilled size={11} />
-					Preview
-				</span>
-			{/if}
+						}}
+						onkeydown={(e) => {
+							if (e.key === 'Enter' || e.key === ' ') {
+								e.preventDefault();
+								e.stopPropagation();
+								onpreview(clusterId);
+							}
+						}}
+						aria-label="Preview a sample from cluster {clusterId}"
+					>
+						<IconPlayerPlayFilled size={11} />
+						Preview
+					</span>
+				{/if}
+			</div>
 		</div>
 	</div>
 </button>
