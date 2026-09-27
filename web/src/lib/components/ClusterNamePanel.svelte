@@ -47,9 +47,10 @@
 				humanNamed: boolean;
 			}>(`/api/clusters/${id}/evidence`);
 			evidence = ok ? data.evidence : null;
-			// Only prefill from a name a person actually chose; a carried-over
-			// legacy name would silently become the new label on save.
-			draft = (ok && data.humanNamed && data.displayName?.trim()) || currentName;
+			// Only prefill from a name a person actually chose. An unnamed
+			// cluster's label is the placeholder "Cluster N", and prefilling that
+			// would let someone save the placeholder as if it were a real name.
+			draft = (ok && data.humanNamed && data.displayName?.trim()) || '';
 			named = ok ? data.humanNamed : false;
 			loading = false;
 		})();
