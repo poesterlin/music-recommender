@@ -330,15 +330,6 @@
 					<p class="font-display text-2xl font-black">The deck is quiet.</p>
 					<p class="text-cream/60 mt-1 text-sm">Drop a vibe below and the room wakes up.</p>
 				</div>
-				{#if player}
-					<button
-						class="border-cream/15 text-cream/65 hover:border-cream/35 hover:bg-cream/10 hover:text-cream ml-auto rounded-full border px-4 py-2.5 text-sm font-bold transition disabled:opacity-40"
-						disabled={busy !== null}
-						onclick={clearQueue}
-					>
-						{busy === 'clear' ? 'Clearing…' : '🗑 Clear queue'}
-					</button>
-				{/if}
 			</div>
 		{/if}
 	</div>
