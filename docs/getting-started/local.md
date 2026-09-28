@@ -155,6 +155,8 @@ docker compose run --rm --entrypoint bun web \
 
 Open **http://127.0.0.1:4932/login** and sign in.
 
+Self-registration is off and the account limit is one by default. To add people later, set `MAX_USERS` to the number of accounts you want in `.env` and run the account command again with a different username. For self-service sign-ups up to that limit, also set `ALLOW_REGISTRATION=true` and run `docker compose up -d` to apply the setting. The registration link disappears when the limit is reached.
+
 ## 5. Connect Music Assistant
 
 Whatever plays your music has to be reachable from this machine. Add two settings to `.env`, then apply them with `docker compose up -d`:

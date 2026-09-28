@@ -2,6 +2,15 @@ import { randomBytes } from 'node:crypto';
 import { password as bunPassword } from 'bun';
 import postgres from 'postgres';
 
+// Keep this lock in sync with the web registration transaction. The deployed
+// image carries this CLI at /app/web/scripts, outside the web source tree.
+const USER_CREATION_LOCK = 734512;
+const rawLimit = process.env.MAX_USERS || '1';
+const maxUsers = Number(rawLimit);
+if (!/^\d+$/.test(rawLimit) || !Number.isSafeInteger(maxUsers) || maxUsers < 1) {
+	throw new Error('MAX_USERS must be a positive integer');
+}
+
 const args = process.argv.slice(2);
 function option(name: string): string | undefined {
 	const inline = args.find((arg) => arg.startsWith(`${name}=`));
@@ -31,10 +40,10 @@ const passwordHash = await bunPassword.hash(password, {
 const sql = postgres(databaseUrl, { max: 1, connect_timeout: 10 });
 
 try {
-	const [existing] = await sql`select id from "user" where username = ${username}`;
-	let action: 'created' | 'reset';
-	if (existing) {
-		await sql.begin(async (tx) => {
+	const action = await sql.begin(async (tx) => {
+		await tx`select pg_advisory_xact_lock(${USER_CREATION_LOCK}, 1)`;
+		const [existing] = await tx`select id from "user" where username = ${username}`;
+		if (existing) {
 			await tx`
 				update "user"
 				set password_hash = ${passwordHash},
@@ -42,15 +51,18 @@ try {
 				where id = ${existing.id}
 			`;
 			await tx`delete from "session" where user_id = ${existing.id}`;
-		});
-		action = 'reset';
-	} else {
-		await sql`
+			return 'reset';
+		}
+		const [count] = await tx`select count(*)::int as total from "user"`;
+		if (Number(count.total) >= maxUsers) {
+			throw new Error(`MAX_USERS (${maxUsers}) reached; raise it to create another account`);
+		}
+		await tx`
 			insert into "user" (id, username, password_hash)
 			values (${randomBytes(18).toString('base64url')}, ${username}, ${passwordHash})
 		`;
-		action = 'created';
-	}
+		return 'created';
+	});
 
 	console.log(`User ${username} ${action}.`);
 	if (!suppliedPassword) console.log(`Temporary password: ${password}`);

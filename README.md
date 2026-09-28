@@ -126,10 +126,9 @@ passes it with `--env-file`.
 ## Authentication
 
 The web UI uses database-backed accounts and an opaque session cookie. Run
-`bun run db:migrate` once on an existing database before using the new login
-pages. Anyone can register an account; registration does not depend on a
-restart-time flag. To create the first account or reset a password without the
-UI, run:
+`bun run db:migrate` once on an existing database before using the login
+pages. Self-registration is disabled by default. To create an account or reset
+a password, run:
 
 ```sh
 bun run auth:create-user --username admin
@@ -137,6 +136,12 @@ bun run auth:create-user --username admin
 
 The command creates the account or replaces its password and revokes that
 user's sessions. Without `--password`, it prints a generated password once.
+The account limit is `MAX_USERS=1` by default. Raise it in `.env` before
+creating more accounts (including with the command above). To allow people to
+create their own accounts up to that limit, set `ALLOW_REGISTRATION=true` in
+`.env` and restart the web service. Once the limit is reached, the registration
+link disappears and `/register` returns to login. Remove the flag and restart
+to close sign-ups earlier; existing accounts keep working.
 
 There are two bootstrap service credentials for Compose and existing automations:
 

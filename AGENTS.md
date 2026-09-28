@@ -43,8 +43,9 @@ External PostgreSQL installations can leave that profile disabled and provide
 - `worker`: API-mode Python worker; it uses the web worker API and no database.
 
 The app uses database-backed user/session authentication. Registration is
-always available; use `bun run auth:create-user --username <name>` to create
-or reset an account. `WORKER_TOKEN` is limited to the worker and internal jobs;
+opt-in with `ALLOW_REGISTRATION=true` and limited by `MAX_USERS` (default 1);
+use `bun run auth:create-user --username <name>` to create or reset an account
+within that limit. `WORKER_TOKEN` is limited to the worker and internal jobs;
 `PLAYBACK_API_KEY` is limited to the external playback POST. API worker
 mode is enabled with `--source-mode api` and `WORKER_URL` plus `WORKER_TOKEN`.
 It downloads bounded snippets in a background pool and uploads batches over

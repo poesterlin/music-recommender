@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '$lib/server/db';
 import {
@@ -13,6 +13,12 @@ import {
 	validateUsername
 } from '$lib/server/auth';
 import { userTable } from '$lib/server/schema';
+import {
+	maxUsers,
+	registrationAvailable,
+	registrationEnabled,
+	USER_CREATION_LOCK
+} from '$lib/server/registration';
 import type { Actions, PageServerLoad } from './$types';
 
 const registerSchema = z.object({
@@ -23,11 +29,13 @@ const registerSchema = z.object({
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) redirect(302, '/');
+	if (!(await registrationAvailable())) redirect(302, '/login');
 	return {};
 };
 
 export const actions: Actions = {
 	register: async (event) => {
+		if (!registrationEnabled()) redirect(303, '/login');
 		const form = Object.fromEntries(await event.request.formData());
 		const parsed = registerSchema.safeParse(form);
 		if (!parsed.success) return fail(400, { message: 'Enter valid account details.' });
@@ -40,24 +48,33 @@ export const actions: Actions = {
 			});
 		}
 
-		const [existing] = await db
-			.select({ id: userTable.id })
-			.from(userTable)
-			.where(eq(userTable.username, username));
-		if (existing) return fail(400, { message: 'That username is already in use.' });
-
 		const userId = generateId();
+		let result: 'created' | 'full' | 'taken';
 		try {
-			await db.insert(userTable).values({
-				id: userId,
-				username,
-				passwordHash: await hashPassword(password),
-				createdAt: new Date(),
-				lastLogin: new Date()
+			const passwordHash = await hashPassword(password);
+			result = await db.transaction(async (tx) => {
+				await tx.execute(sql`select pg_advisory_xact_lock(${USER_CREATION_LOCK}, 1)`);
+				const [count] = await tx.execute(sql`select count(*)::int as total from "user"`);
+				if (Number(count?.total ?? 0) >= maxUsers()) return 'full';
+				const [existing] = await tx
+					.select({ id: userTable.id })
+					.from(userTable)
+					.where(eq(userTable.username, username));
+				if (existing) return 'taken';
+				await tx.insert(userTable).values({
+					id: userId,
+					username,
+					passwordHash,
+					createdAt: new Date(),
+					lastLogin: new Date()
+				});
+				return 'created';
 			});
 		} catch {
 			return fail(500, { message: 'Could not create the account.' });
 		}
+		if (result === 'full') redirect(303, '/login');
+		if (result === 'taken') return fail(400, { message: 'That username is already in use.' });
 
 		const sessionToken = generateSessionToken();
 		const session = await createSession(sessionToken, userId);

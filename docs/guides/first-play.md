@@ -1,55 +1,41 @@
-# First playable vibe
+# Your first playable vibe
 
-The app's **Setup** page walks the whole sequence and shows where it has got to. For most installs, open it and let it run: it checks the database, asks Music Assistant for your library, indexes the tracks, waits while they are analysed, then groups them into vibes and gives each one a name.
+After [local installation](/getting-started/local), sign in to Sole and open **Setup** (`/setup`). Make sure `MUSIC_HOST` and `MA_TOKEN` are set in `.env` as described in the install guide. Music Assistant supplies the catalogue and playback; Sole uses your read-only music mount to prepare short audio snippets for analysis.
 
-Two parts need your decision, because they depend on where the work should run.
+## 1. Start Setup
 
-## Analyse the library
+Click **Start setup**. The page checks the database, asks Music Assistant to refresh its library, indexes the tracks, and shows the result of each step. You can close the page while it works. If a step says **Failed**, read its detail, correct the cause, and click **Run this step again** (or **Continue setup**).
 
-Embedding is the slow part: a worker reads a minute of each track and turns it into a vector. The public stack runs a loop in the background. A local install starts only the app and the database, so start a worker when you are ready:
+![The Setup checklist with analysis, grouping, naming, and the Start setup button](/images/first-play/setup.jpg)
+
+*Example from an established library. Your counts and button label may differ.*
+
+## 2. Start audio analysis
+
+The local install does not start an analysis worker automatically. From the **sole folder on your computer** (the one containing `compose.yaml` and `.env`), run:
 
 ```sh
 docker compose --profile worker up -d
 ```
 
-It runs in API mode: it downloads snippets from the app and uploads vectors back, so it never needs access to your files. It authenticates with `WORKER_TOKEN` from `.env` — the value you generated during install. Stop it any time with `docker compose --profile worker down`.
+This starts the optional worker in the background. It fetches short snippets from the app and sends back its analysis; it does not mount your music folder or connect to PostgreSQL. It uses the `WORKER_TOKEN` in `.env`. You do not need to open a shell inside a container.
 
-If you would rather run the worker on a different machine, create a scoped key under **Manage → API keys** instead of copying this token, and see [Embedding workers](/guides/worker).
+On **Setup**, **Wait for audio analysis** may show **Waiting** for a while. The page checks again about once a minute while the app is running, even if you close your browser. The first pass can take a long time for a large library. Open **Worker** (`/status`) to see **Embedded**, **Pending**, and the progress bar. **Skipped** tracks are reported separately.
 
-## Create the centered space
+![The Worker page showing analysis coverage and progress](/images/first-play/worker.jpg)
 
-Once at least two tracks are analysed, the app needs a *centered space*: the average vector of your library, which every similarity comparison is measured against. Until it exists, search and clustering have nothing to work from.
+If you run the worker elsewhere instead, create a Worker-scoped key under **Manage → API keys** and follow [Embedding workers](/guides/worker).
 
-Open **Worker** and use **Create the centered space** — that button appears when the space is missing, and **Preview** tells you what it would change before you commit. The same step from a terminal, on a deployment whose database your machine can reach:
+## 3. Check the centered space
 
-```sh
-bun run db:ensure-centered
-```
+Before Sole can compare tracks, it needs a *centered space* built from their analysis. On **Worker**, check the small **centered** count beneath the progress bar. If **Embedded** is above zero but **centered** is zero, the page offers **Preview** and **Create the centered space**. Once a useful batch has been analysed, click **Preview**, then **Create the centered space**. If some vectors remain uncentered later, use **Center the remaining embeddings** on the same page.
 
-**Worker** shows both counts. A high number of embedded tracks with zero centered is not ready for the next step.
+Return to **Setup**. It waits for at least **200 analyzed, centered tracks** before grouping a library that has more than 200 tracks. It resumes automatically while the app is running; **Check again** also resumes a paused run immediately. For a smaller library, it can proceed when every track is analyzed.
 
-## Group into vibes
+## 4. Let Setup group and name the vibes
 
-Clustering is deliberately explicit, and it never renumbers an existing generation — your names are attached to cluster ids, so re-running clustering without naming the new generation would strand every name on the wrong vibe.
+**Group tracks into vibes** chooses a cluster count from the size of your analyzed library and groups the tracks. **Name the vibes** gives each group an editable starting name based on its artists. The **Check cover art** step only reports coverage. When Setup says **You're set up**, click **Open your vibes**, or use **Vibe → Browse** to inspect them. Click a tile to change its name; preview a group before playing it.
 
-**Setup → Group tracks into vibes** derives a sensible cluster count from the size of your library and runs it in the app. On the full stack you can instead benchmark a count of your choosing, which is worth doing on a large library:
+![The Vibe Browse tab with named groups of tracks](/images/first-play/vibes.jpg)
 
-```sh
-docker compose --profile clustering run --rm clusterer-bun benchmark \
-  --k 12 --pca-dim 32 --evaluation-dim 32 --runs 3 --record-run \
-  --output /artifacts/first-run.json \
-  --assignments /artifacts/first-assignments.jsonl
-```
-
-`--k` is how many clusters to aim for, `--runs 3` repeats the fit and reports how stable it is, and the two output files are the report and the per-track assignment list. This writes nothing to your library; applying is a separate, validated step. Take the run id it prints:
-
-```sh
-docker compose --profile clustering run --rm clusterer \
-  --apply-run-id 4 --apply-assignments /artifacts/first-assignments.jsonl --confirm-apply
-```
-
-The repository's `clustering-rs/README.md` covers the quality checks, validation, and rollback.
-
-## Then
-
-Return to **Vibe** to listen through the clusters and rename them to something you recognise. **Manage → Full tidy-up** keeps things current afterwards: it assigns newly analysed tracks to the centroids you already have, and leaves every existing assignment alone.
+You can start listening before every track is analyzed. Later, **Manage → Full tidy-up** assigns newly analyzed tracks to the existing vibes without changing earlier assignments. If no tracks appear or analysis stalls, see [Troubleshooting](/reference/troubleshooting).

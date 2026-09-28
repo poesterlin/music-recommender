@@ -12,6 +12,7 @@ import {
 	verifyPassword
 } from '$lib/server/auth';
 import { userTable } from '$lib/server/schema';
+import { registrationAvailable } from '$lib/server/registration';
 import type { Actions, PageServerLoad } from './$types';
 
 const loginSchema = z.object({
@@ -22,7 +23,7 @@ const loginSchema = z.object({
 
 export const load: PageServerLoad = async ({ locals }) => {
 	if (locals.user) redirect(302, '/');
-	return {};
+	return { registrationAvailable: await registrationAvailable() };
 };
 
 export const actions: Actions = {

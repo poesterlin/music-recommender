@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/state';
+	import type { PageData } from './$types';
 
-	let { form } = $props();
+	let { data, form }: { data: PageData; form: { message?: string } | undefined } = $props();
 </script>
 
 <svelte:head><title>Log in · Sole</title></svelte:head>
@@ -48,11 +49,17 @@
 			>
 		</form>
 
-		<p class="text-ink-soft mt-5 text-center text-sm">
-			Need an account? <a
-				class="text-accent-deep hover:text-accent font-bold"
-				href="/register{page.url.search}">Register</a
-			>
-		</p>
+		{#if data.registrationAvailable}
+			<p class="text-ink-soft mt-5 text-center text-sm">
+				Need an account? <a
+					class="text-accent-deep hover:text-accent font-bold"
+					href="/register{page.url.search}">Register</a
+				>
+			</p>
+		{:else}
+			<p class="text-ink-soft mt-5 text-center text-sm">
+				Need an account? Ask the person who runs Sole.
+			</p>
+		{/if}
 	</div>
 </div>

@@ -2,9 +2,7 @@
 
 Getting a container behind TLS and pointing DNS at it is your business. What follows is only what will bite you with this app.
 
-## Served over HTTPS, or logins do not stick
-
-In production the session cookie is named `__Host-music-auth-session`. Browsers only accept a `__Host-` cookie that is `Secure`, so the app must see the request as `https` — terminating TLS at a proxy that does not forward `X-Forwarded-Proto` produces a login that appears to succeed and then bounces straight back to the login page.
+## Set the public URL for login
 
 Set `ORIGIN` to the exact public URL and stop guessing:
 
@@ -47,12 +45,9 @@ The web service reads your library through a read-only bind of `MUSIC_LIBRARY_PA
 
 Named volumes to keep: `postgres-data`, `cluster-artifacts`, `embedding-artifacts`. Clustering writes artifacts and rollback data into `cluster-artifacts`, so treat it as state rather than a cache.
 
-## Open by default
+## Access and uploads
 
-- **Registration is open.** Anyone who can reach the app can create an account; there is no flag to turn this off. If that is not acceptable, put access control in front of it.
-- **The worker API is app-authenticated.** `/api/worker/*` uses its own bearer token. If you also put interactive auth (or an SSO gate) in front of it, remote workers break.
-- **PostgreSQL is published.** The `database` profile maps `${POSTGRES_PORT:-5432}` on every interface. Remove that `ports` entry — containers reach the database by service name anyway — or at least replace the `change-me` default password.
-- **Request bodies are capped at 512 KB.** `POST /api/worker/embeddings` answers **413** above that, so a proxy with a smaller limit stalls embedding uploads.
+Self-registration is off by default, and `MAX_USERS` defaults to `1`. Create an account with `bun run auth:create-user --username <name>` from the repository. To allow more accounts, set a higher `MAX_USERS` in `.env`; to let people create their own up to that limit, also set `ALLOW_REGISTRATION=true` and restart the app. The registration link disappears at the limit, and direct visits return to login. Existing accounts remain usable. For the optional PostgreSQL service, set a real password and keep its port private. If remote workers connect through your proxy, allow uploads of at least 512 KB and let their bearer-authenticated API requests through.
 
 ## Credentials
 
