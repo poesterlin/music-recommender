@@ -30,6 +30,9 @@ export const load: PageServerLoad = async () => {
 		queueState,
 		vibeClusterIds: clusterIds,
 		vibeSchedules: schedules,
-		activeSchedule
+		activeSchedule,
+		// Drives the empty-state banner. "Configured" is not the same as
+		// "reachable"; the queues panel reports that separately.
+		musicAssistant: Boolean(process.env.MUSIC_HOST?.trim() && process.env.MA_TOKEN?.trim())
 	};
 };

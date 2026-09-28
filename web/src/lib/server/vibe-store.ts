@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from './db';
 import { vibeScheduleTable, vibeStateTable } from './schema';
 
@@ -27,13 +27,19 @@ function sanitizeHour(h: unknown): number | null {
 
 export async function getVibeClusterIds(): Promise<number[]> {
 	try {
+		const available = await db.execute(
+			sql`SELECT DISTINCT cluster_id FROM track WHERE cluster_id >= 0`
+		);
+		const active = new Set(available.map((row) => Number(row.cluster_id)));
+		if (!active.size) return [];
 		const [row] = await db
 			.select()
 			.from(vibeStateTable)
 			.where(eq(vibeStateTable.key, VIBE_IDS_KEY));
 		if (row) {
 			const ids = sanitizeIds(JSON.parse(row.value));
-			if (ids.length) return ids;
+			if (ids.length) return ids.filter((id) => active.has(id));
+			return DEFAULT_VIBE_CLUSTERS.filter((id) => active.has(id));
 		}
 	} catch (e) {
 		console.warn('[vibe] read state failed, using default:', String(e));
@@ -72,9 +78,16 @@ export function hourMatches(s: { startHour: number; endHour: number }, hour: num
 }
 
 export async function getActiveSchedule(now = new Date()): Promise<VibeSchedule | null> {
+	const active = new Set(await getVibeClusterIds());
+	if (!active.size) return null;
 	const schedules = await listSchedules();
 	const hour = now.getHours();
-	return schedules.find((s) => s.enabled !== false && hourMatches(s, hour)) ?? null;
+	return (
+		schedules.find(
+			(s) =>
+				s.enabled !== false && hourMatches(s, hour) && s.clusterIds.some((id) => active.has(id))
+		) ?? null
+	);
 }
 
 export async function createSchedule(input: {
@@ -145,6 +158,8 @@ export async function deleteSchedule(id: number): Promise<void> {
 // Seed defaults on first run: manual picks + 3 hour-range slots.
 export async function ensureVibeSeeded(): Promise<void> {
 	try {
+		const active = await getVibeClusterIds();
+		if (!active.length) return;
 		const [existing] = await db
 			.select()
 			.from(vibeStateTable)

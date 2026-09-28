@@ -28,10 +28,14 @@
 	const queueDeviceCount = $derived(
 		new Set(queueState.queues.flatMap((queue) => queue.playerIds)).size
 	);
+	// No clusters means no vibes to play, whatever the stored default list says.
+	const vibesReady = $derived(data.vibeClusterIds.length > 0);
 	const slotLine = $derived(
-		data.activeSchedule
-			? `${data.activeSchedule.name} · ${data.activeSchedule.startHour}–${data.activeSchedule.endHour}h`
-			: 'Open deck · your hand-picked clusters'
+		!vibesReady
+			? 'No vibes yet'
+			: data.activeSchedule
+				? `${data.activeSchedule.name} · ${data.activeSchedule.startHour}–${data.activeSchedule.endHour}h`
+				: 'Open deck · your hand-picked clusters'
 	);
 
 	async function refreshQueues() {
@@ -134,6 +138,21 @@
 </script>
 
 <!-- HERO -->
+{#if !vibesReady}
+	<div
+		class="border-accent/30 bg-accent/5 mb-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4"
+	>
+		<div>
+			<p class="font-bold">Your library needs setup</p>
+			<p class="text-ink-soft text-sm">
+				Connect your music, import tracks, then build your first vibe.
+			</p>
+		</div>
+		<a href="/setup" class="bg-ink text-cream rounded-full px-4 py-2 text-sm font-bold"
+			>Open setup →</a
+		>
+	</div>
+{/if}
 <section class="relative overflow-hidden">
 	<p
 		class="ghost-type font-display pointer-events-none absolute -top-6 right-0 hidden text-[11rem] leading-none font-black tracking-tight select-none lg:block"
@@ -163,12 +182,12 @@
 			<div class="mt-7 flex flex-wrap gap-2.5">
 				<button
 					class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep rounded-full px-7 py-3 font-bold shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
-					disabled={vibeBusy}
+					disabled={vibeBusy || !vibesReady}
 					onclick={playVibe}>{vibeBusy ? 'Starting…' : '▶ Play the vibe'}</button
 				>
 				<button
 					class="bg-ink text-cream hover:bg-ink-soft rounded-full px-6 py-3 font-bold transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
-					disabled={scheduledBusy}
+					disabled={scheduledBusy || !vibesReady || !data.activeSchedule}
 					onclick={playScheduled}>{scheduledBusy ? 'Starting…' : 'Play scheduled slot'}</button
 				>
 			</div>
@@ -210,7 +229,9 @@
 							class="bg-paper flex size-28 flex-col items-center justify-center rounded-full text-center"
 						>
 							<p class="font-display text-ink px-4 text-sm leading-tight font-black">
-								{data.activeSchedule?.name ?? 'Open Deck'}
+								{!vibesReady
+									? 'First play'
+									: (data.activeSchedule?.name ?? 'Open Deck')}
 							</p>
 							<p class="text-faded mt-1 text-[10px] font-bold tracking-[0.2em] uppercase">
 								33⅓ rpm
@@ -248,9 +269,13 @@
 				{data.activeSchedule.clusterIds.map(clusterLabel).join(' · ')}
 			</p>
 		{:else}
-			<p class="font-display mt-2 text-3xl font-black">Hand-picked</p>
+			<p class="font-display mt-2 text-3xl font-black">
+				{!vibesReady ? 'Not ready yet' : 'Hand-picked'}
+			</p>
 			<p class="text-ink-soft mt-1 text-sm font-bold">
-				No schedule slot matches this hour — your manual picks run the room.
+				{!vibesReady
+					? 'Finish setup to build your first vibe.'
+					: 'No schedule slot matches this hour — your manual picks run the room.'}
 			</p>
 			<div class="mt-3 flex flex-wrap gap-1.5">
 				{#each data.vibeClusterIds as id (id)}
@@ -264,8 +289,11 @@
 			</div>
 		{/if}
 		<div class="border-ink/10 mt-5 border-t pt-4">
-			<a href="/vibe" class="text-accent-deep text-sm font-bold underline-offset-4 hover:underline">
-				Retune the vibe mixer →
+			<a
+				href={!vibesReady ? '/setup' : '/vibe'}
+				class="text-accent-deep text-sm font-bold underline-offset-4 hover:underline"
+			>
+				{!vibesReady ? 'Open setup →' : 'Retune the vibe mixer →'}
 			</a>
 		</div>
 	</section>
@@ -307,7 +335,13 @@
 						: 'bg-moss'}"
 				></span>
 			</span>
-			{queueUnavailable ? 'Reconnecting' : queueRefreshing ? 'Syncing' : 'Live'}
+			{!data.musicAssistant
+				? 'Not connected'
+				: queueUnavailable
+					? 'Reconnecting'
+					: queueRefreshing
+						? 'Syncing'
+						: 'Live'}
 		</div>
 	</div>
 
@@ -393,7 +427,12 @@
 		</div>
 	{:else}
 		<div class="border-ink/20 bg-cream/60 rounded-2xl border border-dashed px-6 py-8 text-center">
-			{#if queueUnavailable}
+			{#if !data.musicAssistant}
+				<p class="text-ink-soft text-sm font-bold">Music Assistant is not connected.</p>
+				<a class="text-accent-deep mt-2 inline-block text-sm font-bold" href="/setup"
+					>Open setup →</a
+				>
+			{:else if queueUnavailable}
 				<p class="text-ink-soft text-sm font-bold">Music Assistant is taking a moment.</p>
 				<p class="text-faded mt-1 text-sm">The last queue is safe; this page will keep trying.</p>
 			{:else if queueState.scope === 'main'}
@@ -403,7 +442,7 @@
 			{/if}
 			<button
 				class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep mt-4 rounded-full px-6 py-2.5 font-bold shadow-lg transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-60 disabled:hover:translate-y-0"
-				disabled={vibeBusy}
+				disabled={vibeBusy || !vibesReady}
 				onclick={playVibe}>{vibeBusy ? 'Starting…' : '▶ Play the vibe'}</button
 			>
 		</div>
