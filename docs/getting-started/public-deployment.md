@@ -14,9 +14,30 @@ ORIGIN=https://sole.example.com
 
 SvelteKit compares the browser's `Origin` against this on every form post. Get it wrong and the login returns **403**, with nothing in the app wrong.
 
-## Proxy and network
+## Behind your proxy
 
-`compose.yaml` carries Traefik labels for a router and service named `sole`, and expects an **external** network named by `TRAEFIK_NETWORK` (default `traefik_web`). Docker Compose refuses to start if that network does not exist. Either create it, point `TRAEFIK_NETWORK` at one you already have, or set `TRAEFIK_EXTERNAL=false` to have Compose create and manage it for you. Using another proxy means deleting the `traefik.*` labels and the `traefik_web` entry, then publishing the port yourself.
+The repo's `compose.yaml` wires it like this — these lines are lifted straight from it:
+
+```yaml
+services:
+  web:
+    environment:
+      PORT: "3000"                             # what the container listens on
+      ORIGIN: "${ORIGIN:-https://${DOMAIN}}"   # must match the public URL
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sole.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.services.sole.loadbalancer.server.port=3000"
+    networks:
+      - traefik_web
+
+networks:
+  traefik_web:
+    external: ${TRAEFIK_EXTERNAL:-true}
+    name: ${TRAEFIK_NETWORK:-traefik_web}
+```
+
+Replace the labels with your proxy's, or drop them and publish the port. The one fact your proxy needs is the container port, **3000**.
 
 For probes, `GET /api/health` returns `{"status":"ok"}` with `Cache-Control: no-store`. The container also has a healthcheck, so `up --wait` and orchestrators see readiness.
 
