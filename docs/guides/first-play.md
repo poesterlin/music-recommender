@@ -11,7 +11,7 @@ After both integrations are configured, go to **Manage → Full tidy-up**. It sy
 On the public Compose stack, the default embedding loop runs in the background. On the local web-only stack, start a bounded embedding job when your music is mounted:
 
 ```sh
-docker compose --project-name music-recommender-local --env-file .env.local --profile embedding run --rm embeddings
+docker compose --project-name sole-local --env-file .env.local --profile embedding run --rm embeddings
 ```
 
 After at least two raw embeddings exist, establish the centered space. Use the database URL for the stack you are working on:
@@ -35,7 +35,7 @@ Initial clustering is an explicit operation. Set `COMPOSE` for your stack:
 COMPOSE='docker compose'
 
 # Or, for the local install:
-COMPOSE='docker compose --project-name music-recommender-local --env-file .env.local'
+COMPOSE='docker compose --project-name sole-local --env-file .env.local'
 ```
 
 Benchmark and record an artifact. This does **not** change assignments:

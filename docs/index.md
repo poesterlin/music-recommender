@@ -2,7 +2,7 @@
 layout: home
 
 hero:
-  name: Music Recommender
+  name: Sole
   text: Your library, in a new light.
   tagline: Index your music, find the connections, and play a vibe that sounds like you.
   image:

@@ -1,6 +1,6 @@
 # Getting started
 
-Music Recommender uses a web app, PostgreSQL with pgvector, and a worker that listens to short audio excerpts. Music Assistant supplies the catalog and playback; Home Assistant supplies the current library import endpoint.
+Sole uses a web app, PostgreSQL with pgvector, and a worker that listens to short audio excerpts. Music Assistant supplies the catalog and playback; Home Assistant supplies the current library import endpoint.
 
 ## Choose a path
 

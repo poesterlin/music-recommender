@@ -38,16 +38,16 @@ PostgreSQL database and the web app, and installs the schema. Open
 Assistant details to `.env.local` when ready and restart the web service:
 
 ```sh
-docker compose --project-name music-recommender-local --env-file .env.local up -d --force-recreate web
+docker compose --project-name sole-local --env-file .env.local up -d --force-recreate web
 ```
 
 To resume after an interrupted first run, start the local database, migrate
 with the local URL (never the production `.env`), then start web:
 
 ```sh
-docker compose --project-name music-recommender-local --env-file .env.local --profile database up -d postgres
+docker compose --project-name sole-local --env-file .env.local --profile database up -d postgres
 DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.local)" bun --no-env-file run db:migrate
-docker compose --project-name music-recommender-local --env-file .env.local up -d --build web
+docker compose --project-name sole-local --env-file .env.local up -d --build web
 ```
 
 The local stack starts only web and PostgreSQL. Embedding and scheduled jobs

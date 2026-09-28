@@ -22,21 +22,21 @@ if (!(await stat(musicPath)).isDirectory() || /[\r\n$]/.test(musicPath)) {
 
 const password = randomBytes(24).toString("hex");
 const workerToken = randomBytes(24).toString("hex");
-const databaseUrl = `postgres://recommender:${password}@127.0.0.1:55433/recommender`;
+const databaseUrl = `postgres://sole:${password}@127.0.0.1:55433/sole`;
 const contents = [
   "# Local setup only. Your existing .env is not used.",
   "APP_ENV_FILE=.env.local",
   "SETUP_MODE=local",
   "TRAEFIK_EXTERNAL=false",
-  "TRAEFIK_NETWORK=music_recommender_local_proxy",
+  "TRAEFIK_NETWORK=sole_local_proxy",
   "DOMAIN=localhost",
   "WEB_PORT=4933",
   "POSTGRES_PORT=55433",
-  "POSTGRES_USER=recommender",
+  "POSTGRES_USER=sole",
   `POSTGRES_PASSWORD=${password}`,
-  "POSTGRES_DB=recommender",
+  "POSTGRES_DB=sole",
   `DATABASE_URL=${databaseUrl}`,
-  `DATABASE_INTERNAL_URL=postgres://recommender:${password}@postgres:5432/recommender`,
+  `DATABASE_INTERNAL_URL=postgres://sole:${password}@postgres:5432/sole`,
   `MUSIC_LIBRARY_PATH=${musicPath}`,
   `WORKER_TOKEN=${workerToken}`,
   "MUSIC_HOST=",
@@ -66,7 +66,7 @@ const environment = {
   APP_ENV_FILE: ".env.local",
   SETUP_MODE: "local",
   TRAEFIK_EXTERNAL: "false",
-  TRAEFIK_NETWORK: "music_recommender_local_proxy",
+  TRAEFIK_NETWORK: "sole_local_proxy",
   DOMAIN: "localhost",
   WEB_PORT: "4933",
   POSTGRES_PORT: "55433",
@@ -74,7 +74,7 @@ const environment = {
   POSTGRES_PASSWORD: password,
   POSTGRES_DB: "recommender",
   DATABASE_URL: databaseUrl,
-  DATABASE_INTERNAL_URL: `postgres://recommender:${password}@postgres:5432/recommender`,
+  DATABASE_INTERNAL_URL: `postgres://sole:${password}@postgres:5432/sole`,
   MUSIC_LIBRARY_PATH: musicPath,
   WORKER_TOKEN: workerToken,
   MUSIC_HOST: "",
@@ -99,7 +99,7 @@ const compose = [
   "docker",
   "compose",
   "--project-name",
-  "music-recommender-local",
+  "sole-local",
   "--env-file",
   ".env.local",
 ];

@@ -1,14 +1,14 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'Music Recommender',
+  title: 'Sole',
   description: 'From a local library to your first playable vibe.',
   cleanUrls: true,
   srcExclude: ['README.md'],
   head: [['meta', { name: 'theme-color', content: '#f4efe5' }]],
   themeConfig: {
     logo: '/record.svg',
-    siteTitle: 'Music Recommender',
+    siteTitle: 'Sole',
     nav: [
       { text: 'Start', link: '/getting-started/' },
       { text: 'First play', link: '/guides/first-play' },

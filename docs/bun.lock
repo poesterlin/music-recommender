@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "music-recommender-docs",
+      "name": "sole-docs",
       "devDependencies": {
         "vitepress": "1.6.4",
       },
