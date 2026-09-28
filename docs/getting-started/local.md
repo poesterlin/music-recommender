@@ -172,11 +172,11 @@ Music Assistant supplies the catalogue and handles playback; Sole reads the same
 
 Only the app and PostgreSQL run, and each has its own volume. The app is the only thing that reads your music folder, and only to slice the snippets a worker asks for. The worker itself never touches your files — see [Embedding workers](/guides/worker).
 
-The app's port is published on every interface, so it is reachable from your network. If that is not what you want, publish it to this machine only by editing `compose.yaml`:
+The app's port is published on every interface, so it is reachable from your network. If that is not what you want, bind it to this machine only by editing the one line in `compose.yaml`:
 
 ```yaml
     ports:
-      - '127.0.0.1:${WEB_PORT:-4932}:3000'
+      - '127.0.0.1:4932:3000'
 ```
 
 Opening the app from another device needs one more setting. The login form is refused unless `ORIGIN` matches the address in your browser, so set it to the one you will actually use:
