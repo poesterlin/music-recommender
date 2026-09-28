@@ -23,18 +23,6 @@
 				/>
 			</div>
 			<div>
-				<label class="mb-1 block text-sm font-bold" for="email"
-					>Email <span class="text-ink-soft font-normal">(optional)</span></label
-				>
-				<input
-					class="border-ink/20 bg-paper focus:border-accent w-full rounded-lg border px-3 py-2 outline-none"
-					id="email"
-					name="email"
-					type="email"
-					autocomplete="email"
-				/>
-			</div>
-			<div>
 				<label class="mb-1 block text-sm font-bold" for="password">Password</label>
 				<input
 					class="border-ink/20 bg-paper focus:border-accent w-full rounded-lg border px-3 py-2 outline-none"

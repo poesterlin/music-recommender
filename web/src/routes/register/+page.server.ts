@@ -18,7 +18,6 @@ import type { Actions, PageServerLoad } from './$types';
 const registerSchema = z.object({
 	username: z.string(),
 	password: z.string(),
-	email: z.string().email().optional().or(z.literal('')),
 	redirect: z.string().optional()
 });
 
@@ -51,7 +50,6 @@ export const actions: Actions = {
 		try {
 			await db.insert(userTable).values({
 				id: userId,
-				email: parsed.data.email?.trim() || null,
 				username,
 				passwordHash: await hashPassword(password),
 				createdAt: new Date(),

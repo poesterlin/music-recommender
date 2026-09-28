@@ -16,7 +16,6 @@ const authCascade = { onDelete: 'cascade', onUpdate: 'cascade' } as const;
 
 export const userTable = pgTable('user', {
 	id: text('id').primaryKey(),
-	email: text('email').unique(),
 	createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),
 	lastLogin: timestamp('last_login', { withTimezone: true, mode: 'date' }),
 	username: text('username').notNull().unique(),

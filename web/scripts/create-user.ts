@@ -11,8 +11,6 @@ function option(name: string): string | undefined {
 }
 
 const username = option('--username')?.trim();
-const emailOption = option('--email');
-const email = emailOption?.trim() || null;
 const suppliedPassword = option('--password');
 const password = suppliedPassword ?? randomBytes(18).toString('base64url');
 const databaseUrl = process.env.DATABASE_URL;
@@ -33,14 +31,13 @@ const passwordHash = await bunPassword.hash(password, {
 const sql = postgres(databaseUrl, { max: 1, connect_timeout: 10 });
 
 try {
-	const [existing] = await sql`select id, email from "user" where username = ${username}`;
+	const [existing] = await sql`select id from "user" where username = ${username}`;
 	let action: 'created' | 'reset';
 	if (existing) {
 		await sql.begin(async (tx) => {
 			await tx`
 				update "user"
 				set password_hash = ${passwordHash},
-					email = ${emailOption === undefined ? existing.email : email},
 					last_login = null
 				where id = ${existing.id}
 			`;
@@ -49,8 +46,8 @@ try {
 		action = 'reset';
 	} else {
 		await sql`
-			insert into "user" (id, username, email, password_hash)
-			values (${randomBytes(18).toString('base64url')}, ${username}, ${email}, ${passwordHash})
+			insert into "user" (id, username, password_hash)
+			values (${randomBytes(18).toString('base64url')}, ${username}, ${passwordHash})
 		`;
 		action = 'created';
 	}
