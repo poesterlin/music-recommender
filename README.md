@@ -31,7 +31,7 @@ live in. Nothing is cloned and no file is edited by hand:
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/music-recommender/main/setup.ts | bun run -
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.ts | bun run -
 ```
 
 It downloads `compose.yaml`, writes `.env` with generated secrets, starts

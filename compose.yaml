@@ -7,7 +7,7 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
-    image: ${WEB_IMAGE:-ghcr.io/poesterlin/music-recommender-web:latest}
+    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:latest}
     env_file: ${APP_ENV_FILE:-.env}
     restart: unless-stopped
     ports:
@@ -93,7 +93,7 @@ services:
   # processes tracks with embedding IS NULL. First run has a backlog
   # (~6k tracks) and will take a while; tune/disable via sleep interval.
   embeddings-loop:
-    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/music-recommender-embeddings:latest}
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     build:
       context: embeddings
     env_file: ${APP_ENV_FILE:-.env}
@@ -117,7 +117,7 @@ services:
   # Standalone Rust cluster job. Benchmark mode is read-only; an apply requires
   # an explicit run id, artifact, and confirmation flag.
   clusterer:
-    image: ${CLUSTERER_IMAGE:-ghcr.io/poesterlin/music-recommender-clusterer:latest}
+    image: ${CLUSTERER_IMAGE:-ghcr.io/poesterlin/sole-clusterer:latest}
     build:
       context: .
       dockerfile: clusterer/Dockerfile
@@ -134,7 +134,7 @@ services:
   # Bun + WASM numerical engine. Native clusterer remains the apply/rollback
   # boundary; this service only computes and optionally records artifacts.
   clusterer-bun:
-    image: ${CLUSTERER_BUN_IMAGE:-ghcr.io/poesterlin/music-recommender-clusterer-bun:latest}
+    image: ${CLUSTERER_BUN_IMAGE:-ghcr.io/poesterlin/sole-clusterer-bun:latest}
     build:
       context: .
       dockerfile: clusterer-bun/Dockerfile
@@ -153,7 +153,7 @@ services:
   # parity gate is running; the ONNX artifact is mounted read-only from
   # embedding-rs/models and is not baked into the image.
   embedding-rust:
-    image: ${EMBEDDING_RUST_IMAGE:-ghcr.io/poesterlin/music-recommender-embedding-rs:latest}
+    image: ${EMBEDDING_RUST_IMAGE:-ghcr.io/poesterlin/sole-embedding-rs:latest}
     build:
       context: .
       dockerfile: embedding-rs/Dockerfile
@@ -187,7 +187,7 @@ services:
   #     done"
 
   embeddings:
-    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/music-recommender-embeddings:latest}
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     build:
       context: embeddings
     env_file: ${APP_ENV_FILE:-.env}
@@ -217,7 +217,7 @@ services:
   # Portable worker mode. The worker talks only to the authenticated worker
   # API; it does not need PostgreSQL or a music volume.
   worker:
-    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/music-recommender-embeddings:latest}
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     build:
       context: embeddings
     env_file: ${APP_ENV_FILE:-.env}

@@ -6,7 +6,7 @@
  * .env.example, writes a .env with fresh secrets, then starts the published
  * images. Run it from the folder you want the install to live in.
  *
- *   curl -fsSL https://raw.githubusercontent.com/poesterlin/music-recommender/main/setup.ts | bun run -
+ *   curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.ts | bun run -
  *
  * Every prompt is optional. Pressing Enter accepts the default and the app
  * starts with a local database, so there is always something to open.
@@ -20,7 +20,7 @@ import { createInterface } from "node:readline/promises";
  * repository actually hosting this script; override with SOLE_REPO after a
  * rename or when running from a fork.
  */
-const REPO = process.env.SOLE_REPO ?? "poesterlin/music-recommender";
+const REPO = process.env.SOLE_REPO ?? "poesterlin/sole";
 const RAW = `https://raw.githubusercontent.com/${REPO}/main`;
 const EXAMPLE_URL = `${RAW}/.env.example`;
 const COMPOSE_FILE = "compose.yaml";

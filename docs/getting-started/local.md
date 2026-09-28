@@ -4,7 +4,7 @@ One command, no clone, no editing files. You need Docker; that is the only requi
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/music-recommender/main/setup.ts | bun run -
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.ts | bun run -
 ```
 
 If Bun is not installed:
@@ -71,7 +71,7 @@ The published `compose.yaml` is the full stack: it adds the timed jobs, the embe
 To build from source instead of pulling images, clone the repository and use the build override:
 
 ```sh
-git clone https://github.com/poesterlin/music-recommender.git
+git clone https://github.com/poesterlin/sole.git
 cd sole
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```

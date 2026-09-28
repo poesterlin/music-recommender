@@ -25,7 +25,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/poesterlin/music-recommender-web:latest}
+    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:latest}
     restart: unless-stopped
     env_file: .env
     environment:
