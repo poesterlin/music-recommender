@@ -4,12 +4,10 @@ import type { PageServerLoad } from './$types';
 export const load: PageServerLoad = async () => {
 	const lastRuns = await getLastRuns().catch(() => ({}) as Record<string, LastRun | null>);
 	return {
-		// The timed jobs post through Home Assistant, so they cannot run
+		// Every one of these jobs reads Music Assistant, so they cannot run
 		// without it. Configured is not the same as reachable; a failed run
 		// still reports itself in the job list.
-		homeAssistant: Boolean(
-			process.env.HA_HOST?.trim() && process.env.TOKEN?.trim() && process.env.CONFIG_ID?.trim()
-		),
+		musicAssistant: Boolean(process.env.MUSIC_HOST?.trim() && process.env.MA_TOKEN?.trim()),
 		lastRuns: Object.fromEntries(
 			Object.entries(lastRuns).map(([job, run]) => [
 				job,

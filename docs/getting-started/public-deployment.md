@@ -2,7 +2,7 @@
 
 This path uses the repository's Compose stack and an existing Traefik network. Run commands from the repository root.
 
-1. Copy `.env.example` to `.env` and set `DOMAIN`, `MUSIC_LIBRARY_PATH`, `MUSIC_HOST`, `MA_TOKEN`, `HA_HOST`, `TOKEN`, `CONFIG_ID`, and `WORKER_TOKEN`. The last token authenticates the default timed jobs. `PLAYBACK_API_KEY` is needed only if Home Assistant will call playback with that bootstrap key; a scoped key can also be created in the UI.
+1. Copy `.env.example` to `.env` and set `DOMAIN`, `MUSIC_LIBRARY_PATH`, `MUSIC_HOST`, `MA_TOKEN`, and `WORKER_TOKEN`. The last token authenticates the default timed jobs. `PLAYBACK_API_KEY` is needed only if an external system will call playback with that bootstrap key; a scoped key can also be created in the UI.
 2. Point `DATABASE_URL` at PostgreSQL with pgvector. If using the optional Compose database, start it first:
 
    ```sh

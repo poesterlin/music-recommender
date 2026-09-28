@@ -47,9 +47,6 @@ The first run gives you a working app with an empty library. Fill these in `.env
 |---|---|
 | `MUSIC_HOST` | Base URL of your Music Assistant server |
 | `MA_TOKEN` | Music Assistant access token |
-| `HA_HOST` | Base URL of your Home Assistant instance |
-| `TOKEN` | Home Assistant long-lived access token |
-| `CONFIG_ID` | Music Assistant config entry id |
 
 Then continue with [First playable vibe](/guides/first-play).
 

@@ -135,7 +135,7 @@
 				<p class="text-xs text-gray-500">{lastRunLine(job.id)}</p>
 				<button
 					class="mt-3 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-					disabled={running !== null || !data.homeAssistant}
+					disabled={running !== null || !data.musicAssistant}
 					onclick={() => runJob(job.label, job.path, 'confirm' in job ? job.confirm : undefined)}
 				>
 					{running === job.label ? 'Running…' : 'Run now'}
@@ -146,8 +146,8 @@
 	{#if running}
 		<p class="mt-3 text-sm text-gray-500">{running}… this may take a few minutes.</p>
 	{/if}
-	{#if !data.homeAssistant}<p class="mt-3 text-sm text-gray-600">
-			Connect Home Assistant in <a class="font-bold underline" href="/setup">Setup</a> to run these jobs.
+	{#if !data.musicAssistant}<p class="mt-3 text-sm text-gray-600">
+			Connect Music Assistant in <a class="font-bold underline" href="/setup">Setup</a> to run these jobs.
 		</p>{/if}
 	{#if jobError}<p class="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-800" role="alert">
 			{jobError}

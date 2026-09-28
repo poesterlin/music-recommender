@@ -105,7 +105,7 @@ else:
 <PageHeader
 	kicker="Manage"
 	title="Access"
-	description="Scoped keys for the embedding worker and Home Assistant. Each key is shown once and can be revoked here."
+	description="Scoped keys for the embedding worker and external playback. Each key is shown once and can be revoked here."
 />
 
 <div class="grid gap-6 lg:grid-cols-2">
@@ -137,7 +137,7 @@ else:
 					name="scope"
 				>
 					<option value="worker">Embedding worker API</option>
-					<option value="playback">Home Assistant playback POST</option>
+					<option value="playback">External playback POST</option>
 				</select>
 			</div>
 			<div>
@@ -185,7 +185,7 @@ else:
 				<p class="text-ink-soft mt-2 text-xs">
 					Scope: {form.createdKey.scope === 'worker'
 						? 'Embedding worker API'
-						: 'Home Assistant playback POST'}.
+						: 'External playback POST'}.
 				</p>
 			</div>
 		{/if}
@@ -216,7 +216,7 @@ else:
 							<div class="min-w-0">
 								<p class="font-bold">{key.name}</p>
 								<p class="text-ink-soft mt-1 text-xs">
-									{key.scope === 'worker' ? 'Embedding worker API' : 'Home Assistant playback'} ·
+									{key.scope === 'worker' ? 'Embedding worker API' : 'External playback'} ·
 									<code>{key.keyPrefix}…</code>
 								</p>
 							</div>

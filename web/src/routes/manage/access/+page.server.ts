@@ -54,7 +54,7 @@ export const actions: Actions = {
 			return fail(400, { message: 'Give the key a name between 1 and 80 characters.', values });
 		}
 		if (!scope) {
-			return fail(400, { message: 'Choose either Worker or Home Assistant playback.', values });
+			return fail(400, { message: 'Choose either Worker or external playback.', values });
 		}
 		if (expiresInDays === undefined) {
 			return fail(400, { message: 'Choose a valid expiration period.', values });

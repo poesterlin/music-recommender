@@ -9,7 +9,6 @@ RUN pip install --no-cache-dir -r /workspace/requirements.txt
 
 WORKDIR /workspace
 
-COPY index-library.py /workspace/index-library.py
 COPY generate-local-embeddings.py /workspace/generate-local-embeddings.py
 COPY worker.py worker_api.py install_python312.py /workspace/
 COPY migrate-centered-embeddings.py /workspace/migrate-centered-embeddings.py

@@ -13,7 +13,6 @@ The standalone [documentation site](docs/README.md) has a short guided install a
 - PostgreSQL with the `vector` extension
 - A music library available to the web process
 - Music Assistant for library metadata and playback
-- Home Assistant for the current library import endpoint
 
 Rust `1.78` or newer is needed for the optional native clustering tools. The
 Python worker uses Python 3.11 and the packages in
@@ -39,7 +38,7 @@ PostgreSQL and the web app from the published images, applies the schema, and
 creates an `admin` account. It refuses to overwrite an existing `.env`.
 
 Open `http://127.0.0.1:4932/login` with the printed credentials, then follow
-**Setup**. Add Music Assistant and Home Assistant details to `.env` and run
+**Setup**. Add your Music Assistant details to `.env` and run
 `docker compose up -d` again.
 
 To build from this checkout instead of pulling images, use the build override:
@@ -64,11 +63,10 @@ passes it with `--env-file`.
    - `DOMAIN`
    - `MUSIC_LIBRARY_PATH`
    - `MUSIC_HOST` and `MA_TOKEN`
-   - `HA_HOST`, `TOKEN`, and `CONFIG_ID`
-    - `WORKER_TOKEN` for the default Compose internal jobs (external workers
+   - `WORKER_TOKEN` for the default Compose internal jobs (external workers
       can use a UI-created worker key)
-    - `PLAYBACK_API_KEY` only if using the bootstrap Home Assistant playback key
-      rather than a UI-created playback key
+    - `PLAYBACK_API_KEY` only if using the bootstrap playback key rather than a
+      UI-created playback key
 
 3. Choose a database.
 
@@ -128,16 +126,16 @@ There are two bootstrap service credentials for Compose and existing automations
 
 - `WORKER_TOKEN` authenticates the default Python worker and the two internal
   Compose jobs. It is not accepted by ordinary application routes.
-- `PLAYBACK_API_KEY` lets Home Assistant `POST /api/play-vibe` trigger external
+- `PLAYBACK_API_KEY` lets an external system `POST /api/play-vibe` to trigger
   playback. It is not accepted by other application routes.
 
 Signed-in users can also create narrowly scoped keys under **API keys** in the
 web UI. A `worker` key is accepted only by `/api/worker/*`; a `playback` key is
-accepted only by the Home Assistant playback POST. The secret is displayed once,
+accepted only by the external playback POST. The secret is displayed once,
 stored only as a hash, and can be revoked without affecting the account. The
 environment credentials remain useful for unattended Compose jobs.
 
-For example, the Home Assistant request can use either the bootstrap key or a
+For example, the playback request can use either the bootstrap key or a
 UI-created playback key:
 
 ```sh
@@ -165,7 +163,7 @@ python embeddings/generate-local-embeddings.py --dry-run --limit 10
 ### API mode
 
 API mode is portable. It needs only the worker API URL and a worker-scoped
-bearer key; it does not need PostgreSQL, Music Assistant, Home Assistant, or a
+bearer key; it does not need PostgreSQL, Music Assistant, or a
 local music mount. Create the key under **API keys** in the UI, or use the
 bootstrap `WORKER_TOKEN` for an existing deployment.
 
@@ -267,8 +265,6 @@ versioned service images to GHCR and creates a GitHub release.
   to `127.0.0.1`.
 - The web service must have `ffmpeg` and a read-only music mount to serve worker
   audio snippets.
-- `HA_PLAYER_ENTITY` is optional and only enables the Home Assistant
-  now-playing fallback; no media-player watcher runs.
 - The repository `deploy.sh` runs from a checkout on the deployment machine; it
   fetches the configured branch and rebuilds the local Compose stack. Use the
   Compose workflow directly for another host.

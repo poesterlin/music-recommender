@@ -9,7 +9,7 @@ So the split is:
 - **Music Assistant** — the catalog and playback. Your music stays where it is.
 - **Sole** — the listening and the grouping. It reads the same library and shows you what belongs together.
 
-It stores those vectors in PostgreSQL with pgvector. Home Assistant supplies the current library import endpoint, which is how a fresh library sync reaches the app.
+It stores those vectors in PostgreSQL with pgvector. The library index is read straight from Music Assistant, which is how a fresh library sync reaches the app.
 
 ## Choose a path
 
@@ -19,5 +19,5 @@ It stores those vectors in PostgreSQL with pgvector. Home Assistant supplies the
 Then follow [First playable vibe](/guides/first-play). The app's **Setup** page shows which steps are ready and lets you test the two connections.
 
 ::: tip Before you start
-You need Bun, Docker Compose v2, a music folder readable by Docker, Music Assistant, and Home Assistant. A fresh database is created automatically on the local path.
+You need Bun, Docker Compose v2, a music folder readable by Docker, and Music Assistant. A fresh database is created automatically on the local path.
 :::

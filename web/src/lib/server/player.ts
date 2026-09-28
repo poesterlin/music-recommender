@@ -1,7 +1,6 @@
 /**
  * Native Music Assistant player backend.
- * Read + control playback directly over the MA WebSocket API —
- * no Home Assistant proxy involved.
+ * Read + control playback directly over the MA WebSocket API.
  *
  * Required env: MUSIC_HOST (https base URL), MA_TOKEN.
  * Optional: MA_PLAYER_NAME selects the main player. When it is unset, queue

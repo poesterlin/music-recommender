@@ -1,42 +1,16 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
+import { imageProxyPath, scanLibrary, type MaTrack } from './ma-library';
 import { trackTable } from './schema';
 
 /**
- * Measured against Music Assistant, per-item cost is lowest around 2000 per
- * page: 500 costs ~0.38ms/item, 2000 ~0.26ms/item, 5000 ~0.51ms/item because
- * the payload stops amortising the round trip.
+ * Measured against Music Assistant's `library_items`, throughput is flat to
+ * 2000 per request: 500 costs ~0.4ms/item, 2000 ~0.15ms/item, 5000 ~0.17ms/item.
+ * Going much larger stops helping and makes a dropped request costly to retry.
  */
 const PAGE_SIZE = 2000;
 /** Rows per multi-row insert. Large enough to amortise, small enough to stay cheap. */
 const CHUNK_SIZE = 150;
-
-interface Artist {
-	media_type: string;
-	uri: string;
-	name: string;
-	version: string;
-	image?: string;
-}
-
-interface Album {
-	media_type: string;
-	uri: string;
-	name: string;
-	version: string;
-	image: string;
-	artists: Artist[];
-}
-
-interface Track {
-	media_type: string;
-	uri: string;
-	name: string;
-	version: string;
-	image: string;
-	artists: Artist[];
-	album?: Album | null;
-}
 
 export type IndexResult = {
 	/** Rows the library reported. */
@@ -72,27 +46,9 @@ function splitArtists(artistName: string): string[] {
 	return parts.map((p) => p.trim()).filter((p) => p.length > 0);
 }
 
-/**
- * Keep only the imageproxy path from a Music Assistant cover URL.
- *
- * The upstream host is a private LAN address, so storing the full URL would
- * bake deployment-specific detail into the database and break whenever the
- * host changes. The path is stable; the host is re-applied at render time.
- */
-function imageProxyPath(image: string | undefined): string | null {
-	if (!image) return null;
-	try {
-		const url = new URL(image);
-		if (!url.pathname.startsWith('/imageproxy/')) return null;
-		return url.pathname;
-	} catch {
-		return null;
-	}
-}
-
 type Staged = typeof trackTable.$inferInsert;
 
-function stage(track: Track): Staged | null {
+function stage(track: MaTrack): Staged | null {
 	// A track with no uri cannot be upserted, and a track with no artists is
 	// not something the rest of the app can reason about. Skip both rather
 	// than letting one malformed item abort a whole page.
@@ -134,51 +90,10 @@ async function countExisting(rows: Staged[]): Promise<number> {
  * duplicate cleanup survives re-indexing.
  */
 export async function indexLibrary(): Promise<IndexResult> {
-	const env = process.env;
 	const result: IndexResult = { fetched: 0, added: 0, existing: 0, failed: 0 };
 
-	const authHeaders = new Headers();
-	authHeaders.append('Content-Type', 'application/json');
-	authHeaders.append('Authorization', 'Bearer ' + (env.TOKEN ?? ''));
-
-	let offset = 0;
-	while (true) {
-		const res = await fetch(
-			`${env.HA_HOST}/api/services/music_assistant/get_library?return_response`,
-			{
-				method: 'POST',
-				headers: authHeaders,
-				redirect: 'follow',
-				body: JSON.stringify({
-					config_entry_id: env.CONFIG_ID,
-					media_type: 'track',
-					limit: PAGE_SIZE,
-					offset,
-					order_by: 'sort_name'
-				})
-			}
-		);
-
-		if (res.status !== 200) {
-			const text = await res.text();
-			throw new Error(
-				`HTTP ${res.status} fetching library page at offset ${offset}: ${text.slice(0, 200)}`
-			);
-		}
-
-		let items: unknown;
-		try {
-			items = (JSON.parse(await res.text()) as { service_response?: { items?: unknown } })
-				.service_response?.items;
-		} catch (error) {
-			throw new Error(`library page at offset ${offset} was not valid JSON: ${String(error)}`);
-		}
-		if (!Array.isArray(items)) {
-			throw new Error(`library page at offset ${offset} had no items array`);
-		}
-		if (items.length === 0) break;
-
-		const staged = (items as Track[]).map(stage).filter((row): row is Staged => row !== null);
+	await scanLibrary({ limit: PAGE_SIZE }, async (items, offset) => {
+		const staged = items.map(stage).filter((row): row is Staged => row !== null);
 		result.fetched += items.length;
 
 		for (let i = 0; i < staged.length; i += CHUNK_SIZE) {
@@ -216,10 +131,7 @@ export async function indexLibrary(): Promise<IndexResult> {
 				console.error(`[index-library] chunk at offset ${offset + i} failed:`, error);
 			}
 		}
-
-		if (items.length < PAGE_SIZE) break;
-		offset += PAGE_SIZE;
-	}
+	});
 
 	console.log(
 		`[index-library] fetched ${result.fetched}, new ${result.added}, already indexed ${result.existing}, failed ${result.failed}`

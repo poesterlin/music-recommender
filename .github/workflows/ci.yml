@@ -138,9 +138,6 @@ jobs:
           DOMAIN: sole.example.test
           MUSIC_HOST: http://music-assistant.example.test
           MA_TOKEN: ci-token
-          HA_HOST: http://home-assistant.example.test
-          TOKEN: ci-token
-          CONFIG_ID: ci-config
           WORKER_TOKEN: ci-worker-token
         run: |
           cat > .env <<'EOF'
@@ -148,9 +145,6 @@ jobs:
           DOMAIN=sole.example.test
           MUSIC_HOST=http://music-assistant.example.test
           MA_TOKEN=ci-token
-          HA_HOST=http://home-assistant.example.test
-          TOKEN=ci-token
-          CONFIG_ID=ci-config
           WORKER_TOKEN=ci-worker-token
           EOF
           bun run doctor -- --json --skip-audio > fresh-doctor.json

@@ -1,106 +1,48 @@
 import { db } from './db';
+import { scanLibrary } from './ma-library';
 import { likedSongsTable } from './schema';
 
-const BATCH_SIZE = 500;
+/** Favourites are a small slice of the library, so a modest page is plenty. */
+const PAGE_SIZE = 500;
+/** Rows per multi-row insert. Large enough to amortise, small enough to stay cheap. */
 const CHUNK_SIZE = 150;
 
-interface Track {
-	media_type: string;
-	uri: string;
-	name: string;
-	version: string;
-	image: string;
-	artists: { media_type: string; uri: string; name: string; version: string; image?: string }[];
-	album: {
-		media_type: string;
-		uri: string;
-		name: string;
-		version: string;
-		image: string;
-		artists: any[];
-	};
-}
-
+/**
+ * Mirror Music Assistant's favourites into the liked-songs table.
+ *
+ * `favorite: true` is a server-side filter, so only favourites cross the wire
+ * rather than the whole library minus the rows to skip. Music Assistant's
+ * `count` command silently ignores the same filter, so the scan is paged to
+ * exhaustion instead of counting first.
+ *
+ * Returns the number of favourites seen, whether or not each one was newly
+ * inserted — the table is deduplicated by URI, so a re-sync legitimately
+ * writes nothing new.
+ */
 export async function syncFavorites(): Promise<number> {
-	const env = process.env;
-
-	const authHeaders = new Headers();
-	authHeaders.append('Content-Type', 'application/json');
-	authHeaders.append('Authorization', 'Bearer ' + env.TOKEN);
-
-	let offset = 0;
-	let allTracks: Track[] = [];
+	let seen = 0;
 
 	console.log('Fetching favorite tracks from Music Assistant...');
 
-	while (true) {
-		const raw = JSON.stringify({
-			config_entry_id: env.CONFIG_ID,
-			media_type: 'track',
-			limit: BATCH_SIZE,
-			offset,
-			favorite: true,
-			album_artists_only: false
-		});
+	await scanLibrary({ favorite: true, limit: PAGE_SIZE }, async (items) => {
+		const rows = items
+			.filter((track): track is typeof track & { uri: string } => Boolean(track?.uri))
+			.map((track) => ({ uri: track.uri, source: 'sync-favorites' }));
+		if (rows.length === 0) return;
+		seen += rows.length;
 
-		console.log(`Fetching favorites batch: offset ${offset}, limit ${BATCH_SIZE}`);
-
-		const res = await fetch(
-			env.HA_HOST + '/api/services/music_assistant/get_library?return_response',
-			{ method: 'POST', headers: authHeaders, body: raw, redirect: 'follow' }
-		);
-
-		const text = await res.text();
-
-		if (res.status !== 200) {
-			console.error('Response text:', text);
-			throw new Error(`HTTP ${res.status}: ${text}`);
+		for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
+			const chunk = rows.slice(i, i + CHUNK_SIZE);
+			try {
+				await db.insert(likedSongsTable).values(chunk).onConflictDoNothing();
+			} catch (error) {
+				// Keep going: a failed chunk should not abandon the remaining
+				// favourites, but it must be visible in the log.
+				console.error(`[sync-favorites] chunk at offset ${i} failed:`, error);
+			}
 		}
+	});
 
-		let data: any;
-		try {
-			data = JSON.parse(text);
-		} catch (error) {
-			console.error('Failed to parse JSON response:', error);
-			console.error('Response text:', text);
-			throw error;
-		}
-
-		const batch = data.service_response.items;
-
-		if (!batch || batch.length === 0) {
-			console.log('No more tracks to fetch.');
-			break;
-		}
-
-		allTracks.push(...batch);
-		console.log(`Fetched ${batch.length} tracks. Total: ${allTracks.length}`);
-
-		if (batch.length < BATCH_SIZE) {
-			console.log('Reached end of favorite tracks.');
-			break;
-		}
-
-		offset += BATCH_SIZE;
-	}
-
-	const rows = allTracks.map((track) => ({
-		uri: track.uri,
-		source: 'sync-favorites'
-	}));
-
-	console.log(`Inserting ${rows.length} favorite tracks into liked_songs...`);
-
-	for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-		const chunk = rows.slice(i, i + CHUNK_SIZE);
-		try {
-			await db.insert(likedSongsTable).values(chunk).onConflictDoNothing();
-			console.log(`Success: Chunk ${i / CHUNK_SIZE + 1} / ${Math.ceil(rows.length / CHUNK_SIZE)}`);
-		} catch (error) {
-			console.error(`Error in chunk starting at ${i}:`, error);
-		}
-	}
-
-	console.log('Finished syncing favorite tracks.');
-	return rows.length;
+	console.log(`Finished syncing favorite tracks: ${seen}`);
+	return seen;
 }

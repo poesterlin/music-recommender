@@ -48,10 +48,7 @@ async function main(): Promise<void> {
   if (!local) required('DOMAIN', process.env.DOMAIN, 'set the public hostname used by Traefik');
   for (const [name, hint] of [
     ['MUSIC_HOST', 'set the Music Assistant base URL'],
-    ['MA_TOKEN', 'set the Music Assistant access token'],
-    ['HA_HOST', 'set the Home Assistant base URL for library sync'],
-    ['TOKEN', 'set the Home Assistant long-lived access token'],
-    ['CONFIG_ID', 'set the Music Assistant config entry id']
+    ['MA_TOKEN', 'set the Music Assistant access token']
   ]) {
     if (local && !process.env[name]?.trim()) add('ok', name, 'configure before importing music');
     else required(name, process.env[name], hint);

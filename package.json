@@ -25,7 +25,6 @@
     "embeddings:rust:test": "cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features",
     "embeddings:rust:docker": "docker compose --profile embedding-rust build embedding-rust",
     "debug:validate-uris": "bun src/debug-validate-uris.ts",
-    "debug:analyze-shift": "bun src/debug-analyze-id-shift.ts",
     "task": "bun src/task-runner.ts",
     "dev": "bun --bun --watch ./src/index-library.ts"
   },

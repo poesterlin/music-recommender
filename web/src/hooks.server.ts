@@ -79,7 +79,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
-	// Home Assistant may trigger the external playback action with its own
+	// An external system may trigger the external playback action with its own
 	// dedicated key. It is deliberately limited to the playback POST route.
 	if (
 		isExternalPlaybackRequest(event) &&

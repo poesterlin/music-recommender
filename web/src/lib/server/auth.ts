@@ -20,14 +20,6 @@ export type AuthState = {
 
 export const serviceUser: AuthUser = { id: 'service', username: 'service' };
 
-// Outbound Home Assistant webhook authentication used by legacy playback
-// fallback. This is intentionally separate from inbound app authentication.
-export const authHeaders = new Headers({
-	Accept: 'application/json',
-	'Content-Type': 'application/json',
-	Authorization: `Bearer ${process.env.TOKEN ?? ''}`
-});
-
 function sha256(value: string): string {
 	return createHash('sha256').update(value, 'utf8').digest('hex');
 }

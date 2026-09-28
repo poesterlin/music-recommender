@@ -10,6 +10,7 @@ import {
 	sql
 } from 'drizzle-orm';
 import { db } from './db';
+import { scanLibrary } from './ma-library';
 import { likedSongsTable, skippedArtistsTable, skippedSongsTable, trackTable } from './schema';
 
 // ---------- Christmas Filtering Helpers ----------
@@ -414,67 +415,46 @@ function getMatchKey(name: string, artists: string[], album: string): string {
 	return `${nName}#${nArtists}#${nAlbum}`;
 }
 
-interface MATrack {
-	uri: string;
-	name: string;
-	artists: { name: string }[];
-	album: { name: string };
-}
-
 let cachedMAUris: Set<string> | null = null;
 let cachedMANameMap: Map<string, string> | null = null; // matchKey → uri
 let lastMAFetch = 0;
 const MA_CACHE_MS = 5 * 60 * 1000;
 
+/**
+ * Items per request when rebuilding the snapshot. This only reads a handful of
+ * fields per track, so the 5000 that suits a full index is unnecessary weight
+ * for a set that is rebuilt on a timer.
+ */
+const LIBRARY_PAGE_SIZE = 1000;
+
 let maRefreshInFlight: Promise<void> | null = null;
 let maRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * Build the URI and name-key snapshot used to validate and repair
+ * recommendations.
+ *
+ * A failure propagates rather than yielding a partial set. The caller caches
+ * the result, so a throw leaves the previous good snapshot in play; returning
+ * a half-scanned set would instead make the un-scanned tail look deleted and
+ * trigger spurious renames.
+ */
 async function fetchMALibrary(): Promise<{ uriSet: Set<string>; nameMap: Map<string, string> }> {
-	const env = process.env;
-	const authHeaders = new Headers();
-	authHeaders.append('Content-Type', 'application/json');
-	authHeaders.append('Authorization', 'Bearer ' + env.TOKEN);
-
 	const uriSet = new Set<string>();
 	const nameMap = new Map<string, string>();
-	let offset = 0;
-	const BATCH = 500;
 
-	while (true) {
-		const raw = JSON.stringify({
-			config_entry_id: env.CONFIG_ID,
-			media_type: 'track',
-			limit: BATCH,
-			offset,
-			order_by: 'sort_name'
-		});
-
-		const res = await fetch(
-			env.HA_HOST + '/api/services/music_assistant/get_library?return_response',
-			{ method: 'POST', headers: authHeaders, body: raw, redirect: 'follow' }
-		);
-
-		if (res.status !== 200) break;
-
-		const data = await res.json();
-		const items = data.service_response?.items;
-		if (!items || items.length === 0) break;
-
-		for (const t of items) {
-			uriSet.add(t.uri);
+	await scanLibrary({ limit: LIBRARY_PAGE_SIZE }, async (items) => {
+		for (const track of items) {
+			if (!track?.uri) continue;
+			uriSet.add(track.uri);
 			const key = getMatchKey(
-				t.name,
-				t.artists.map((a: any) => a.name),
-				t.album.name
+				track.name ?? '',
+				(track.artists ?? []).map((artist) => artist.name ?? ''),
+				track.album?.name ?? ''
 			);
-			if (!nameMap.has(key)) {
-				nameMap.set(key, t.uri);
-			}
+			if (!nameMap.has(key)) nameMap.set(key, track.uri);
 		}
-
-		if (items.length < BATCH) break;
-		offset += BATCH;
-	}
+	});
 
 	return { uriSet, nameMap };
 }
@@ -482,11 +462,13 @@ async function fetchMALibrary(): Promise<{ uriSet: Set<string>; nameMap: Map<str
 /**
  * Refresh the Music Assistant snapshot without blocking the caller.
  *
- * Paging the whole library out of Home Assistant costs ~14s for a 52k-track
- * library — about 105 sequential requests. That used to happen lazily on the
- * request path, so the first recommendation after every 5-minute expiry stalled
- * for 14 seconds. It now happens in the background and callers use whatever
- * snapshot is already loaded.
+ * The snapshot used to be paged out of Home Assistant's `get_library` service,
+ * costing ~14s for a 52k-track library across ~105 sequential requests. That
+ * happened lazily on the request path, so the first recommendation after every
+ * 5-minute expiry stalled for 14 seconds. It now happens in the background and
+ * callers use whatever snapshot is already loaded — and reading the library
+ * straight from Music Assistant cut the request count by roughly an order of
+ * magnitude, so a cold refresh is quick enough not to matter either way.
  */
 function scheduleMARefresh(): void {
 	if (maRefreshInFlight) return;
@@ -510,7 +492,7 @@ function scheduleMARefresh(): void {
  * Keep the snapshot warm on a timer, started once at boot.
  *
  * A recommendation then always validates against fresh-enough data without
- * ever waiting on Home Assistant.
+ * ever waiting on a full library scan.
  */
 export function startMABackgroundRefresh(): void {
 	if (maRefreshTimer) return;
@@ -535,7 +517,7 @@ async function getMALibrary(): Promise<{
 	nameMap: Map<string, string> | null;
 }> {
 	if (!cachedMAUris || !cachedMANameMap || Date.now() - lastMAFetch > MA_CACHE_MS) {
-		// Fire and forget. The caller must not wait ~14s for a library page.
+		// Fire and forget. The caller must not wait on a full library scan.
 		scheduleMARefresh();
 	}
 	return { uriSet: cachedMAUris, nameMap: cachedMANameMap };
@@ -554,7 +536,7 @@ export async function validateTrackUris(results: TrackResult[]): Promise<TrackRe
 	const { uriSet, nameMap } = await getMALibrary();
 	// No snapshot yet (the first moments after boot). These URIs came from our
 	// own index of Music Assistant, so passing them through is correct; waiting
-	// for the snapshot would mean a 14-second stall on a request.
+	// for the snapshot would mean a stall on a request.
 	if (!uriSet || !nameMap) return results;
 
 	const validated: TrackResult[] = [];

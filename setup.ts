@@ -110,12 +110,7 @@ const settings: Record<string, string> = {
 const placeholders = [
   "MUSIC_HOST",
   "MA_TOKEN",
-  "HA_HOST",
-  "TOKEN",
-  "CONFIG_ID",
-  "WEBHOOK_URL",
   "PLAYBACK_API_KEY",
-  "HA_PLAYER_ENTITY",
   "LIDARR_API_KEY",
 ];
 
@@ -211,7 +206,7 @@ Ready.
   Music     ${library}
   Settings  .env  (nothing there is secret from you; keep it out of git)
 
-Add Music Assistant and Home Assistant details to .env, then run:
+Add your Music Assistant details to .env, then run:
   docker compose up -d
 
 Change the music folder or ports? Edit .env and run \`docker compose up -d\` again.

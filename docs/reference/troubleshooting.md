@@ -4,7 +4,7 @@
 |---|---|
 | Setup says an integration is not configured | Add its fields to the active env file and recreate the web container. Use **Test connections** again. |
 | Music Assistant cannot connect | Check `MUSIC_HOST` and `MA_TOKEN` from the web container's network. |
-| Import is disabled | Home Assistant needs `HA_HOST`, `TOKEN`, and `CONFIG_ID`. |
+| Import is disabled | Music Assistant needs `MUSIC_HOST` and `MA_TOKEN`. |
 | Tracks appear, but no vibe plays | Check **Worker** for embeddings, centered vectors, and centroids. These are separate steps. |
 | Worker audio is missing | The host library mount and the track's local file must agree. |
 | A Colab worker cannot reach localhost | Enter a URL reachable from Colab on **Manage → API keys**. |
