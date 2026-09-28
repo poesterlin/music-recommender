@@ -24,7 +24,9 @@ class FakeLibrosa:
         assert path.endswith(".mp3")
         assert sr is None
         assert mono is True
-        assert duration == 2.0
+        # The existing tests decode a 2s clip; the hop tests decode 60s because
+        # a hop above the duration is rejected up front.
+        assert duration in (2.0, 60.0)
         return np.ones(44100, dtype=np.float32), 44100
 
     @staticmethod
@@ -45,17 +47,22 @@ class FakeModels:
 class FakeOpenL3:
     models = FakeModels()
     calls = []
+    # Hops are recorded so a test can assert the hop actually reaches OpenL3:
+    # it changes what the pooled vector represents, not just how long it takes.
+    hops = []
 
     @staticmethod
     def get_audio_embedding(
-        audio, sample_rate, model, embedding_size, batch_size, verbose
+        audio, sample_rate, model, embedding_size, batch_size, hop_size, verbose
     ):
         assert sample_rate == 48000
         assert model is FakeOpenL3.model
         assert embedding_size == 512
         assert batch_size >= 1
+        assert hop_size > 0
         assert verbose == 0
         FakeOpenL3.calls.append(batch_size)
+        FakeOpenL3.hops.append(hop_size)
         return np.ones((3, 512), dtype=np.float32), np.arange(3)
 
 
@@ -150,6 +157,7 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
     def test_process_audio_file_profiles_stages_and_reuses_model(self):
         FakeOpenL3.model = object()
         FakeOpenL3.calls = []
+        FakeOpenL3.hops = []
         stats = local_embeddings.StageStats()
         with patch.object(local_embeddings, "librosa", FakeLibrosa), patch.object(
             local_embeddings, "openl3", FakeOpenL3
@@ -169,6 +177,44 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(
             timings["infer_batch_size"], local_embeddings.DEFAULT_INFER_BATCH_SIZE
         )
+
+    def test_process_audio_file_forwards_the_hop_and_records_it(self):
+        # hop_seconds decides how many overlapping windows get mean pooled, so
+        # it changes what the vector represents. It must reach OpenL3 and be
+        # reported, or embeddings of different recipes become indistinguishable.
+        FakeOpenL3.model = object()
+        FakeOpenL3.calls = []
+        FakeOpenL3.hops = []
+        stats = local_embeddings.StageStats()
+        with patch.object(local_embeddings, "librosa", FakeLibrosa), patch.object(
+            local_embeddings, "openl3", FakeOpenL3
+        ):
+            vector, timings = local_embeddings.process_audio_file(
+                "fixture.mp3", FakeOpenL3.model, 60.0, "fast", stats,
+                local_embeddings.DEFAULT_INFER_BATCH_SIZE, 0.5,
+            )
+
+        self.assertEqual(vector.shape, (512,))
+        self.assertEqual(FakeOpenL3.hops, [0.5])
+        self.assertEqual(timings["hop_seconds"], 0.5)
+        self.assertEqual(timings["max_sample_seconds"], 60.0)
+
+    def test_process_audio_file_defaults_to_the_openl3_hop(self):
+        # Omitting hop must keep OpenL3's own default, so behaviour is unchanged
+        # until someone opts in.
+        FakeOpenL3.model = object()
+        FakeOpenL3.calls = []
+        FakeOpenL3.hops = []
+        stats = local_embeddings.StageStats()
+        with patch.object(local_embeddings, "librosa", FakeLibrosa), patch.object(
+            local_embeddings, "openl3", FakeOpenL3
+        ):
+            _, timings = local_embeddings.process_audio_file(
+                "fixture.mp3", FakeOpenL3.model, 60.0, "fast", stats
+            )
+
+        self.assertEqual(timings["hop_seconds"], local_embeddings.DEFAULT_HOP_SECONDS)
+        self.assertEqual(FakeOpenL3.hops, [local_embeddings.DEFAULT_HOP_SECONDS])
 
     def test_process_audio_file_forwards_a_custom_infer_batch_size(self):
         FakeOpenL3.model = object()

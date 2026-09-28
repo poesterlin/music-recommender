@@ -47,6 +47,11 @@ except ImportError:  # API mode does not need PostgreSQL bindings.
 EMBEDDING_SIZE = 512
 TARGET_SAMPLE_RATE = 48_000
 DEFAULT_DURATION_SECONDS = 60.0
+# OpenL3's own default. Each window is one second of audio, so at 0.1 a
+# 60s clip yields ~596 heavily overlapping windows that are then mean
+# pooled. Raising this removes duplicated work and changes what the
+# pooled vector averages over, so it is recorded per embedding.
+DEFAULT_HOP_SECONDS = 0.1
 DEFAULT_BATCH_SIZE = 8
 # OpenL3's own default is 32 one-second windows per model.predict call. Each
 # window is one second of 48 kHz mono audio, so the default is safe on CPU and
@@ -186,6 +191,17 @@ def parse_args(
         type=positive_float,
         default=env_float("EMBEDDING_DURATION_SECONDS", DEFAULT_DURATION_SECONDS),
         help="Maximum audio seconds to analyze",
+    )
+
+    parser.add_argument(
+        "--hop",
+        type=positive_float,
+        default=env_float("EMBEDDING_HOP_SECONDS", DEFAULT_HOP_SECONDS),
+        help=(
+            "OpenL3 window hop in seconds. Larger values cover more of the "
+            "track with fewer, less-overlapping windows: much faster, and a "
+            "slightly different pooled vector. Recorded per embedding."
+        ),
     )
     parser.add_argument(
         "--audio-backend",
@@ -338,6 +354,14 @@ def parse_args(
         parser.error("--lock-key must fit in a signed PostgreSQL bigint")
     if args.duration <= 0 or not math.isfinite(args.duration):
         parser.error("--duration must be positive and finite")
+
+    if args.hop <= 0 or not math.isfinite(args.hop):
+        parser.error("--hop must be positive and finite")
+    if args.hop > args.duration:
+        parser.error(
+            "--hop must not exceed --duration; every window would be a repeat "
+            "of the same audio"
+        )
     if args.db_retry_delay < 0 or not math.isfinite(args.db_retry_delay):
         parser.error("--db-retry-delay must be a finite non-negative number")
     if args.max_errors < 0:
@@ -586,6 +610,7 @@ def process_audio_file(
     audio_backend: str,
     stats: StageStats,
     infer_batch_size: int = DEFAULT_INFER_BATCH_SIZE,
+    hop_seconds: float = DEFAULT_HOP_SECONDS,
 ) -> tuple[np.ndarray, dict[str, Any]]:
     """Decode, resample, infer, and mean-pool one local audio file."""
     track_started = time.perf_counter()
@@ -635,13 +660,16 @@ def process_audio_file(
             model=model,
             embedding_size=EMBEDDING_SIZE,
             batch_size=infer_batch_size,
+
+            hop_size=hop_seconds,
             verbose=0,
         )
     finally:
         timings["inference_seconds"] = time.perf_counter() - started
         stats.add("model_inference", timings["inference_seconds"])
     timings["infer_batch_size"] = infer_batch_size
-
+    timings["hop_seconds"] = hop_seconds
+    timings["max_sample_seconds"] = duration
     if embeddings is None or len(embeddings) == 0:
         raise ValueError("OpenL3 returned no frame embeddings")
     if np.asarray(embeddings).ndim != 2 or np.asarray(embeddings).shape[1] != EMBEDDING_SIZE:
@@ -1049,6 +1077,12 @@ def run(args: argparse.Namespace) -> int:
         if thread_config:
             print(f"TensorFlow thread limits: {thread_config}", flush=True)
         model = load_openl3_model(stats)
+
+        print(
+            f"embedding settings: hop={args.hop}s max_sample={args.duration}s "
+            f"infer_batch={args.infer_batch_size} source_mode={args.source_mode}",
+            flush=True,
+        )
         cursor_uri = detail.get("cursor") if isinstance(detail.get("cursor"), str) else None
         processed = int(detail.get("processed", 0) or 0)
         failed_total = int(detail.get("failed", 0) or 0)
@@ -1112,6 +1146,7 @@ def run(args: argparse.Namespace) -> int:
                             args.audio_backend,
                             stats,
                             args.infer_batch_size,
+                            args.hop,
                         )
                         serialize_started = time.perf_counter()
                         literal = vector_literal(embedding)

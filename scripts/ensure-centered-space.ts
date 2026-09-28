@@ -151,12 +151,28 @@ try {
 			END;
 			$func$;
 
-			INSERT INTO "embedding_space" ("version", "model", "mean_embedding", "track_count")
-			SELECT 1, 'openl3-512', avg("embedding")::vector, count(*)::integer
+			-- A fresh install bootstraps space 1 with the shipped defaults, which is
+			-- what the worker uses until EMBEDDING_HOP_SECONDS changes. The settings
+			-- are part of the recipe's identity, so a later hop registers as its own
+			-- version rather than overwriting this one.
+			INSERT INTO "embedding_space"
+				("version", "model", "mean_embedding", "track_count",
+				 "hop_seconds", "max_sample_seconds", "frontend")
+			SELECT 1, 'openl3-512', avg("embedding")::vector, count(*)::integer,
+				0.1, 60, 'kapre'
 			FROM "track"
 			WHERE "embedding" IS NOT NULL
 			HAVING count(*) >= 2
 			ON CONFLICT ("version") DO NOTHING;
+
+			-- Backfill settings on any space created before they were recorded. Every
+			-- historical embedding used those defaults, so this holds for a library
+			-- that has only ever used one recipe.
+			UPDATE "embedding_space"
+			SET "hop_seconds" = 0.1,
+				"max_sample_seconds" = 60,
+				"frontend" = COALESCE("frontend", 'kapre')
+			WHERE "hop_seconds" IS NULL OR "max_sample_seconds" IS NULL;
 
 			UPDATE "track"
 			SET "embedding_centered" = center_openl3_embedding(

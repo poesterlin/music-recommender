@@ -99,6 +99,13 @@
       "when": 1790534400000,
       "tag": "0013_track_album_image",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1790620800000,
+      "tag": "0014_embedding_space_settings",
+      "breakpoints": true
     }
   ]
 }

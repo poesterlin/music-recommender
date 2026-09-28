@@ -100,11 +100,23 @@ export const skippedArtistsTable = pgTable('skipped_artists', {
 
 // Versioned centering space for OpenL3 embeddings. Raw embeddings are kept
 // unchanged; retrieval and clustering use the L2-normalized centered vector.
+// The recipe registry. One row per distinct way of producing an embedding, and
+// `track.embedding_space_version` records which one produced each row. The
+// settings are part of the identity, not decoration: OpenL3 is frame-based, so
+// hop_seconds decides how many overlapping windows get mean pooled and therefore
+// what the vector represents, while max_sample_seconds decides how much of the
+// track was read. Two spaces with different settings are not comparable, so
+// mixing them is detectable rather than silent.
 export const embeddingSpaceTable = pgTable('embedding_space', {
 	version: integer('version').primaryKey(),
 	model: text('model').notNull(),
 	meanEmbedding: vector('mean_embedding', { dimensions: 512 }).notNull(),
 	trackCount: integer('track_count').notNull(),
+	/** OpenL3 window hop. 0.1 is the library default: ~596 windows per 60s. */
+	hopSeconds: real('hop_seconds'),
+	/** Seconds of audio read per track. */
+	maxSampleSeconds: real('max_sample_seconds'),
+	frontend: text('frontend'),
 	createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 });
 

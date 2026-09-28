@@ -69,8 +69,14 @@ export function emptyState(): SetupState {
 	};
 }
 
-/** A state is parseable only if every step is present and statuses are known. */
-function coerce(value: unknown): SetupState | null {
+/**
+ * Validate a persisted state, or return null if it cannot be trusted.
+ *
+ * A partially-written or hand-edited row must fall back to a clean state rather
+ * than be partially believed: a step reported as `done` that never ran would
+ * silently skip work on the next attempt.
+ */
+export function coerceState(value: unknown): SetupState | null {
 	if (!value || typeof value !== 'object') return null;
 	const raw = value as Partial<SetupState>;
 	if (raw.version !== 1 || !raw.steps) return null;
@@ -104,7 +110,7 @@ export async function readState(): Promise<SetupState> {
 		.from(vibeStateTable)
 		.where(eq(vibeStateTable.key, SETUP_KEY));
 	if (!rows.length) return emptyState();
-	const parsed = coerce(safeParse(rows[0].value));
+	const parsed = coerceState(safeParse(rows[0].value));
 	if (!parsed) return emptyState();
 
 	// Recover from a runner that died with the process.
