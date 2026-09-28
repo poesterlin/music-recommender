@@ -25,21 +25,39 @@ workers through the packaging-only compatibility installer
 
 ### Local first run
 
-With Docker and Bun installed, run this from the folder you want the install to
-live in. Nothing is cloned and no file is edited by hand:
+Docker is the only requirement. The steps are explicit, so nothing has to be
+piped from a URL into a shell:
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.ts | bun run -
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/stack.yaml -o compose.yaml
+
+cat > .env <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+MUSIC_LIBRARY_PATH=$HOME/Music
+WEB_PORT=4932
+EOF
+chmod 600 .env
+
+docker compose up -d --wait
+
+docker compose run --rm --entrypoint sh web \
+  -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate'
+docker compose run --rm --entrypoint bun web \
+  web/scripts/create-user.ts --username admin
 ```
 
-It downloads `compose.yaml`, writes `.env` with generated secrets, starts
-PostgreSQL and the web app from the published images, applies the schema, and
-creates an `admin` account. It refuses to overwrite an existing `.env`.
+The last command prints a generated password once. Open
+`http://127.0.0.1:4932/login`, then follow **Setup**. Add your Music Assistant
+details to `.env` and run `docker compose up -d` again.
 
-Open `http://127.0.0.1:4932/login` with the printed credentials, then follow
-**Setup**. Add your Music Assistant details to `.env` and run
-`docker compose up -d` again.
+The same steps are automated in `setup.sh` if you would rather not type them:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.sh -o setup.sh
+less setup.sh   # read it first
+bash setup.sh "$HOME/Music"
+```
 
 To build from this checkout instead of pulling images, use the build override:
 
@@ -64,9 +82,7 @@ passes it with `--env-file`.
    - `MUSIC_LIBRARY_PATH`
    - `MUSIC_HOST` and `MA_TOKEN`
    - `WORKER_TOKEN` for the default Compose internal jobs (external workers
-      can use a UI-created worker key)
-    - `PLAYBACK_API_KEY` only if using the bootstrap playback key rather than a
-      UI-created playback key
+     can use a UI-created worker key)
 
 3. Choose a database.
 
@@ -126,16 +142,16 @@ There are two bootstrap service credentials for Compose and existing automations
 
 - `WORKER_TOKEN` authenticates the default Python worker and the two internal
   Compose jobs. It is not accepted by ordinary application routes.
-- `PLAYBACK_API_KEY` lets an external system `POST /api/play-vibe` to trigger
+- `PLAYBACK_API_KEY` lets an external caller `POST /api/play-vibe` trigger
   playback. It is not accepted by other application routes.
 
 Signed-in users can also create narrowly scoped keys under **API keys** in the
 web UI. A `worker` key is accepted only by `/api/worker/*`; a `playback` key is
-accepted only by the external playback POST. The secret is displayed once,
-stored only as a hash, and can be revoked without affecting the account. The
-environment credentials remain useful for unattended Compose jobs.
+accepted only by the playback POST. The secret is displayed once, stored only as
+a hash, and can be revoked without affecting the account. The environment
+credentials remain useful for unattended Compose jobs.
 
-For example, the playback request can use either the bootstrap key or a
+For example, an external playback trigger can use either the bootstrap key or a
 UI-created playback key:
 
 ```sh
@@ -163,9 +179,9 @@ python embeddings/generate-local-embeddings.py --dry-run --limit 10
 ### API mode
 
 API mode is portable. It needs only the worker API URL and a worker-scoped
-bearer key; it does not need PostgreSQL, Music Assistant, or a
-local music mount. Create the key under **API keys** in the UI, or use the
-bootstrap `WORKER_TOKEN` for an existing deployment.
+bearer key; it does not need PostgreSQL, a music mount, or access to your files.
+Create the key under **API keys** in the UI, or use the bootstrap `WORKER_TOKEN`
+for an existing deployment.
 
 ```sh
 export WORKER_URL=https://sole.example.com

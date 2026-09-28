@@ -13,11 +13,11 @@ It stores those vectors in PostgreSQL with pgvector. The library index is read s
 
 ## Choose a path
 
-- [Local install](/getting-started/local): one command creates an isolated database and starts the app on your computer.
-- [Public deployment](/getting-started/public-deployment): configure the domain, integrations, and default background jobs.
+- [Local install](/getting-started/local): one command on your own machine.
+- [Public deployment](/getting-started/public-deployment): a domain, background jobs, and the full Compose stack.
 
-Then follow [First playable vibe](/guides/first-play). The app's **Setup** page shows which steps are ready and lets you test the two connections.
+Then follow [First playable vibe](/guides/first-play). The app's **Setup** page shows which steps are ready.
 
 ::: tip Before you start
-You need Bun, Docker Compose v2, a music folder readable by Docker, and Music Assistant. A fresh database is created automatically on the local path.
+You need Docker, a music folder, and Music Assistant. A fresh database is created for you.
 :::

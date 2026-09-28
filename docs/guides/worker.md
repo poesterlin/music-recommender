@@ -1,15 +1,27 @@
 # Embedding workers
 
-The default public stack includes a local Python embedding loop. A local web-only install starts no worker by default; see [First playable vibe](/guides/first-play) for a one-shot run.
+A worker turns each track into a vector. It talks to the app's API only: it downloads snippets, computes, and uploads the results. It needs no database, no music folder, and no access to your files.
 
-For a worker on another computer, sign in and open **Manage → API keys**. Create a **Worker** key. The page provides a Colab/Jupyter cell and a notebook download; the key is displayed once. A portable worker needs the app URL and that key, not database credentials or a music mount.
+## On this machine
+
+A local install ships the worker behind a profile. Start it when you want to analyse the library:
 
 ```sh
-export WORKER_URL=https://your-recommender.example.com
+docker compose --profile worker up -d
+```
+
+The public Compose stack runs an equivalent loop by default.
+
+## On another machine or in Colab
+
+Sign in and open **Manage → API keys**, then create a **Worker** key. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
+
+```sh
+export WORKER_URL=https://your-sole.example.com
 export WORKER_TOKEN='your-worker-scoped-key'
 python embeddings/worker.py --source-mode api --dry-run --limit 1
 ```
 
-The copied notebook cell begins with a one-track dry run. Enter a URL reachable **from the notebook machine**. `127.0.0.1` on Colab means Colab itself, not your computer.
+Enter a URL reachable **from the worker machine**. `127.0.0.1` in Colab means Colab itself, not your computer, so a remote worker needs the public address or a tunnel.
 
-When the dry run succeeds, remove `--dry-run` and the limit to process pending tracks. Check **Worker** for coverage and the last upload. The portable worker reports progress when batches upload; the local worker has a separate job record.
+The copied cell starts with a one-track dry run. When that succeeds, remove `--dry-run` and the limit. Check **Worker** for coverage and the last upload; progress appears once the first batch uploads.

@@ -2,12 +2,12 @@
 
 | What you see | What to check |
 |---|---|
-| Setup says an integration is not configured | Add its fields to the active env file and recreate the web container. Use **Test connections** again. |
 | Music Assistant cannot connect | Check `MUSIC_HOST` and `MA_TOKEN` from the web container's network. |
-| Import is disabled | Music Assistant needs `MUSIC_HOST` and `MA_TOKEN`. |
 | Tracks appear, but no vibe plays | Check **Worker** for embeddings, centered vectors, and centroids. These are separate steps. |
-| Worker audio is missing | The host library mount and the track's local file must agree. |
+| Nothing is analysed | A local install starts no worker. Run `docker compose --profile worker up -d`. |
+| Worker audio is missing | The app host's library mount and the track's local file must agree. A remote worker needs no files, only a reachable URL. |
 | A Colab worker cannot reach localhost | Enter a URL reachable from Colab on **Manage → API keys**. |
 | PostgreSQL reports a vector error | Run `bun run db:migrate` against the intended database with permission to enable pgvector. |
+| Login is refused | Set `ORIGIN` to the address you actually open the app on. |
 
 For details on jobs and optional profiles, see the repository `README.md`. Never put API keys or database passwords into a screenshot or a support report.

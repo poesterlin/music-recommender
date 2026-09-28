@@ -1,54 +1,62 @@
 # Local install
 
-One command, no clone, no editing files. You need Docker; that is the only requirement.
+Docker is the only requirement. Every step below is an explicit command you can read before it runs — nothing is piped from the internet into a shell.
+
+## 1. Get the files
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.ts | bun run -
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/stack.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/.env.example -o .env.example
 ```
 
-If Bun is not installed:
+`compose.yaml` is the stack: PostgreSQL, the app, and an optional worker. Open it if you want to see what will run; it is about fifty lines.
+
+## 2. Write a minimal `.env`
 
 ```sh
-curl -fsSL https://bun.sh/install | bash
+cat > .env <<EOF
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
+MUSIC_LIBRARY_PATH=$HOME/Music
+WEB_PORT=4932
+EOF
+chmod 600 .env
 ```
 
-Press Enter at the single prompt (where your music lives) and wait. The script writes two files, generates secrets, starts the app, creates an account, and prints the login.
+Those three are all the stack needs to start. `.env.example` lists every other setting, including the Music Assistant details you add in step 5.
 
-```
-Sole setup. Press Enter to accept each default.
-Folder that contains your music (read-only) [/home/you/Music]:
+## 3. Start it
 
-Ready.
-
-  Open      http://127.0.0.1:4932/login
-  Username  admin
-  Password  45q8-v8EzQOjWXf4
+```sh
+docker compose up -d --wait
 ```
 
-Log in and follow the **Setup** page from there.
+## 4. Create the schema and your account
 
-## What it creates
+```sh
+docker compose run --rm --entrypoint sh web \
+  -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate'
 
-Both files sit in the folder you made and can be edited afterwards.
+docker compose run --rm --entrypoint bun web \
+  web/scripts/create-user.ts --username admin
+```
 
-| File | Purpose |
-|---|---|
-| `compose.yaml` | The stack. Downloaded, so no clone is needed. |
-| `.env` | Your settings and generated secrets. Never commit it. |
+The second command prints a generated password once — copy it. Then open **http://127.0.0.1:4932/login** and sign in.
 
-Only the web app and PostgreSQL run, and both bind to `127.0.0.1`. The published images are used as-is.
+## 5. Connect Music Assistant
 
-## Connecting music
-
-The first run gives you a working app with an empty library. Fill these in `.env`, then run `docker compose up -d`:
+Add these to `.env`, then run `docker compose up -d`:
 
 | Setting | What it is |
 |---|---|
 | `MUSIC_HOST` | Base URL of your Music Assistant server |
 | `MA_TOKEN` | Music Assistant access token |
 
-Then continue with [First playable vibe](/guides/first-play).
+Reload the app and follow the **Setup** page, then continue with [First playable vibe](/guides/first-play).
+
+## What runs, and which files are read
+
+Only the app and PostgreSQL run, and both bind to `127.0.0.1`. Your music folder is mounted into the app read-only, because the app slices the snippets the worker analyses. Nothing else reads your files: the worker only ever talks to the app's API.
 
 ## Common changes
 
@@ -58,23 +66,26 @@ Edit `.env`, then run `docker compose up -d` again.
 |---|---|
 | Music folder | `MUSIC_LIBRARY_PATH` |
 | Web port | `WEB_PORT` (default `4932`) |
-| PostgreSQL port | `POSTGRES_PORT` (default `5432`) |
-| Login host, when behind a proxy | `ORIGIN` (defaults to `http://127.0.0.1:4932`) |
+| Login host, behind a proxy | `ORIGIN` (defaults to `http://127.0.0.1:4932`) |
 
-## Going further
-
-The published `compose.yaml` is the full stack: it adds the timed jobs, the embedding worker, clustering profiles, and the Traefik labels for a public domain. The setup script writes the same file, so there is no switch to flip later.
-
-To build from source instead of pulling images, clone the repository and use the build override:
+PostgreSQL is not published to the host, so it cannot collide with a database you already run. To look inside it:
 
 ```sh
-git clone https://github.com/poesterlin/sole.git
-cd sole
-docker compose -f compose.yaml -f compose.build.yaml up -d --build
+docker compose exec postgres psql -U sole
 ```
 
-## If something goes wrong
+## Optional: the installer script
 
-The setup script will not overwrite an existing `.env`. To start over, delete `.env` and the Docker volumes for this folder, then run it again.
+The repository also carries `setup.sh`, which performs steps 1–4, writes a fuller `.env`, and prints the login. It is short and worth reading first:
 
-Set `ORIGIN` if a reverse proxy serves the app on a different hostname, otherwise login is refused for safety.
+```sh
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.sh -o setup.sh
+less setup.sh
+bash setup.sh "$HOME/Music"
+```
+
+It will not overwrite an existing `.env`. To start over, delete `.env` and the Docker volumes for this folder.
+
+## Public domain instead
+
+The file above is the local stack. For a domain, background jobs, and clustering profiles, use the repository's `compose.yaml` — see [Public deployment](/getting-started/public-deployment).

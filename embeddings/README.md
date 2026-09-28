@@ -5,7 +5,7 @@ The worker has two source modes:
 - **local** (default): reads a mounted audio directory and writes PostgreSQL directly;
 - **api**: asks an authenticated worker API for tracks and bounded audio snippets, then uploads vectors over HTTP.
 
-The API mode needs no PostgreSQL URL, Music Assistant token, or audio mount. It is suitable for a separate VM, a container, or a Colab runtime.
+The API mode needs no PostgreSQL URL, Music Assistant token, or access to your files. It is suitable for a separate VM, a container, or a Colab runtime.
 
 Use Python 3.11 for the reference environment. On Python 3.12 or newer, run
 `python embeddings/install_python312.py` first; it verifies the pinned source
