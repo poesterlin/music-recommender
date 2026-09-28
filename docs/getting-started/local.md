@@ -106,26 +106,28 @@ Two things worth noticing: the app's port is published, so anyone who can reach 
 
 ## 2. Create `.env`
 
-Settings live in a file called `.env`, next to `compose.yaml`. Three of them are enough to start:
+Settings live in a file called `.env`, next to `compose.yaml`. Four of them make a working install:
 
 | Setting | What it is |
 |---|---|
 | `MUSIC_LIBRARY_PATH` | The folder that holds your music. It is mounted into the app read-only, which is what lets the app slice the audio a worker analyses. Nothing writes to it. |
 | `POSTGRES_PASSWORD` | A password for the database this stack creates for you. Only this stack uses it, so any random string will do — the point is not to ship a guessable default. |
 | `WEB_PORT` | The local port the app listens on. You will open `http://127.0.0.1:<port>` in a moment. |
+| `WORKER_TOKEN` | A shared secret between the app and a worker. The app refuses analysis requests that do not carry it, so generate a long random value. Anything that talks to the worker API — the local worker in this stack, or the timed jobs — uses this same string. |
 
-Create the file in your editor — `nano .env` — and fill in those three lines, or let this do it for you with a generated password:
+Create the file in your editor — `nano .env` — and fill in those four lines, or let this do it for you with generated secrets:
 
 ```sh
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 MUSIC_LIBRARY_PATH=$HOME/Music
 WEB_PORT=4932
+WORKER_TOKEN=$(openssl rand -hex 24)
 EOF
 chmod 600 .env
 ```
 
-Change `MUSIC_LIBRARY_PATH` if your collection is not in `~/Music`. The `chmod 600` keeps the generated secret readable only by your own account.
+Change `MUSIC_LIBRARY_PATH` if your collection is not in `~/Music`. The `chmod 600` keeps the generated secrets readable only by your own account.
 
 ## 3. Start the stack
 

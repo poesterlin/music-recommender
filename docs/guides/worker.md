@@ -4,17 +4,17 @@ A worker turns each track into a vector. It talks to the app's API only: it down
 
 ## On this machine
 
-A local install ships the worker behind a profile. Start it when you want to analyse the library:
+A local install ships the worker behind a profile. It authenticates with `WORKER_TOKEN` from your `.env`, which the install steps had you generate. Start it when you want to analyse the library:
 
 ```sh
 docker compose --profile worker up -d
 ```
 
-The public Compose stack runs an equivalent loop by default.
+The public Compose stack runs an equivalent loop by default, using the same `.env` value.
 
 ## On another machine or in Colab
 
-Sign in and open **Manage → API keys**, then create a **Worker** key. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
+Sign in and open **Manage → API keys**, then create a **Worker** key. This is the better choice off this machine: it is a scoped credential you can revoke on its own, instead of copying the token that also drives the timed jobs. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
 
 ```sh
 export WORKER_URL=https://your-sole.example.com

@@ -17,7 +17,7 @@ Then edit `.env`. The settings that matter on this path:
 | `MUSIC_HOST` / `MA_TOKEN` | Your Music Assistant server: the base URL, and an access token from its settings. |
 | `DATABASE_URL` | A PostgreSQL URL with pgvector, used by commands you run on this host. |
 | `DATABASE_INTERNAL_URL` | The same database as the containers see it, usually a Compose service name. Leave it unset if the host URL already works from inside the network. |
-| `WORKER_TOKEN` | Shared secret for the timed jobs in this file. A scoped key from the UI works too, if you would rather not keep it in `.env`. |
+| `WORKER_TOKEN` | A shared secret for anything that talks to the worker API or triggers the timed jobs. The two job endpoints accept only this value; the worker API also accepts a scoped Worker key from the UI. Generate a long random string. |
 
 ## 2. Make sure the database is running
 

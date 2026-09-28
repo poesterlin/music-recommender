@@ -12,7 +12,9 @@ Embedding is the slow part: a worker reads a minute of each track and turns it i
 docker compose --profile worker up -d
 ```
 
-It runs in API mode, which means it downloads snippets from the app and uploads vectors back — it never needs access to your files, and you can stop it at any time with `docker compose --profile worker down`.
+It runs in API mode: it downloads snippets from the app and uploads vectors back, so it never needs access to your files. It authenticates with `WORKER_TOKEN` from `.env` — the value you generated during install. Stop it any time with `docker compose --profile worker down`.
+
+If you would rather run the worker on a different machine, create a scoped key under **Manage → API keys** instead of copying this token, and see [Embedding workers](/guides/worker).
 
 ## Create the centered space
 
