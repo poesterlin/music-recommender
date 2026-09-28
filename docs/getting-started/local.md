@@ -1,27 +1,83 @@
 # Local install
 
-Run these commands from the Sole repository root.
+One command, no clone, no editing files. You need Docker; that is the only requirement.
 
 ```sh
-bun --no-env-file scripts/setup-local.ts /absolute/path/to/music
+mkdir sole && cd sole
+curl -fsSL https://raw.githubusercontent.com/poesterlin/music-recommender/main/setup.ts | bun run -
 ```
 
-The command creates `.env.local`, starts a private pgvector database, applies migrations, and starts the web app. It does **not** read or change `.env`. It refuses to overwrite an existing `.env.local`.
-
-Open **http://127.0.0.1:4933/register**, create an account, then open **Setup**. Playback stays unavailable until the library and vibes are ready.
-
-## Connect your services
-
-In `.env.local`, fill in `MUSIC_HOST` and `MA_TOKEN` for Music Assistant, and `HA_HOST`, `TOKEN`, and `CONFIG_ID` for Home Assistant. Restart the web container so it reads the new values:
+If Bun is not installed:
 
 ```sh
-docker compose --project-name sole-local --env-file .env.local up -d --force-recreate web
+curl -fsSL https://bun.sh/install | bash
 ```
 
-Use **Setup → Test connections** to check them. Then [import music and build your first vibe](/guides/first-play).
+Press Enter at the single prompt (where your music lives) and wait. The script writes two files, generates secrets, starts the app, creates an account, and prints the login.
 
-::: info Local ports
-The app uses `127.0.0.1:4933`; PostgreSQL uses `127.0.0.1:55433`. Both are bound to this computer. The local command starts only web and database; workers and timed jobs are separate.
-:::
+```
+Sole setup. Press Enter to accept each default.
+Folder that contains your music (read-only) [/home/you/Music]:
 
-If the first command stops partway through, use the resume commands in the repository `README.md` under **Local first run**. Do not run a database command against another `.env` by accident.
+Ready.
+
+  Open      http://127.0.0.1:4932/login
+  Username  admin
+  Password  45q8-v8EzQOjWXf4
+```
+
+Log in and follow the **Setup** page from there.
+
+## What it creates
+
+Both files sit in the folder you made and can be edited afterwards.
+
+| File | Purpose |
+|---|---|
+| `compose.yaml` | The stack. Downloaded, so no clone is needed. |
+| `.env` | Your settings and generated secrets. Never commit it. |
+
+Only the web app and PostgreSQL run, and both bind to `127.0.0.1`. The published images are used as-is.
+
+## Connecting music
+
+The first run gives you a working app with an empty library. Fill these in `.env`, then run `docker compose up -d`:
+
+| Setting | What it is |
+|---|---|
+| `MUSIC_HOST` | Base URL of your Music Assistant server |
+| `MA_TOKEN` | Music Assistant access token |
+| `HA_HOST` | Base URL of your Home Assistant instance |
+| `TOKEN` | Home Assistant long-lived access token |
+| `CONFIG_ID` | Music Assistant config entry id |
+
+Then continue with [First playable vibe](/guides/first-play).
+
+## Common changes
+
+Edit `.env`, then run `docker compose up -d` again.
+
+| Want to change | Setting |
+|---|---|
+| Music folder | `MUSIC_LIBRARY_PATH` |
+| Web port | `WEB_PORT` (default `4932`) |
+| PostgreSQL port | `POSTGRES_PORT` (default `5432`) |
+| Login host, when behind a proxy | `ORIGIN` (defaults to `http://127.0.0.1:4932`) |
+
+## Going further
+
+The published `compose.yaml` is the full stack: it adds the timed jobs, the embedding worker, clustering profiles, and the Traefik labels for a public domain. The setup script writes the same file, so there is no switch to flip later.
+
+To build from source instead of pulling images, clone the repository and use the build override:
+
+```sh
+git clone https://github.com/poesterlin/music-recommender.git
+cd sole
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
+```
+
+## If something goes wrong
+
+The setup script will not overwrite an existing `.env`. To start over, delete `.env` and the Docker volumes for this folder, then run it again.
+
+Set `ORIGIN` if a reverse proxy serves the app on a different hostname, otherwise login is refused for safety.

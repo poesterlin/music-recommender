@@ -8,20 +8,20 @@ After both integrations are configured, go to **Manage → Full tidy-up**. It sy
 
 ## 2. Embed and center
 
-On the public Compose stack, the default embedding loop runs in the background. On the local web-only stack, start a bounded embedding job when your music is mounted:
+On the public Compose stack, the default embedding loop runs in the background. On a local stack that started only web and PostgreSQL, run one bounded embedding job when your music is mounted:
 
 ```sh
-docker compose --project-name sole-local --env-file .env.local --profile embedding run --rm embeddings
+docker compose --profile embedding run --rm embeddings
 ```
 
-After at least two raw embeddings exist, establish the centered space. Use the database URL for the stack you are working on:
+After at least two raw embeddings exist, establish the centered space. The status page also has a repair button that does this without a terminal. To do it from the command line, use the database URL for the stack you are working on:
 
 ```sh
 # Public deployment, with DATABASE_URL configured for host commands:
 bun run db:ensure-centered
 
 # Local stack (instead of the command above):
-DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.local)" bun --no-env-file run db:ensure-centered
+DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env)" bun run db:ensure-centered
 ```
 
 **Worker** shows both embedded and centered counts. A high embedded percentage with zero centered tracks is not ready for clustering.
@@ -31,11 +31,8 @@ DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.local)" bun --no-env-file run 
 Initial clustering is an explicit operation. Set `COMPOSE` for your stack:
 
 ```sh
-# Public deployment:
+# Public or local, from the folder holding compose.yaml and .env:
 COMPOSE='docker compose'
-
-# Or, for the local install:
-COMPOSE='docker compose --project-name sole-local --env-file .env.local'
 ```
 
 Benchmark and record an artifact. This does **not** change assignments:

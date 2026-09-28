@@ -7,7 +7,7 @@ export default defineConfig({
   srcExclude: ['README.md'],
   head: [['meta', { name: 'theme-color', content: '#f4efe5' }]],
   themeConfig: {
-    logo: '/record.svg',
+    logo: '/logo.png',
     siteTitle: 'Sole',
     nav: [
       { text: 'Start', link: '/getting-started/' },

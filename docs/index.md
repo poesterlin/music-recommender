@@ -6,8 +6,8 @@ hero:
   text: Your library, in a new light.
   tagline: Index your music, find the connections, and play a vibe that sounds like you.
   image:
-    src: /record.svg
-    alt: Illustrated vinyl record
+    src: /logo.png
+    alt: Illustrated sole with a music note
   actions:
     - theme: brand
       text: Start locally
