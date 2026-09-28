@@ -258,6 +258,13 @@
 			<span>{formatNumber(counts.centered)} centered</span>
 			<span>last write {relativeTime(counts.lastUpdated)}</span>
 		</div>
+		{#if counts.embedded > 0 && counts.centered === 0}
+			<p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
+				Embeddings exist, but the centered space is missing. Run <code
+					>bun run db:ensure-centered</code
+				> after at least two embeddings.
+			</p>
+		{/if}
 	</div>
 </section>
 
@@ -458,8 +465,8 @@
 				existing assignment.
 			</p>
 			<p class="text-ink-soft mt-3 text-sm">
-				{formatNumber(counts.embedded - counts.unclustered)} of {formatNumber(counts.embedded)} embedded
-				tracks have a category.
+				{formatNumber(counts.embeddedAssigned)} of {formatNumber(counts.embedded)} embedded tracks have
+				a category.
 			</p>
 		</div>
 	</div>

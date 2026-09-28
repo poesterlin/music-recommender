@@ -1,10 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { untrack } from 'svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { IconClipboardCopy, IconKey } from '@tabler/icons-svelte';
 
 	let { data, form } = $props();
 	let copied = $state<'secret' | 'notebook' | null>(null);
+	let workerUrl = $state(
+		untrack(() =>
+			/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(data.workerUrl) ? '' : data.workerUrl
+		)
+	);
+	const localWorkerUrl = $derived(/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(workerUrl));
 
 	const workerCell = $derived(`import getpass
 import os
@@ -26,7 +33,7 @@ if sys.version_info >= (3, 12):
 else:
     subprocess.run([sys.executable, "-m", "pip", "install", "-r", "embeddings/requirements.txt"], check=True)
 
-os.environ["WORKER_URL"] = ${JSON.stringify(data.workerUrl)}
+os.environ["WORKER_URL"] = ${workerUrl ? JSON.stringify(workerUrl.trim()) : 'input("Worker URL reachable from this notebook: ").strip()'}
 os.environ["WORKER_TOKEN"] = getpass.getpass("Paste worker API key: ")
 
 # OpenL3 predict batch. 64 is safe on CPU; 128-256 helps on a GPU.
@@ -268,6 +275,22 @@ else:
 				download>Download notebook</a
 			>
 		</div>
+	</div>
+	<div class="mt-5 max-w-xl">
+		<label class="mb-1 block text-sm font-bold" for="worker-url">Worker URL</label>
+		<input
+			id="worker-url"
+			type="url"
+			placeholder="https://your-recommender.example.com"
+			bind:value={workerUrl}
+			class="border-ink/20 bg-paper w-full rounded-lg border px-3 py-2"
+		/>
+		<p class="text-ink-soft mt-1 text-xs">
+			Leave blank to enter it in the notebook. Colab cannot reach this computer’s localhost address.
+		</p>
+		{#if localWorkerUrl}<p class="mt-1 text-xs text-amber-800">
+				This address works only for a notebook on the same computer.
+			</p>{/if}
 	</div>
 	<pre class="bg-ink text-cream mt-5 overflow-x-auto rounded-xl p-4 text-xs leading-relaxed"><code
 			>{workerCell}</code

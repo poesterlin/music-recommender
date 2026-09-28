@@ -23,6 +23,7 @@ export type EmbeddingCounts = {
 	centered: number;
 	versioned: number;
 	clustered: number;
+	embeddedAssigned: number;
 	unclustered: number;
 	lastUpdated: string | null;
 };
@@ -210,6 +211,7 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 					count(*) FILTER (WHERE embedding_centered IS NOT NULL)::bigint AS centered,
 					count(*) FILTER (WHERE embedding_space_version IS NOT NULL)::bigint AS versioned,
 					count(*) FILTER (WHERE cluster_id >= 0)::bigint AS clustered,
+					count(*) FILTER (WHERE embedding IS NOT NULL AND cluster_id >= 0)::bigint AS embedded_assigned,
 					count(*) FILTER (WHERE cluster_id IS NULL OR cluster_id < 0)::bigint AS unclustered,
 					max(updated_at) AS last_updated
 				FROM track
@@ -254,6 +256,7 @@ export async function getPipelineStatus(): Promise<PipelineStatus> {
 				centered: numberOrZero(counts.centered),
 				versioned: numberOrZero(counts.versioned),
 				clustered: numberOrZero(counts.clustered),
+				embeddedAssigned: numberOrZero(counts.embedded_assigned),
 				unclustered: numberOrZero(counts.unclustered),
 				lastUpdated: dateOrNull(counts.last_updated)
 			},
