@@ -4,6 +4,8 @@ A local music-library indexer, OpenL3 embedding worker, pgvector similarity
 search, and clustering service. The web process is the database-backed UI and
 API. The Python worker can run beside it or on another machine.
 
+The standalone [documentation site](docs/README.md) has a short guided install and first-play path.
+
 ## Requirements
 
 - Docker Compose v2
