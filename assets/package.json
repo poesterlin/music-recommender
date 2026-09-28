@@ -1,0 +1,9 @@
+{
+  "name": "assets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.ts",
+    "check": "bun build.ts --check"
+  }
+}
