@@ -260,9 +260,11 @@
 		</div>
 		{#if counts.embedded > 0 && counts.centered === 0}
 			<p class="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
-				Embeddings exist, but the centered space is missing. Run <code
-					>bun run db:ensure-centered</code
-				> after at least two embeddings.
+				{counts.embedded < 2
+					? 'Wait for at least two embedded tracks before creating the centered space.'
+					: status.embedding.space
+						? 'Use Center the remaining embeddings above to make these tracks ready for grouping.'
+						: 'Use Create the centered space above to make these tracks ready for grouping.'}
 			</p>
 		{/if}
 	</div>

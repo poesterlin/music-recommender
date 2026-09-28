@@ -41,6 +41,7 @@ const MIN_EMBEDDINGS_TO_CLUSTER = 200;
 
 export type Counts = {
 	total: number;
+	eligible: number;
 	embedded: number;
 	clusterable: number;
 	clusters: number;
@@ -51,6 +52,7 @@ export async function counts(): Promise<Counts> {
 	const [row] = await db
 		.select({
 			total: sql<number>`count(*)::int`,
+			eligible: sql<number>`count(*) FILTER (WHERE COALESCE(skip, FALSE) = FALSE)::int`,
 			// Embedded and not pruned: exactly the rows full clustering reads.
 			clusterable: sql<number>`count(embedding_centered) FILTER (WHERE COALESCE(skip, FALSE) = FALSE)::int`,
 			covered: sql<number>`count(*) FILTER (WHERE album_image IS NOT NULL)::int`,
@@ -59,6 +61,7 @@ export async function counts(): Promise<Counts> {
 		.from(trackTable);
 	return {
 		total: row?.total ?? 0,
+		eligible: row?.eligible ?? 0,
 		// clusterable is already the embedded-and-not-skipped count.
 		embedded: row?.clusterable ?? 0,
 		clusterable: row?.clusterable ?? 0,
@@ -191,19 +194,20 @@ const embed: SetupStep = {
 	async probe() {
 		const c = await counts();
 		if (c.total === 0) return { status: 'waiting', detail: 'Nothing to analyse yet' };
+		if (c.eligible === 0) return { status: 'waiting', detail: 'No tracks are eligible for analysis' };
 		if (c.embedded === 0) {
 			return {
 				status: 'waiting',
-				detail: `0 of ${c.total.toLocaleString()} analysed — the worker picks these up automatically`
+				detail: `0 of ${c.eligible.toLocaleString()} eligible tracks analysed — the worker picks these up automatically`
 			};
 		}
-		if (c.embedded < MIN_EMBEDDINGS_TO_CLUSTER && c.embedded < c.total) {
+		if (c.embedded < MIN_EMBEDDINGS_TO_CLUSTER && c.embedded < c.eligible) {
 			return {
 				status: 'waiting',
-				detail: `${c.embedded.toLocaleString()} of ${c.total.toLocaleString()} analysed — waiting for at least ${MIN_EMBEDDINGS_TO_CLUSTER}`
+				detail: `${c.embedded.toLocaleString()} of ${c.eligible.toLocaleString()} eligible tracks analysed — waiting for at least ${MIN_EMBEDDINGS_TO_CLUSTER}, or all eligible tracks`
 			};
 		}
-		const pending = c.total - c.embedded;
+		const pending = c.eligible - c.embedded;
 		return {
 			status: 'done',
 			detail: pending

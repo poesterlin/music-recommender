@@ -1,4 +1,4 @@
-import { readState, mutateState, setStep, isTerminal, STEP_ORDER, emptyState } from './state';
+import { readState, mutateState, setStep, STEP_ORDER, emptyState } from './state';
 import type { SetupState, StepId } from './state';
 import { STEPS, stepById, counts, type StepOutcome } from './steps';
 import { deriveClusterCount } from './derive-k';
@@ -31,8 +31,11 @@ export async function getSetupState(): Promise<SetupState> {
 		if (state.steps[step.id].status !== 'pending') continue;
 		try {
 			const outcome = await step.probe();
+			// A probe describes readiness, not work performed. Keep runnable steps
+			// pending so Start setup still syncs MA, indexes, and clusters.
+			const status = outcome.status === 'done' || outcome.status === 'skipped' ? 'pending' : outcome.status;
 			const next = setStep(state, step.id, {
-				status: outcome.status,
+				status,
 				detail: outcome.detail,
 				at: null
 			});
@@ -42,7 +45,7 @@ export async function getSetupState(): Promise<SetupState> {
 				// the meantime is not dragged back to pending.
 				if (current.steps[step.id].status !== 'pending') return current;
 				const updated = setStep(current, step.id, {
-					status: outcome.status,
+					status,
 					detail: outcome.detail
 				});
 				if (outcome.k) updated.k = outcome.k;
@@ -75,6 +78,7 @@ async function runStep(step: (typeof STEPS)[number]): Promise<StepOutcome> {
 }
 
 async function execute(): Promise<SetupState> {
+	clearRetry();
 	await mutateState((state) => ({
 		...state,
 		running: true,
@@ -86,7 +90,7 @@ async function execute(): Promise<SetupState> {
 
 	for (const step of STEPS) {
 		const state = await readState();
-		if (isTerminal(state.steps[step.id].status)) continue;
+		if (state.steps[step.id].status === 'done' || state.steps[step.id].status === 'skipped') continue;
 
 		// The derive is cheap and lets the UI show k before the long step runs.
 		if (step.id === 'cluster' && !state.k) {
@@ -112,6 +116,10 @@ async function execute(): Promise<SetupState> {
 				retryTimer = null;
 				void startSetup({ background: true }).catch(() => undefined);
 			}, WAITING_RETRY_MS);
+			return readState();
+		}
+		if (outcome.status === 'failed') {
+			await mutateState((s) => ({ ...s, running: false, paused: false, current: null }));
 			return readState();
 		}
 	}
