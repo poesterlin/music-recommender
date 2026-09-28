@@ -11,7 +11,7 @@ services:
     env_file: ${APP_ENV_FILE:-.env}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${WEB_PORT:-4932}:3000"
+      - "${WEB_PORT:-4932}:3000"
     environment:
       PORT: "3000"
       NODE_ENV: production
@@ -248,7 +248,7 @@ services:
       timeout: 5s
       retries: 20
     ports:
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:

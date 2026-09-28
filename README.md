@@ -277,8 +277,9 @@ versioned service images to GHCR and creates a GitHub release.
 ## Configuration notes
 
 - Keep `.env`, database URLs, and tokens out of source control.
-- Keep PostgreSQL private. The optional database profile binds its host port
-  to `127.0.0.1`.
+- The web and database ports are published on every interface. Set a real
+  `POSTGRES_PASSWORD`, and remove the `postgres` `ports:` entry if nothing
+  outside the stack needs to reach the database.
 - The web service must have `ffmpeg` and a read-only music mount to serve worker
   audio snippets.
 - The repository `deploy.sh` runs from a checkout on the deployment machine; it
