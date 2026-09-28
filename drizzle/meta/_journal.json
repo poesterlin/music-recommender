@@ -113,6 +113,13 @@
       "when": 1790700000000,
       "tag": "0015_remove_user_email",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790786400000,
+      "tag": "0016_drop_liked_songs_hour",
+      "breakpoints": true
     }
   ]
 }

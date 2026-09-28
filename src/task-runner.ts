@@ -77,7 +77,6 @@ async function main() {
         artist: r.track.artist,
         album: r.track.album,
         likedAt: r.liked_songs.likedAt,
-        hour: r.liked_songs.hour,
         source: r.liked_songs.source,
       }));
       console.log(JSON.stringify(mapped, null, 2));

@@ -283,10 +283,8 @@ export async function likeTrack(uri: string, source?: string) {
 		return;
 	}
 
-	const hour = new Date().getHours();
 	await db.insert(likedSongsTable).values({
 		uri,
-		hour,
 		source: source || 'unknown'
 	});
 	console.log(`Track liked (${source || 'unknown'}):`, uri);
