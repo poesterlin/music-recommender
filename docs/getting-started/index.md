@@ -19,5 +19,5 @@ It stores those vectors in PostgreSQL with pgvector.
 Then follow [First playable vibe](/guides/first-play). The app's **Setup** page shows which steps are ready.
 
 ::: tip Before you start
-You need Docker, Bun, a music folder, and Music Assistant. A fresh database is created for you.
+You need Docker, a music folder, and Music Assistant. A fresh database is created for you.
 :::
