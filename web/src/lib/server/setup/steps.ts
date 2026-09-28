@@ -87,7 +87,7 @@ const environment: SetupStep = {
 			if (!pgvectorVersion) {
 				return {
 					status: 'failed',
-					detail: 'The vector extension is missing. Run `bun run db:ensure-pgvector`.'
+					detail: 'The vector extension is missing. Setup will install it automatically.'
 				};
 			}
 		} catch (error) {
@@ -102,6 +102,24 @@ const environment: SetupStep = {
 		return { status: 'done', detail: notes.join(' · ') };
 	},
 	async run() {
+		const probed = await environment.probe();
+		if (probed.status !== 'failed' || !probed.detail.startsWith('The vector extension')) {
+			return probed;
+		}
+		// The app's database role can usually install the extension itself, so try
+		// that before telling an operator to open a terminal. It is idempotent, and
+		// a role without the privilege gets a message saying so rather than a raw
+		// permission error.
+		try {
+			await db.execute(sql`CREATE EXTENSION IF NOT EXISTS vector`);
+		} catch (error) {
+			return {
+				status: 'failed',
+				detail:
+					'The vector extension is missing and this database role cannot install it. ' +
+					`Ask whoever runs the database to run: bun run db:ensure-pgvector (${String(error).slice(0, 80)})`
+			};
+		}
 		return environment.probe();
 	}
 };

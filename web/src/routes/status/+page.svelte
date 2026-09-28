@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import PageHeader from '$lib/components/PageHeader.svelte';
+	import { post } from '$lib/api';
 
 	let { data } = $props();
 	let status = $state(data);
@@ -11,6 +13,36 @@
 	const worker = $derived(status.embedding.worker);
 	const activeJob = $derived(status.embedding.activeJob);
 	const clusters = $derived(status.clusters);
+
+	// Embeddings exist but nothing is deriving centered vectors from them. This
+	// is fixable from here; the alternative used to be a terminal command.
+	let repairing = $state(false);
+	let repairMessage = $state<string | null>(null);
+	let repairError = $state<string | null>(null);
+
+	const spaceBroken = $derived(counts.embedded > 0 && status.embedding.space === null);
+	const spaceIncomplete = $derived(
+		counts.embedded > 0 && status.embedding.space !== null && counts.centered < counts.embedded
+	);
+
+	async function repairSpace(dryRun: boolean) {
+		if (!dryRun) repairing = true;
+		repairError = null;
+		const { ok, data: json } = await post<{
+			success: boolean;
+			message?: string;
+			error?: string;
+			skipped?: string;
+		}>(`/api/embedding-spaces/repair${dryRun ? '?dryRun=1' : ''}`, { method: 'POST' });
+		if (!ok || !json.success) {
+			repairError = json.error ?? json.skipped ?? 'The repair failed.';
+			repairing = false;
+			return;
+		}
+		repairMessage = json.message ?? 'Nothing to do.';
+		repairing = false;
+		await invalidateAll();
+	}
 
 	// A worker that has not spoken in a while is the signal you actually want:
 	// "it stopped" and "it finished" look identical without a heartbeat.
@@ -146,6 +178,47 @@
 			</span>
 		{/if}
 	</div>
+
+	{#if spaceBroken || spaceIncomplete}
+		<div class="border-accent/40 bg-accent/5 mt-6 rounded-2xl border p-4" role="alert">
+			<h3 class="font-display font-black">
+				{spaceBroken
+					? 'Embeddings exist, but the centered space is missing'
+					: `${formatNumber(counts.embedded - counts.centered)} embeddings are not centered`}
+			</h3>
+			<p class="text-ink-soft mt-1 text-sm">
+				{spaceBroken
+					? 'Vectors were written, but there is no corpus mean to center them against, so the database cannot derive centered vectors and search returns nothing useful.'
+					: 'These rows were embedded before the space existed. Centering them makes them searchable.'}
+			</p>
+			<div class="mt-3 flex flex-wrap items-center gap-2">
+				<button
+					class="border-ink/20 hover:bg-ink/5 cursor-pointer rounded-lg border px-3 py-1.5 text-xs font-bold disabled:opacity-50"
+					disabled={repairing}
+					onclick={() => repairSpace(true)}
+				>
+					Preview
+				</button>
+				<button
+					class="bg-accent text-cream hover:bg-accent-deep cursor-pointer rounded-lg px-4 py-1.5 text-xs font-bold transition disabled:opacity-50"
+					disabled={repairing}
+					onclick={() => repairSpace(false)}
+				>
+					{repairing
+						? 'Repairing…'
+						: spaceBroken
+							? 'Create the centered space'
+							: 'Center the remaining embeddings'}
+				</button>
+			</div>
+			{#if repairMessage}
+				<p class="text-moss mt-2 text-sm">{repairMessage}</p>
+			{/if}
+			{#if repairError}
+				<p class="mt-2 text-sm text-red-700">{repairError}</p>
+			{/if}
+		</div>
+	{/if}
 
 	<div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
 		<div class="border-line rounded-2xl border bg-white/70 p-4">
