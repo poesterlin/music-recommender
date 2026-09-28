@@ -51,3 +51,6 @@ embeddings/music_*.html
 /server/
 embedding-rs/models/*.onnx
 embedding-rs/models/*.bin
+
+# Full-resolution logo export; the cropped master is committed in assets/source.
+logo-4k.png

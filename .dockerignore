@@ -2,7 +2,7 @@
 .gitignore
 .env
 **/node_modules
-web
+web/build
 embeddings
 **/target
 artifacts

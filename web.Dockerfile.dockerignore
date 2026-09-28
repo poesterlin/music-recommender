@@ -1,0 +1,24 @@
+# Build context is the repository root (see compose.yaml and release.yml), so
+# .dockerignore at the root would exclude web/ itself. This file trims the
+# context for the web image only.
+.git
+.env
+.env.*
+!.env.example
+**/node_modules
+**/.svelte-kit
+web/build
+embeddings
+embeddings/.venv
+**/__pycache__
+**/target
+artifacts
+*.log
+clusterer
+clusterer-bun
+clustering-rs
+clustering-wasm
+embedding-rs
+backups_*.sql
+output
+server

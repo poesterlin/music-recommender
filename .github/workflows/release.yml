@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
           - name: web
-            context: ./web
+            context: .
             dockerfile: ./web/Dockerfile
           - name: embeddings
             context: ./embeddings

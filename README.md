@@ -26,33 +26,30 @@ workers through the packaging-only compatibility installer
 
 ### Local first run
 
-With Bun and Docker Compose installed, run:
+With Docker and Bun installed, run this from the folder you want the install to
+live in. Nothing is cloned and no file is edited by hand:
 
 ```sh
-bun --no-env-file scripts/setup-local.ts /absolute/path/to/music
+mkdir sole && cd sole
+curl -fsSL https://raw.githubusercontent.com/poesterlin/music-recommender/main/setup.ts | bun run -
 ```
 
-This creates `.env.local` without reading or changing `.env`, starts a private local
-PostgreSQL database and the web app, and installs the schema. Open
-`http://127.0.0.1:4933/register`, then **Setup**. Add Music Assistant and Home
-Assistant details to `.env.local` when ready and restart the web service:
+It downloads `compose.yaml`, writes `.env` with generated secrets, starts
+PostgreSQL and the web app from the published images, applies the schema, and
+creates an `admin` account. It refuses to overwrite an existing `.env`.
+
+Open `http://127.0.0.1:4932/login` with the printed credentials, then follow
+**Setup**. Add Music Assistant and Home Assistant details to `.env` and run
+`docker compose up -d` again.
+
+To build from this checkout instead of pulling images, use the build override:
 
 ```sh
-docker compose --project-name sole-local --env-file .env.local up -d --force-recreate web
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-To resume after an interrupted first run, start the local database, migrate
-with the local URL (never the production `.env`), then start web:
-
-```sh
-docker compose --project-name sole-local --env-file .env.local --profile database up -d postgres
-DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.local)" bun --no-env-file run db:migrate
-docker compose --project-name sole-local --env-file .env.local up -d --build web
-```
-
-The local stack starts only web and PostgreSQL. Embedding and scheduled jobs
-can be enabled after connecting the integrations. For a public deployment,
-use the Compose setup below.
+A machine that also runs another stack keeps its values in a separate `.env` and
+passes it with `--env-file`.
 
 ### Public deployment
 
@@ -249,6 +246,7 @@ an explicit operation.
 
 ```sh
 cd web && bun install --frozen-lockfile && bun run check && bun run build
+cd assets && bun run check
 cargo test --manifest-path clustering-rs/Cargo.toml --locked
 cargo test --manifest-path clustering-wasm/Cargo.toml --locked
 cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'

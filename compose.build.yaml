@@ -1,0 +1,31 @@
+# Build the app from this checkout instead of pulling the published images.
+#
+# Only needed when you are changing the code. Combine it with the base file:
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+services:
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+  embeddings-loop:
+    build:
+      context: embeddings
+  embeddings:
+    build:
+      context: embeddings
+  worker:
+    build:
+      context: embeddings
+  clusterer:
+    build:
+      context: .
+      dockerfile: clusterer/Dockerfile
+  clusterer-bun:
+    build:
+      context: .
+      dockerfile: clusterer-bun/Dockerfile
+  embedding-rust:
+    build:
+      context: .
+      dockerfile: embedding-rs/Dockerfile
