@@ -17,6 +17,25 @@ env:
   RUST_VERSION: 1.78.0
 
 jobs:
+  assets:
+    name: Generated images
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: assets
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Check the committed images match their master
+        run: bun run check
+      - name: Check the knockout master still derives reproducibly
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 make-alpha.py
+          git diff --exit-code -- source/logo-mark-alpha.png
+
   web:
     name: Web checks and build
     runs-on: ubuntu-24.04

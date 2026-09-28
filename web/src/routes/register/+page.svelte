@@ -9,7 +9,8 @@
 
 <div class="mx-auto flex min-h-[70vh] max-w-md items-center justify-center px-6">
 	<div class="border-ink/10 w-full rounded-2xl border bg-white/80 p-8 shadow-xl">
-		<p class="text-accent text-xs font-bold tracking-[0.2em] uppercase">Sole</p>
+		<img alt="" class="size-10" height="40" src="/logo-mark.png" width="40" />
+		<p class="text-accent mt-3 text-xs font-bold tracking-[0.2em] uppercase">Sole</p>
 		<h1 class="font-display mt-2 text-3xl font-black">Create an account</h1>
 		<form method="POST" action="?/register" use:enhance class="mt-6 space-y-4">
 			<div>

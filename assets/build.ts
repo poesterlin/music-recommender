@@ -16,7 +16,6 @@ import { dirname, join, relative } from "node:path";
 
 const dir = import.meta.dir;
 const root = join(dir, "..");
-const masterPath = join(dir, "source", "logo-mark.png");
 const checkOnly = Bun.argv.includes("--check");
 
 type Target = {
@@ -28,28 +27,51 @@ type Target = {
   compression?: number;
   /** Why this file exists, shown in the report. */
   why: string;
+  /**
+   * Master to resize, relative to the repository root. Defaults to the opaque
+   * master. Only the knockout master differs, and only because the app draws
+   * the mark on its own paper, where an opaque cream tile would show.
+   */
+  from?: string;
 };
+
+const OPAQUE_MASTER = "assets/source/logo-mark.png";
 
 const targets: Target[] = [
   { out: "web/static/favicon.png", size: 64, compression: 9, why: "browser tab" },
   { out: "web/static/apple-touch-icon.png", size: 180, compression: 9, why: "iOS home screen" },
   { out: "web/static/icon-192.png", size: 192, compression: 9, why: "PWA icon" },
   { out: "web/static/icon-512.png", size: 512, compression: 9, why: "PWA and social cards" },
-  { out: "docs/public/logo.png", size: 512, compression: 9, why: "docs nav and hero" }
+  { out: "docs/public/logo.png", size: 512, compression: 9, why: "docs nav and hero" },
+  {
+    out: "web/static/logo-mark.png",
+    size: 128,
+    compression: 9,
+    why: "header and login mark, drawn on the app's own paper",
+    from: "assets/source/logo-mark-alpha.png"
+  }
 ];
-
-if (!(await Bun.file(masterPath).exists())) {
-  console.error(`Missing master: ${relative(root, masterPath)}`);
-  console.error("See README.md for how the master is produced from the 4K artwork.");
-  process.exit(1);
-}
 
 // bun-types does not describe the Image API yet, so the calls are typed loosely.
 const Image = (Bun as unknown as { Image: new (input: ArrayBuffer) => any }).Image;
-const source = await Bun.file(masterPath).arrayBuffer();
+
+const sources = new Map<string, ArrayBuffer>();
+async function masterBytes(path: string): Promise<ArrayBuffer> {
+  const cached = sources.get(path);
+  if (cached) return cached;
+  if (!(await Bun.file(join(root, path)).exists())) {
+    console.error(`Missing master: ${path}`);
+    console.error("See README.md for how the masters are produced.");
+    process.exit(1);
+  }
+  const bytes = await Bun.file(join(root, path)).arrayBuffer();
+  sources.set(path, bytes);
+  return bytes;
+}
 
 /** Encode one target in memory, so --check can compare bytes instead of writing. */
 async function encode(target: Target): Promise<Uint8Array> {
+  const source = await masterBytes(target.from ?? OPAQUE_MASTER);
   const image = new Image(source).resize(target.size, target.size);
   const png = target.compression ? image.png({ compressionLevel: target.compression }) : image.png();
   return png.bytes();
@@ -89,7 +111,9 @@ if (checkOnly) {
     console.error(`\n${stale} asset(s) out of date. Run: bun run build`);
     process.exit(1);
   }
-  console.log("\nAll assets match the master.");
+  console.log("\nAll assets match their master.");
 } else {
-  console.log(`\n${targets.length} assets written from ${relative(root, masterPath)}.`);
+  const used = [...new Set(targets.map((t) => t.from ?? OPAQUE_MASTER))].sort();
+  console.log(`\n${targets.length} assets written from ${used.length} master(s):`);
+  for (const path of used) console.log(`  ${path}`);
 }

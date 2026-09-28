@@ -1,6 +1,5 @@
 <script lang="ts">
 	import {
-		IconDisc,
 		IconHeartbeat,
 		IconHome,
 		IconLogout,
@@ -87,10 +86,13 @@
 	<header class="border-ink/15 bg-paper/90 sticky top-0 z-40 border-b backdrop-blur">
 		<div class="mx-auto max-w-6xl px-6 pt-4 pb-3">
 			<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-				<a href="/" class="group flex items-baseline gap-3">
-					<IconDisc
-						class="text-accent size-6 translate-y-1 transition-transform duration-700 group-hover:rotate-180"
-						size={24}
+				<a href="/" class="group flex items-center gap-2.5">
+					<img
+						alt=""
+						class="size-8 shrink-0 transition-transform duration-700 group-hover:-rotate-6"
+						height="32"
+						src="/logo-mark.png"
+						width="32"
 					/>
 					<span class="font-display text-2xl font-black tracking-tight"> Sole </span>
 				</a>

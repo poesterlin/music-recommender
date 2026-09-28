@@ -1,0 +1,16 @@
+{
+	"name": "Sole",
+	"short_name": "Sole",
+	"description": "A local music-library indexer, embedding worker, and clustering service.",
+	"start_url": "/",
+	"scope": "/",
+	"display": "standalone",
+	"background_color": "#f4eee1",
+	"theme_color": "#f4eee1",
+	"icons": [
+		{ "src": "/favicon.png", "sizes": "64x64", "type": "image/png" },
+		{ "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" },
+		{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+		{ "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+	]
+}

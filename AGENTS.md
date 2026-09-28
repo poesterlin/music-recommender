@@ -4,7 +4,7 @@
 
 - Install web dependencies: `cd web && bun install --frozen-lockfile`
 - Web checks/build: `cd web && bun run check && bun run build`
-- Generated images: `cd assets && bun run check` (fails when a committed asset no longer matches `assets/source/logo-mark.png`; rebuild with `bun run build`)
+- Generated images: `cd assets && bun run check` (fails when a committed asset no longer matches its master; rebuild with `bun run build`). Replacing the artwork means rebuilding the knockout master first with `python3 assets/make-alpha.py`, which needs Pillow — see `assets/README.md`
 - Native clustering: `cargo test --manifest-path clustering-rs/Cargo.toml --locked`
 - WASM adapter: `cargo test --manifest-path clustering-wasm/Cargo.toml --locked`
 - Embedding core/CLI: `cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'`
