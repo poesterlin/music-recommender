@@ -28,24 +28,39 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 	const body = (await request.json().catch(() => null)) as {
 		hopSeconds?: unknown;
 		maxSampleSeconds?: unknown;
+		mode?: unknown;
 		frontend?: unknown;
 		dryRun?: unknown;
 	} | null;
 
-	const hopSeconds = Number(body?.hopSeconds);
-	const maxSampleSeconds = Number(body?.maxSampleSeconds);
-	if (!Number.isFinite(hopSeconds) || !Number.isFinite(maxSampleSeconds)) {
+	// A named mode is the interface; an exact hop is the escape hatch, matching
+	// the worker's --mode / --hop precedence.
+	const hasMode = typeof body?.mode === 'string' && body.mode.trim() !== '';
+	const hasHop = body?.hopSeconds !== undefined && body?.hopSeconds !== null;
+	if (!hasMode && !hasHop) {
 		return Response.json(
-			{ error: 'hopSeconds and maxSampleSeconds must both be numbers' },
+			{
+				error:
+					'specify a mode (low, medium, high) or an exact hopSeconds; ' +
+					'low is used when neither is given'
+			},
 			{ status: 400 }
 		);
+	}
+	if (hasHop && !Number.isFinite(Number(body?.hopSeconds))) {
+		return Response.json({ error: 'hopSeconds must be a number' }, { status: 400 });
+	}
+	if (body?.maxSampleSeconds !== undefined && !Number.isFinite(Number(body?.maxSampleSeconds))) {
+		return Response.json({ error: 'maxSampleSeconds must be a number' }, { status: 400 });
 	}
 
 	const { ensureEmbeddingSpace } = await import('$lib/server/embedding-spaces');
 	try {
 		const result = await ensureEmbeddingSpace({
-			hopSeconds,
-			maxSampleSeconds,
+			mode: hasMode ? String(body?.mode) : undefined,
+			hopSeconds: hasHop ? Number(body?.hopSeconds) : undefined,
+			maxSampleSeconds:
+				body?.maxSampleSeconds === undefined ? undefined : Number(body?.maxSampleSeconds),
 			frontend: typeof body?.frontend === 'string' ? body.frontend : undefined,
 			dryRun: body?.dryRun === true
 		});

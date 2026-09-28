@@ -216,6 +216,60 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(timings["hop_seconds"], local_embeddings.DEFAULT_HOP_SECONDS)
         self.assertEqual(FakeOpenL3.hops, [local_embeddings.DEFAULT_HOP_SECONDS])
 
+    @staticmethod
+    def _parse(argv):
+        # parse_args insists on a database URL in local mode; these tests are
+        # about how --mode resolves, not about connecting to anything.
+        previous = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = "postgresql://unused/unused"
+        try:
+            return local_embeddings.parse_args(argv)
+        finally:
+            if previous is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous
+
+    def test_mode_maps_to_the_measured_hops(self):
+        # low/medium/high are the three measured points, not arbitrary names.
+        self.assertEqual(
+            local_embeddings.EMBEDDING_MODES,
+            {"low": 0.1, "medium": 0.5, "high": 1.0},
+        )
+
+    def test_mode_resolves_the_hop_and_defaults_to_low(self):
+        # With no EMBEDDING_HOP_SECONDS, --mode alone must decide the hop, and
+        # the default has to stay OpenL3's own so behaviour is unchanged.
+        for name, expected in local_embeddings.EMBEDDING_MODES.items():
+            args = self._parse(["--mode", name])
+            self.assertEqual(args.hop, expected, name)
+
+        args = self._parse([])
+        self.assertEqual(args.mode, "low")
+        self.assertEqual(args.hop, local_embeddings.EMBEDDING_MODES["low"])
+
+    def test_an_exact_hop_overrides_the_mode(self):
+        args = self._parse(["--mode", "low", "--hop", "0.25"])
+        self.assertEqual(args.hop, 0.25)
+        # The mode is still recorded: the recipe identifies what was asked for,
+        # and the hop is what was actually used.
+        self.assertEqual(args.mode, "low")
+
+    def test_mode_is_case_and_space_insensitive(self):
+        # It arrives from an env var written by a person, so " Medium " has to
+        # work rather than erroring at 3am.
+        args = self._parse(["--mode", " Medium "])
+        self.assertEqual(args.hop, local_embeddings.EMBEDDING_MODES["medium"])
+
+    def test_an_unknown_mode_is_rejected(self):
+        with self.assertRaises(SystemExit):
+            self._parse(["--mode", "turbo"])
+
+    def test_hop_may_not_exceed_duration(self):
+        # Every window would be a repeat of the same audio.
+        with self.assertRaises(SystemExit):
+            self._parse(["--mode", "high", "--duration", "0.5"])
+
     def test_process_audio_file_forwards_a_custom_infer_batch_size(self):
         FakeOpenL3.model = object()
         FakeOpenL3.calls = []
@@ -310,7 +364,7 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
     def test_unknown_flags_exit_with_the_usage_status_not_two(self):
         with self.assertRaises(SystemExit) as raised:
             with contextlib.redirect_stderr(io.StringIO()):
-                local_embeddings.parse_args(["--not-a-real-flag"])
+                self._parse(["--not-a-real-flag"])
         self.assertEqual(raised.exception.code, local_embeddings.USAGE_EXIT_CODE)
 
     def test_api_page_batch_cap_points_at_the_inference_batch_flag(self):

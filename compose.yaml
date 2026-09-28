@@ -90,10 +90,8 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
-      # OpenL3 window hop. 0.1 is OpenL3's own default and what every embedding
-      # written so far used; raising it is much faster and slightly changes the
-      # pooled vector, so the value is recorded per embedding space.
-      EMBEDDING_HOP_SECONDS: "${EMBEDDING_HOP_SECONDS:-0.1}"
+      # How finely each track is sampled: low | medium | high. See .env.example.
+      EMBEDDING_MODE: "${EMBEDDING_MODE:-low}"
     volumes:
       - music:/music:ro
     networks:
@@ -189,10 +187,8 @@ services:
       EMBEDDING_DURATION_SECONDS: "${EMBEDDING_DURATION_SECONDS:-60}"
       EMBEDDING_AUDIO_BACKEND: "${EMBEDDING_AUDIO_BACKEND:-fast}"
       EMBEDDING_INFER_BATCH_SIZE: "${EMBEDDING_INFER_BATCH_SIZE:-64}"
-      # OpenL3 window hop. 0.1 is OpenL3's own default and what every embedding
-      # written so far used; raising it is much faster and slightly changes the
-      # pooled vector, so the value is recorded per embedding space.
-      EMBEDDING_HOP_SECONDS: "${EMBEDDING_HOP_SECONDS:-0.1}"
+      # How finely each track is sampled: low | medium | high. See .env.example.
+      EMBEDDING_MODE: "${EMBEDDING_MODE:-low}"
       EMBEDDING_JOB_NAME: "${EMBEDDING_JOB_NAME:-python-local-embeddings}"
       EMBEDDING_LOCK_KEY: "${EMBEDDING_LOCK_KEY:-5572451585022050817}"
       EMBEDDING_TF_INTRA_THREADS: "${EMBEDDING_TF_INTRA_THREADS:-0}"

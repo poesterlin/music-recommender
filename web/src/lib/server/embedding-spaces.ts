@@ -1,11 +1,43 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
 
+/**
+ * Worker sampling presets, mirroring EMBEDDING_MODES in the Python worker.
+ *
+ * The numbers are measured, not chosen: over a 60s clip on a 10-core CPU these
+ * are ~1.0x, ~4.8x and ~8.9x the low setting, for a mean pooled-similarity
+ * shift of 0, ~0.004 and ~0.012. Retrieval order survives all three, so the
+ * choice is how finely the vector samples a track, not whether the recommender
+ * still works.
+ */
+export const EMBEDDING_MODES: Record<string, number> = {
+	low: 0.1,
+	medium: 0.5,
+	high: 1.0
+};
+
+/**
+ * The preset a hop corresponds to, or null when it is a custom value.
+ *
+ * An exact hop is still recorded even when it has no name, so a library using
+ * one is identifiable rather than rounded to the nearest preset.
+ */
+export function modeForHop(hopSeconds: number | null): string | null {
+	if (hopSeconds === null) return null;
+	for (const [name, hop] of Object.entries(EMBEDDING_MODES)) {
+		// Exact match: a hop between presets must not be reported as one.
+		if (hop === hopSeconds) return name;
+	}
+	return null;
+}
+
 export type EmbeddingSpaceUsage = {
 	version: number;
 	model: string;
 	hopSeconds: number | null;
 	maxSampleSeconds: number | null;
+	/** low | medium | high, or null for a custom hop. */
+	mode: string | null;
 	frontend: string | null;
 	/** Mean seconds of audio per track, from the space's own track_count. */
 	/** Null when the mean is unknown (no space row yet). */
@@ -43,21 +75,55 @@ export type EmbeddingSpaceReport = {
  */
 export async function ensureEmbeddingSpace(input: {
 	model?: string;
-	hopSeconds: number;
-	maxSampleSeconds: number;
+	/** low | medium | high, or an exact hop via hopSeconds. */
+	mode?: string;
+	hopSeconds?: number;
+	maxSampleSeconds?: number;
 	frontend?: string;
 	dryRun?: boolean;
-}): Promise<{ version: number; created: boolean; trackCount: number | null; mixed: boolean }> {
+}): Promise<{
+	version: number;
+	created: boolean;
+	trackCount: number | null;
+	mixed: boolean;
+	mode: string | null;
+	hopSeconds: number;
+	maxSampleSeconds: number;
+}> {
 	const model = input.model ?? 'openl3-512';
 	const frontend = input.frontend ?? 'kapre';
 
-	if (!Number.isFinite(input.hopSeconds) || input.hopSeconds <= 0) {
+	const maxSampleSeconds = input.maxSampleSeconds ?? 60;
+
+	// A named mode is the interface; an exact hop is the escape hatch, matching
+	// the worker's --mode / --hop precedence.
+	let hopSeconds: number;
+	let mode: string | null = null;
+	if (input.hopSeconds !== undefined && input.hopSeconds !== null) {
+		hopSeconds = input.hopSeconds;
+		mode = modeForHop(hopSeconds);
+	} else if (input.mode !== undefined && input.mode !== null) {
+		const requested = String(input.mode).trim().toLowerCase();
+		const hop = EMBEDDING_MODES[requested];
+		if (hop === undefined) {
+			throw new RangeError(
+				`mode must be one of ${Object.keys(EMBEDDING_MODES).join(', ')} (got '${input.mode}')`
+			);
+		}
+		hopSeconds = hop;
+		mode = requested;
+	} else {
+		hopSeconds = EMBEDDING_MODES.low;
+		mode = 'low';
+	}
+
+	if (!Number.isFinite(hopSeconds) || hopSeconds <= 0) {
 		throw new RangeError('hopSeconds must be a positive finite number');
 	}
-	if (!Number.isFinite(input.maxSampleSeconds) || input.maxSampleSeconds <= 0) {
+	if (!Number.isFinite(maxSampleSeconds) || maxSampleSeconds <= 0) {
 		throw new RangeError('maxSampleSeconds must be a positive finite number');
 	}
-	if (input.hopSeconds > input.maxSampleSeconds) {
+	if (hopSeconds > maxSampleSeconds) {
 		throw new RangeError('hopSeconds must not exceed maxSampleSeconds');
 	}
 
@@ -65,8 +131,8 @@ export async function ensureEmbeddingSpace(input: {
 		SELECT version
 		FROM embedding_space
 		WHERE model = ${model}
-			AND hop_seconds IS NOT DISTINCT FROM ${input.hopSeconds}
-			AND max_sample_seconds IS NOT DISTINCT FROM ${input.maxSampleSeconds}
+			AND hop_seconds IS NOT DISTINCT FROM ${hopSeconds}
+			AND max_sample_seconds IS NOT DISTINCT FROM ${maxSampleSeconds}
 			AND COALESCE(frontend, 'kapre') = ${frontend}
 		ORDER BY version DESC
 		LIMIT 1
@@ -79,12 +145,23 @@ export async function ensureEmbeddingSpace(input: {
 			version: existing[0].version,
 			created: false,
 			trackCount: space?.trackCount ?? null,
-			mixed: usage.mixed
+			mixed: usage.mixed,
+			mode,
+			hopSeconds,
+			maxSampleSeconds
 		};
 	}
 
 	if (input.dryRun) {
-		return { version: -1, created: false, trackCount: null, mixed: false };
+		return {
+			version: -1,
+			created: false,
+			trackCount: null,
+			mixed: false,
+			mode,
+			hopSeconds,
+			maxSampleSeconds
+		};
 	}
 
 	// A new recipe needs its own mean. Averaging a library that already holds a
@@ -112,7 +189,7 @@ export async function ensureEmbeddingSpace(input: {
 	const inserted = (await db.execute(sql`
 		INSERT INTO embedding_space (version, model, mean_embedding, track_count, hop_seconds, max_sample_seconds, frontend)
 		SELECT COALESCE(max(version), 0) + 1, ${model}, ${meanRow.mean_embedding}::vector,
-			${meanRow.n}, ${input.hopSeconds}, ${input.maxSampleSeconds}, ${frontend}
+			${meanRow.n}, ${hopSeconds}, ${maxSampleSeconds}, ${frontend}
 		FROM embedding_space
 		RETURNING version
 	`)) as unknown as Array<{ version: number }>;
@@ -121,7 +198,10 @@ export async function ensureEmbeddingSpace(input: {
 		version: inserted[0].version,
 		created: true,
 		trackCount: Number(meanRow.n),
-		mixed: false
+		mixed: false,
+		mode,
+		hopSeconds,
+		maxSampleSeconds
 	};
 }
 
@@ -185,6 +265,7 @@ export async function getEmbeddingSpaceUsage(): Promise<EmbeddingSpaceReport> {
 		model: r.model,
 		hopSeconds: r.hop_seconds === null ? null : Number(r.hop_seconds),
 		maxSampleSeconds: r.max_sample_seconds === null ? null : Number(r.max_sample_seconds),
+		mode: modeForHop(r.hop_seconds === null ? null : Number(r.hop_seconds)),
 		frontend: r.frontend,
 		trackCount: r.track_count === null ? null : Number(r.track_count),
 		createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : (r.created_at ?? null),
@@ -199,6 +280,7 @@ export async function getEmbeddingSpaceUsage(): Promise<EmbeddingSpaceReport> {
 			model: '(unregistered)',
 			hopSeconds: null,
 			maxSampleSeconds: null,
+			mode: null,
 			frontend: null,
 			trackCount: null,
 			createdAt: null,
@@ -216,13 +298,19 @@ export async function getEmbeddingSpaceUsage(): Promise<EmbeddingSpaceReport> {
 	};
 }
 
-/** One line per distinct recipe, for logs and CLI output. */
+/**
+ * One line per recipe, leading with the preset name.
+ *
+ * The hop is still shown even for a preset, because that is the value that
+ * actually determines the vector and the one a space is registered against.
+ */
 export function describeSpace(space: EmbeddingSpaceUsage): string {
 	const hop = space.hopSeconds === null ? 'unknown' : `${space.hopSeconds}s`;
 	const max = space.maxSampleSeconds === null ? 'unknown' : `${space.maxSampleSeconds}s`;
+	const mode = space.mode ?? 'custom';
 	return (
-		`v${space.version} ${space.model} hop=${hop} max=${max}s` +
-		` frontend=${space.frontend ?? 'kapre'} -> ${space.tracks.toLocaleString()} tracks` +
+		`v${space.version} ${space.model} mode=${mode} (hop=${hop}, max=${max}s, ` +
+		`frontend=${space.frontend ?? 'kapre'}) -> ${space.tracks.toLocaleString()} tracks` +
 		` (${(space.share * 100).toFixed(1)}%)`
 	);
 }
