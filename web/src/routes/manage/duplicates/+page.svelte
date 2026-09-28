@@ -40,7 +40,7 @@
 	let loading = $state(true);
 	let working = $state(false);
 	let expanded = new SvelteSet<string>();
-	let selection = new SvelteSet<string>();
+	let selection = $state(new SvelteSet<string>());
 
 	// Bulk state. The plan is fetched up front so the confirmation quotes
 	// exact numbers rather than an estimate.
@@ -59,11 +59,15 @@
 		]);
 		summary = scan.ok ? scan.data : null;
 		bulk = plan.ok ? plan.data : null;
-		// Preselect only the unambiguous duplicates. Groups whose copies turn
-		// out to be different recordings are a judgement call and start
-		// unselected so a bulk prune cannot quietly drop real tracks.
+		// Preselect only groups that still have work to do. Fully-skipped
+		// groups and groups whose copies sound different are a judgement call,
+		// so they start unselected and a bulk skip cannot quietly drop tracks.
 		if (scan.ok) {
-			selection = new SvelteSet(scan.data.groups.filter((g) => !g.mixedAudio).map((g) => g.key));
+			selection = new SvelteSet(
+				scan.data.groups
+					.filter((g) => !g.mixedAudio && g.victims.some((v) => !v.skipped))
+					.map((g) => g.key)
+			);
 		}
 		loading = false;
 	}
@@ -80,11 +84,8 @@
 		if (!bulk) return;
 		if (
 			!confirm(
-				`Prune ${bulk.copies.toLocaleString()} duplicate copies across ` +
-					`${bulk.groups.toLocaleString()} groups?\n\n` +
-					`Only groups whose copies are the same recording are included. ` +
-					`Each group's embeddings are folded into one copy, which is then ` +
-					`skipped. This can be undone from the Restore button.`
+				`Skip extra copies in ${bulk.groups.toLocaleString()} likely matching group${bulk.groups === 1 ? '' : 's'}?\n\n` +
+					`One copy stays available in each group. Music files are not deleted, and you can undo this here.`
 			)
 		) {
 			return;
@@ -104,7 +105,7 @@
 				body: JSON.stringify({ action: 'prune', limit: 4000 })
 			});
 			if (!ok) {
-				toastStore.show(data.error ?? 'Bulk prune failed');
+				toastStore.show(data.error ?? 'Could not skip the matches');
 				break;
 			}
 			bulkProgress = {
@@ -113,9 +114,8 @@
 			};
 		}
 		working = false;
-		const total = bulkProgress?.affected ?? 0;
 		if (bulkProgress?.done) {
-			toastStore.show(`Pruned ${total.toLocaleString()} duplicate copies`);
+			toastStore.show('Finished skipping likely matches');
 			bulkProgress = null;
 			await load();
 		}
@@ -126,6 +126,20 @@
 	});
 
 	const selectable = $derived((summary?.groups ?? []).filter((g) => !g.mixedAudio));
+	const shownPending = $derived(
+		(summary?.groups ?? []).reduce(
+			(total, group) => total + group.victims.filter((copy) => !copy.skipped).length,
+			0
+		)
+	);
+	const selectedPending = $derived(
+		(summary?.groups ?? []).reduce(
+			(total, group) =>
+				total +
+				(selection.has(group.key) ? group.victims.filter((copy) => !copy.skipped).length : 0),
+			0
+		)
+	);
 	const allSelected = $derived(
 		selectable.length > 0 && selectable.every((g) => selection.has(g.key))
 	);
@@ -145,17 +159,18 @@
 	}
 
 	async function act(action: 'skip' | 'restore') {
-		if (selection.size === 0) {
-			toastStore.show('Select at least one group');
+		if (selection.size === 0 || (action === 'skip' && selectedPending === 0)) {
+			toastStore.show(
+				action === 'skip' ? 'No active copies selected' : 'Select at least one group'
+			);
 			return;
 		}
 		const count = selection.size;
 		if (
 			action === 'skip' &&
 			!confirm(
-				`Skip the duplicate copies in ${count} group${count === 1 ? '' : 's'}?\n\n` +
-					`Skipped tracks are excluded from recommendations and clustering. ` +
-					`This can be undone here.`
+				`Skip the extra copies in ${count} group${count === 1 ? '' : 's'}?\n\n` +
+					`One copy stays available in each group. Music files are not deleted, and you can undo this here.`
 			)
 		) {
 			return;
@@ -168,7 +183,12 @@
 		});
 		working = false;
 		if (ok) {
-			toastStore.show(`${action === 'skip' ? 'Skipped' : 'Restored'} ${data.affected ?? 0} tracks`);
+			const affected = data.affected ?? 0;
+			toastStore.show(
+				action === 'skip'
+					? 'Selected copies skipped'
+					: `Restored ${affected} track${affected === 1 ? '' : 's'}`
+			);
 			selection = new SvelteSet<string>();
 			await load();
 		}
@@ -178,7 +198,7 @@
 <PageHeader
 	kicker="Manage"
 	title="Duplicates"
-	description="The same track and album imported more than once. The embedded copy is kept; the rest are skipped, which excludes them from recommendations and clustering."
+	description="Keep one copy of each song. Skipping extras hides them from recommendations without deleting your music."
 />
 
 <div class="mb-6 flex flex-wrap gap-2">
@@ -193,7 +213,7 @@
 		disabled={loading}
 		onclick={load}
 	>
-		Rescan
+		Refresh results
 	</button>
 </div>
 
@@ -203,22 +223,22 @@
 	<p
 		class="border-ink/15 text-faded rounded-2xl border border-dashed px-6 py-10 text-center text-sm"
 	>
-		No duplicate track and album combinations found.
+		No matching copies found.
 	</p>
 {:else}
 	<div class="border-ink/10 bg-cream rounded-2xl border p-5">
 		<div class="flex flex-wrap items-center justify-between gap-3">
 			<div class="grid gap-1 sm:grid-cols-3 sm:gap-6">
 				<div>
-					<p class="text-faded text-xs font-bold tracking-wide uppercase">Groups</p>
+					<p class="text-faded text-xs font-bold tracking-wide uppercase">Matching groups</p>
 					<p class="font-display text-2xl font-black">{summary.groupCount.toLocaleString()}</p>
 				</div>
 				<div>
-					<p class="text-faded text-xs font-bold tracking-wide uppercase">Duplicate copies</p>
+					<p class="text-faded text-xs font-bold tracking-wide uppercase">Extra copies</p>
 					<p class="font-display text-2xl font-black">{summary.duplicateCount.toLocaleString()}</p>
 				</div>
 				<div>
-					<p class="text-faded text-xs font-bold tracking-wide uppercase">Still active</p>
+					<p class="text-faded text-xs font-bold tracking-wide uppercase">Not skipped yet</p>
 					<p class="font-display text-2xl font-black">{summary.pendingCount.toLocaleString()}</p>
 				</div>
 			</div>
@@ -230,9 +250,7 @@
 						onclick={pruneAllSafe}
 					>
 						<IconBolt size={15} />
-						{bulkProgress
-							? `Pruning… ${bulkProgress.affected.toLocaleString()} skipped`
-							: `Prune all ${bulk.copies.toLocaleString()} safe copies`}
+						{bulkProgress ? 'Skipping…' : 'Skip likely matches'}
 					</button>
 				{/if}
 				<button
@@ -243,11 +261,13 @@
 				</button>
 				<button
 					class="bg-accent text-cream hover:bg-accent-deep inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:opacity-50"
-					disabled={working || selection.size === 0}
+					disabled={working || selectedPending === 0}
 					onclick={() => act('skip')}
 				>
 					<IconCopy size={15} />
-					Skip {selection.size || ''} selected
+					{selectedPending > 0
+						? `Skip ${selectedPending} active cop${selectedPending === 1 ? 'y' : 'ies'}`
+						: 'Nothing selected to skip'}
 				</button>
 				<button
 					class="border-ink/20 text-ink-soft hover:bg-ink/5 inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:opacity-50"
@@ -255,7 +275,7 @@
 					onclick={() => act('restore')}
 				>
 					<IconRestore size={15} />
-					Restore
+					Undo skip
 				</button>
 			</div>
 		</div>
@@ -264,21 +284,31 @@
 			<p class="mt-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">
 				<IconAlertTriangle size={16} class="mt-0.5 shrink-0" />
 				<span>
-					{summary.mixedAudioGroups} of {summary.groupCount.toLocaleString()} groups share a name and
-					album but sound different, so they are not true duplicates. They are left unselected — review
-					them before pruning.
+					{summary.mixedAudioGroups.toLocaleString()} group{summary.mixedAudioGroups === 1
+						? ''
+						: 's'} may contain different recordings. They are not selected automatically. Review them
+					before skipping.
 				</span>
 			</p>
 		{/if}
 		<p class="text-ink-soft mt-4 text-sm">
-			Pruning keeps one copy per group and folds the rest of the group's embeddings into it, so no
-			embedding work is thrown away. Use <b>Prune all</b> to clear every safe group at once, or select
-			groups below to prune them individually.
+			{#if shownPending === 0}
+				The groups shown below are already handled. No need to skip them again.
+				{#if summary.pendingCount > 0}
+					The {summary.pendingCount.toLocaleString()} unskipped cop{summary.pendingCount === 1
+						? 'y'
+						: 'ies'} are in other groups.
+				{/if}
+			{:else}
+				{shownPending.toLocaleString()} extra cop{shownPending === 1 ? 'y' : 'ies'} in the groups shown
+				below {shownPending === 1 ? 'is' : 'are'} not skipped yet. Select groups to skip their extras,
+				or leave different recordings alone.
+			{/if}
 		</p>
 
 		<p class="text-faded mt-4 text-xs">
-			Showing the {summary.groups.length.toLocaleString()} largest of
-			{summary.groupCount.toLocaleString()} groups. Skipped copies stay skipped when the library is re-indexed.
+			Showing the {summary.groups.length.toLocaleString()} largest groups, not necessarily those needing
+			work. Skipping does not delete music files.
 		</p>
 	</div>
 
@@ -299,24 +329,17 @@
 					</button>
 					<div class="text-right text-xs">
 						<p class="text-faded">
-							{group.victims.length} duplicate{group.victims.length === 1 ? '' : 's'}
+							{group.victims.length} extra cop{group.victims.length === 1 ? 'y' : 'ies'}
 						</p>
-						{#if group.clusters.length > 1}
-							<p class="text-accent-deep font-bold">
-								split across {group.clusters.length} clusters
-							</p>
-						{:else}
-							<p class="text-faded">cluster {group.clusters[0] ?? '—'}</p>
-						{/if}
 						{#if group.mixedAudio}
-							<p class="font-bold text-amber-700">different audio</p>
-						{:else if group.similarity !== null}
-							<p class="text-faded">match {group.similarity.toFixed(3)}</p>
+							<p class="font-bold text-amber-700">Review: may sound different</p>
 						{/if}
 					</div>
-					<span class="text-faded text-xs tabular-nums"
-						>{group.victims.filter((v) => v.skipped).length}/{group.victims.length} skipped</span
-					>
+					<span class="text-faded text-xs tabular-nums">
+						{group.victims.every((v) => v.skipped)
+							? 'All extras skipped'
+							: `${group.victims.filter((v) => !v.skipped).length} left to review`}
+					</span>
 				</div>
 				{#if expanded.has(group.key)}
 					<div class="border-ink/10 grid gap-2 border-t p-4 sm:grid-cols-2">
@@ -335,7 +358,7 @@
 									: ''}"
 							>
 								<p class="text-faded text-xs font-bold tracking-wide uppercase">
-									Duplicate {victim.skipped ? '· skipped' : ''}
+									Extra copy {victim.skipped ? '· skipped' : ''}
 								</p>
 								<p class="mt-1 truncate font-bold">{victim.name}</p>
 								<p class="text-faded mt-0.5 truncate text-xs">
