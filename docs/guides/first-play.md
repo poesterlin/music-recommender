@@ -1,59 +1,53 @@
 # First playable vibe
 
-The app's **Setup** page shows progress. These are distinct jobs: importing a catalog does not create audio embeddings, and embeddings do not create clusters.
+The app's **Setup** page walks the whole sequence and shows where it has got to. For most installs, open it and let it run: it checks the database, asks Music Assistant for your library, indexes the tracks, waits while they are analysed, then groups them into vibes and gives each one a name.
 
-## 1. Import
+Two parts need your decision, because they depend on where the work should run.
 
-Once Music Assistant is connected, go to **Manage → Full tidy-up**. It syncs Music Assistant, imports new tracks, and assigns already-embedded tracks **if centroids exist**. Check **Worker** for the resulting track count.
+## Analyse the library
 
-## 2. Embed and center
-
-On the public Compose stack the embedding loop runs in the background. A local install starts only the app and the database, so start a worker when you are ready to analyse the library:
+Embedding is the slow part: a worker reads a minute of each track and turns it into a vector. The public stack runs a loop in the background. A local install starts only the app and the database, so start a worker when you are ready:
 
 ```sh
 docker compose --profile worker up -d
 ```
 
-That worker runs in API mode: it downloads snippets from the app and needs no access to your files.
+It runs in API mode, which means it downloads snippets from the app and uploads vectors back — it never needs access to your files, and you can stop it at any time with `docker compose --profile worker down`.
 
-After at least two raw embeddings exist, establish the centered space. The status page also has a repair button that does this without a terminal. To do it from the command line, use the database URL for the stack you are working on:
+## Create the centered space
+
+Once at least two tracks are analysed, the app needs a *centered space*: the average vector of your library, which every similarity comparison is measured against. Until it exists, search and clustering have nothing to work from.
+
+Open **Worker** and use **Create the centered space** — that button appears when the space is missing, and **Preview** tells you what it would change before you commit. The same step from a terminal, on a deployment whose database your machine can reach:
 
 ```sh
-# Public deployment, with DATABASE_URL configured for host commands:
 bun run db:ensure-centered
-
-# Local stack (instead of the command above):
-DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env)" bun run db:ensure-centered
 ```
 
-**Worker** shows both embedded and centered counts. A high embedded percentage with zero centered tracks is not ready for clustering.
+**Worker** shows both counts. A high number of embedded tracks with zero centered is not ready for the next step.
 
-## 3. Create clusters
+## Group into vibes
 
-Initial clustering is an explicit operation. Set `COMPOSE` for your stack:
+Clustering is deliberately explicit, and it never renumbers an existing generation — your names are attached to cluster ids, so re-running clustering without naming the new generation would strand every name on the wrong vibe.
 
-```sh
-# Public or local, from the folder holding compose.yaml and .env:
-COMPOSE='docker compose'
-```
-
-Benchmark and record an artifact. This does **not** change assignments:
+**Setup → Group tracks into vibes** derives a sensible cluster count from the size of your library and runs it in the app. On the full stack you can instead benchmark a count of your choosing, which is worth doing on a large library:
 
 ```sh
-$COMPOSE --profile clustering run --rm clusterer-bun benchmark \
+docker compose --profile clustering run --rm clusterer-bun benchmark \
   --k 12 --pca-dim 32 --evaluation-dim 32 --runs 3 --record-run \
   --output /artifacts/first-run.json \
   --assignments /artifacts/first-assignments.jsonl
 ```
 
-Use the run ID printed by that command. Validate before applying; set the number first:
+`--k` is how many clusters to aim for, `--runs 3` repeats the fit and reports how stable it is, and the two output files are the report and the per-track assignment list. This writes nothing to your library; applying is a separate, validated step. Take the run id it prints:
 
 ```sh
-RUN_ID=4 # replace with your recorded run ID
-$COMPOSE --profile clustering run --rm clusterer \
-  --apply-run-id "$RUN_ID" --apply-assignments /artifacts/first-assignments.jsonl --validate-apply
-$COMPOSE --profile clustering run --rm clusterer \
-  --apply-run-id "$RUN_ID" --apply-assignments /artifacts/first-assignments.jsonl --confirm-apply
+docker compose --profile clustering run --rm clusterer \
+  --apply-run-id 4 --apply-assignments /artifacts/first-assignments.jsonl --confirm-apply
 ```
 
-The repository's `clustering-rs/README.md` covers quality checks and rollback. Once centroids and assignments exist, return to **Vibe** to choose and name clusters. **Manage → Full tidy-up** can then assign newly embedded tracks to those centroids.
+The repository's `clustering-rs/README.md` covers the quality checks, validation, and rollback.
+
+## Then
+
+Return to **Vibe** to listen through the clusters and rename them to something you recognise. **Manage → Full tidy-up** keeps things current afterwards: it assigns newly analysed tracks to the centroids you already have, and leaves every existing assignment alone.
