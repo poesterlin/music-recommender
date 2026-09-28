@@ -135,7 +135,7 @@
 	);
 </script>
 
-<svelte:head><title>Set up · Music Recommender</title></svelte:head>
+<svelte:head><title>Set up · Sole</title></svelte:head>
 
 <div class="mx-auto max-w-3xl px-6 py-12">
 	<p class="text-accent text-xs font-bold tracking-[0.2em] uppercase">First run</p>

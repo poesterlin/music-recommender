@@ -9,7 +9,7 @@ const originalRefresh = process.env.AUDIO_INDEX_REFRESH_SECONDS;
 const temporaryRoots: string[] = [];
 
 async function makeLibrary(files: Record<string, string>): Promise<string> {
-	const root = await mkdtemp(join(tmpdir(), 'music-recommender-audio-'));
+	const root = await mkdtemp(join(tmpdir(), 'sole-audio-'));
 	temporaryRoots.push(root);
 	process.env.MUSIC_LIBRARY_PATH = root;
 	process.env.AUDIO_INDEX_REFRESH_SECONDS = '0';

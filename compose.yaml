@@ -16,8 +16,8 @@ services:
     labels:
       - "traefik.enable=true"
       # set host in DOMAIN env variable
-      - "traefik.http.routers.recommender.rule=Host(`${DOMAIN}`)"
-      - "traefik.http.services.recommender.loadbalancer.server.port=3000"
+      - "traefik.http.routers.sole.rule=Host(`${DOMAIN}`)"
+      - "traefik.http.services.sole.loadbalancer.server.port=3000"
     networks:
       - traefik_web
       - music
@@ -232,11 +232,11 @@ services:
     profiles: ["database"]
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-recommender}
+      POSTGRES_USER: ${POSTGRES_USER:-sole}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
-      POSTGRES_DB: ${POSTGRES_DB:-recommender}
+      POSTGRES_DB: ${POSTGRES_DB:-sole}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-recommender} -d ${POSTGRES_DB:-recommender}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sole} -d ${POSTGRES_DB:-sole}"]
       interval: 5s
       timeout: 5s
       retries: 20

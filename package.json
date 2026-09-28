@@ -1,5 +1,5 @@
 {
-  "name": "recommender",
+  "name": "sole",
   "module": "index.ts",
   "type": "module",
   "private": true,

@@ -35,7 +35,7 @@ RESAMPY = {
 def download_and_verify(spec: dict[str, str], destination: Path) -> Path:
     archive = destination / f"{spec['name']}-{spec['version']}.tar.gz"
     request = urllib.request.Request(
-        spec["url"], headers={"User-Agent": "music-recommender-openl3-compat"}
+        spec["url"], headers={"User-Agent": "sole-openl3-compat"}
     )
     with urllib.request.urlopen(request, timeout=120) as response, archive.open("wb") as output:
         while chunk := response.read(1024 * 1024):
@@ -118,7 +118,7 @@ def main() -> int:
     except ImportError:
         run_pip("install", "--no-cache-dir", "setuptools", "wheel")
     root = Path(__file__).resolve().parent
-    with tempfile.TemporaryDirectory(prefix="music-recommender-openl3-") as temporary:
+    with tempfile.TemporaryDirectory(prefix="sole-openl3-") as temporary:
         work = Path(temporary)
         openl3_source = extract_archive(
             download_and_verify(OPENL3, work), work, f"openl3-{OPENL3['version']}"

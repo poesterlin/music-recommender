@@ -21,7 +21,7 @@ if sys.version_info < (3, 11):
 
 
 CORE_PATH = Path(__file__).with_name("generate-local-embeddings.py")
-CORE_MODULE_NAME = "music_recommender_local_embeddings"
+CORE_MODULE_NAME = "sole_local_embeddings"
 _EMBEDDINGS_DIR = str(Path(__file__).resolve().parent)
 if _EMBEDDINGS_DIR not in sys.path:
     sys.path.insert(0, _EMBEDDINGS_DIR)

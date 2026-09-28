@@ -1,4 +1,4 @@
-//! Fast, deterministic clustering primitives for the music recommender.
+//! Fast, deterministic clustering primitives for Sole.
 //!
 //! The database/CLI layer lives in `main.rs`.  This module deliberately has
 //! no database or native runtime dependencies, so the same core can be reused

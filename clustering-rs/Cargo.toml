@@ -3,7 +3,7 @@ name = "music-clustering"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.78"
-description = "Standalone spherical clustering benchmark for the music recommender"
+description = "Standalone spherical clustering benchmark for Sole"
 license = "MIT"
 
 [lib]

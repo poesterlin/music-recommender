@@ -49,7 +49,7 @@ The web service exposes an authenticated broker for remote workers:
 Run it with:
 
 ```sh
-export WORKER_URL=https://recommender.example.com
+export WORKER_URL=https://sole.example.com
 export WORKER_TOKEN='a-worker-scoped-key-from-the-web-ui'
 python embeddings/worker.py --source-mode api
 ```

@@ -1,4 +1,4 @@
-# Music Recommender contributor and deployment notes
+# Sole contributor and deployment notes
 
 ## Checks
 

@@ -102,7 +102,7 @@ async function main() {
     .select({ count: sql<string>`count(*)` })
     .from(trackTable);
   const dbTotal = Number(totalRow?.count ?? 0);
-  console.log(`Recommender DB has ${dbTotal} tracks`);
+  console.log(`Sole DB has ${dbTotal} tracks`);
 
   const dbURIs = await db
     .select({ uri: trackTable.uri })

@@ -21,8 +21,8 @@ import sys
 if sys.version_info < (3, 11):
     raise RuntimeError("The worker requires Python 3.11 or newer.")
 
-repo_url = "https://github.com/poesterlin/music-recommender.git"
-repo_dir = "music-recommender"
+repo_url = "https://github.com/poesterlin/sole.git"
+repo_dir = "sole"
 if not os.path.isdir(os.path.join(repo_dir, "embeddings")):
     subprocess.run(["git", "clone", "--depth", "1", repo_url, repo_dir], check=True)
 else:
@@ -100,7 +100,7 @@ else:
 	}
 </script>
 
-<svelte:head><title>Access · Music Recommender</title></svelte:head>
+<svelte:head><title>Access · Sole</title></svelte:head>
 
 <PageHeader
 	kicker="Manage"
@@ -271,7 +271,7 @@ else:
 			</button>
 			<a
 				class="border-ink/15 hover:bg-ink/5 rounded-lg border px-3 py-2 text-xs font-bold"
-				href="/music-recommender-worker.ipynb"
+				href="/sole-worker.ipynb"
 				download>Download notebook</a
 			>
 		</div>

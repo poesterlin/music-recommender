@@ -7,7 +7,7 @@ import { db } from './db';
  * The numbers are measured, not chosen: over a 60s clip on a 10-core CPU these
  * are ~1.0x, ~4.8x and ~8.9x the low setting, for a mean pooled-similarity
  * shift of 0, ~0.004 and ~0.012. Retrieval order survives all three, so the
- * choice is how finely the vector samples a track, not whether the recommender
+ * choice is how finely the vector samples a track, not whether Sole
  * still works.
  */
 export const EMBEDDING_MODES: Record<string, number> = {

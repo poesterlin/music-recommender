@@ -1,4 +1,4 @@
-# Music Recommender
+# Sole
 
 A local music-library indexer, OpenL3 embedding worker, pgvector similarity
 search, and clustering service. The web process is the database-backed UI and
@@ -144,7 +144,7 @@ For example, the Home Assistant request can use either the bootstrap key or a
 UI-created playback key:
 
 ```sh
-curl -X POST https://recommender.example.com/api/play-vibe \
+curl -X POST https://sole.example.com/api/play-vibe \
   -H "Authorization: Bearer $PLAYBACK_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{}'
@@ -173,7 +173,7 @@ local music mount. Create the key under **API keys** in the UI, or use the
 bootstrap `WORKER_TOKEN` for an existing deployment.
 
 ```sh
-export WORKER_URL=https://recommender.example.com
+export WORKER_URL=https://sole.example.com
 export WORKER_TOKEN='a-worker-scoped-key'
 python embeddings/worker.py --source-mode api
 ```
@@ -212,7 +212,7 @@ For Colab or Jupyter, open **API keys** in the web UI, create a Worker key, and
 copy the ready-made worker cell from that page. The cell clones the repository,
 installs `embeddings/requirements.txt`, prompts for the key, and runs the
 existing 60-second API worker. The same notebook is downloadable as
-[`web/static/music-recommender-worker.ipynb`](web/static/music-recommender-worker.ipynb).
+[`web/static/sole-worker.ipynb`](web/static/sole-worker.ipynb).
 
 The worker URL must be reachable from the notebook. The copied cell uses the
 Python 3.11 reference path, or the compatibility installer on Python 3.12+. It
@@ -252,9 +252,9 @@ cd web && bun install --frozen-lockfile && bun run check && bun run build
 cargo test --manifest-path clustering-rs/Cargo.toml --locked
 cargo test --manifest-path clustering-wasm/Cargo.toml --locked
 cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'
-docker build -t music-recommender-embeddings:ci embeddings
+docker build -t sole-embeddings:ci embeddings
 docker run --rm -v "$PWD/embeddings:/workspace-tests:ro" \
-  --entrypoint python music-recommender-embeddings:ci \
+  --entrypoint python sole-embeddings:ci \
   -m unittest discover -s /workspace-tests/tests
 ```
 

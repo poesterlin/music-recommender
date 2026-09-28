@@ -72,13 +72,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Build pinned worker image
-        run: docker build --tag music-recommender-embeddings:ci embeddings
+        run: docker build --tag sole-embeddings:ci embeddings
       - name: Run worker unit tests
         run: |
           docker run --rm \
             --volume "$PWD/embeddings:/workspace-tests:ro" \
             --entrypoint python \
-            music-recommender-embeddings:ci \
+            sole-embeddings:ci \
             -m unittest discover -s /workspace-tests/tests
 
   fresh-db:
@@ -90,11 +90,11 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: recommender
+          POSTGRES_DB: sole
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d recommender"
+          --health-cmd "pg_isready -U postgres -d sole"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -106,17 +106,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Apply migrations to an empty database
         env:
-          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sole
         run: bun run db:migrate
       - name: Verify first embeddings and centering backfill
         env:
-          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sole
           FRESH_DATABASE: '1'
         run: bun run test:fresh-db
       - name: Run machine-readable preflight
         env:
-          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/recommender
-          DOMAIN: recommender.example.test
+          DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sole
+          DOMAIN: sole.example.test
           MUSIC_HOST: http://music-assistant.example.test
           MA_TOKEN: ci-token
           HA_HOST: http://home-assistant.example.test
@@ -125,8 +125,8 @@ jobs:
           WORKER_TOKEN: ci-worker-token
         run: |
           cat > .env <<'EOF'
-          DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/recommender
-          DOMAIN=recommender.example.test
+          DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/sole
+          DOMAIN=sole.example.test
           MUSIC_HOST=http://music-assistant.example.test
           MA_TOKEN=ci-token
           HA_HOST=http://home-assistant.example.test

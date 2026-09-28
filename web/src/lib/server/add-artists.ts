@@ -62,7 +62,7 @@ export async function getMusicBrainzId(artistName: string): Promise<string | nul
 	try {
 		const response = await fetch(url.toString(), {
 			headers: {
-				'User-Agent': 'MusicRecommender/1.0 (https://github.com/poesterlin/music-recommender)'
+				'User-Agent': 'Sole/1.0 (https://github.com/poesterlin/sole)'
 			}
 		});
 

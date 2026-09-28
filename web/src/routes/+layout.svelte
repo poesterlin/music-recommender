@@ -92,7 +92,7 @@
 						class="text-accent size-6 translate-y-1 transition-transform duration-700 group-hover:rotate-180"
 						size={24}
 					/>
-					<span class="font-display text-2xl font-black tracking-tight"> Music Recommender </span>
+					<span class="font-display text-2xl font-black tracking-tight"> Sole </span>
 				</a>
 				{#if shown}
 					<div class="flex max-w-full items-center gap-3 text-sm">

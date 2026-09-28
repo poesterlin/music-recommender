@@ -53,7 +53,7 @@ exercised without a database connection:
 docker run --rm --cpus=8 -e MUSIC_EMBEDDING_THREADS=8 \
   -v /srv/music:/music:ro \
   -v "$PWD/embedding-rs/models:/models:ro" \
-  music-recommender-embedding-rs:test embed \
+  sole-embedding-rs:test embed \
   --audio '/music/Artist/Album/track.mp3' \
   --model /models/openl3-mel256-music.onnx \
   --metadata /models/model-lock.json \

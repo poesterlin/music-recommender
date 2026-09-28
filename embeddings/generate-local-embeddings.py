@@ -58,7 +58,7 @@ DEFAULT_HOP_SECONDS = 0.1
 # for a mean pooled-similarity shift of ~0.004, and 1.0 is ~8.9x for ~0.012.
 # Retrieval order survives all three (identical rank-1 neighbours, 100% top-5
 # overlap), so these trade speed against how finely the vector samples the
-# track, not against whether the recommender still works.
+# track, not against whether Sole still works.
 EMBEDDING_MODES = {
     "low": 0.1,
     "medium": 0.5,
