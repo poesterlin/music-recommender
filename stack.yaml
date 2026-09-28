@@ -1,8 +1,9 @@
 # Minimal first-run stack: published images only, no clone required.
 #
-# The setup script writes this next to a .env and starts it. It is intentionally
-# small; the repository's compose.yaml adds the timed jobs, the embedding
-# worker, and the Traefik labels for a public deployment.
+# The setup script writes this next to a .env and starts it. It is deliberately
+# small: PostgreSQL, the app, and an optional API-mode worker. The repository's
+# compose.yaml adds the timed jobs, the clustering profiles, and the Traefik
+# labels for a public deployment.
 #
 # To move up to the full stack later, replace this file with the repository's
 # compose.yaml and run `docker compose --profile database up -d`.
@@ -42,7 +43,37 @@ services:
       postgres:
         condition: service_healthy
     volumes:
+      # Read-only: the app slices the snippets a worker downloads. No worker
+      # ever reads these files.
       - music:/music:ro
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'bun',
+          '-e',
+          "const r = await fetch('http://127.0.0.1:3000/api/health'); if (!r.ok) throw new Error('status ' + r.status)",
+        ]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  # Optional: analyse the library on this machine. API mode needs no music
+  # volume and no database — it downloads snippets from the app and uploads
+  # vectors back. Start it with `docker compose --profile worker up -d`.
+  worker:
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
+    profiles: ['worker']
+    command: python worker.py --source-mode api
+    restart: unless-stopped
+    init: true
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      WORKER_URL: 'http://web:3000'
+      WORKER_TOKEN: '${WORKER_TOKEN:-}'
 
 volumes:
   postgres-data:

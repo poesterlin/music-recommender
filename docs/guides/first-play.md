@@ -4,15 +4,17 @@ The app's **Setup** page shows progress. These are distinct jobs: importing a ca
 
 ## 1. Import
 
-After both integrations are configured, go to **Manage → Full tidy-up**. It syncs Music Assistant, imports new tracks, and assigns already-embedded tracks **if centroids exist**. Check **Worker** for the resulting track count.
+Once Music Assistant is connected, go to **Manage → Full tidy-up**. It syncs Music Assistant, imports new tracks, and assigns already-embedded tracks **if centroids exist**. Check **Worker** for the resulting track count.
 
 ## 2. Embed and center
 
-On the public Compose stack, the default embedding loop runs in the background. On a local stack that started only web and PostgreSQL, run one bounded embedding job when your music is mounted:
+On the public Compose stack the embedding loop runs in the background. A local install starts only the app and the database, so start a worker when you are ready to analyse the library:
 
 ```sh
-docker compose --profile embedding run --rm embeddings
+docker compose --profile worker up -d
 ```
+
+That worker runs in API mode: it downloads snippets from the app and needs no access to your files.
 
 After at least two raw embeddings exist, establish the centered space. The status page also has a repair button that does this without a terminal. To do it from the command line, use the database URL for the stack you are working on:
 

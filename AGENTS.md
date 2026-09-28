@@ -11,8 +11,8 @@
 - Python worker tests: build `embeddings/Dockerfile`, then run `unittest discover` from `embeddings/tests`
 - Fresh database: provide a disposable pgvector URL and run `bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db`
 - Create/reset an account: `bun run auth:create-user --username <name>`
-- The authenticated `/settings` page manages scoped Worker and Home Assistant
-  API keys; secrets are shown once and stored hashed.
+- The authenticated `/settings` page manages scoped Worker and playback API
+  keys; secrets are shown once and stored hashed.
 
 ## Configuration
 
@@ -41,7 +41,7 @@ External PostgreSQL installations can leave that profile disabled and provide
 The app uses database-backed user/session authentication. Registration is
 always available; use `bun run auth:create-user --username <name>` to create
 or reset an account. `WORKER_TOKEN` is limited to the worker and internal jobs;
-`PLAYBACK_API_KEY` is limited to the Home Assistant playback POST. API worker
+`PLAYBACK_API_KEY` is limited to the external playback POST. API worker
 mode is enabled with `--source-mode api` and `WORKER_URL` plus `WORKER_TOKEN`.
 It downloads bounded snippets in a background pool and uploads batches over
 HTTP. Cluster apply/rollback and embedding writes are explicit operations.

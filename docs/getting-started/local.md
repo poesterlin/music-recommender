@@ -13,7 +13,7 @@ If Bun is not installed:
 curl -fsSL https://bun.sh/install | bash
 ```
 
-Press Enter at the single prompt (where your music lives) and wait. The script writes two files, generates secrets, starts the app, creates an account, and prints the login.
+Press Enter at the single prompt (where your music lives) and wait. The script writes two files, generates secrets, pulls the published images, creates an account, and prints the login.
 
 ```
 Sole setup. Press Enter to accept each default.
@@ -37,21 +37,20 @@ Both files sit in the folder you made and can be edited afterwards.
 | `compose.yaml` | The stack. Downloaded, so no clone is needed. |
 | `.env` | Your settings and generated secrets. Never commit it. |
 
-Only the web app and PostgreSQL run, and both bind to `127.0.0.1`. The published images are used as-is.
+Only the web app and PostgreSQL run, and both bind to `127.0.0.1`.
 
-## Connecting music
+Your music folder is mounted into the app read-only, because the app slices the snippets the worker analyses. Nothing else reads your files: the worker only ever talks to the app's API.
 
-The first run gives you a working app with an empty library. Fill these in `.env`, then run `docker compose up -d`:
+## Connect Music Assistant
+
+Add these to `.env`, then run `docker compose up -d`:
 
 | Setting | What it is |
 |---|---|
 | `MUSIC_HOST` | Base URL of your Music Assistant server |
 | `MA_TOKEN` | Music Assistant access token |
-| `HA_HOST` | Base URL of your Home Assistant instance |
-| `TOKEN` | Home Assistant long-lived access token |
-| `CONFIG_ID` | Music Assistant config entry id |
 
-Then continue with [First playable vibe](/guides/first-play).
+Music Assistant supplies the catalogue and playback. Reload **Setup** to confirm it connects, then continue with [First playable vibe](/guides/first-play).
 
 ## Common changes
 
@@ -62,13 +61,13 @@ Edit `.env`, then run `docker compose up -d` again.
 | Music folder | `MUSIC_LIBRARY_PATH` |
 | Web port | `WEB_PORT` (default `4932`) |
 | PostgreSQL port | `POSTGRES_PORT` (default `5432`) |
-| Login host, when behind a proxy | `ORIGIN` (defaults to `http://127.0.0.1:4932`) |
+| Login host, behind a proxy | `ORIGIN` (defaults to `http://127.0.0.1:4932`) |
 
 ## Going further
 
 The published `compose.yaml` is the full stack: it adds the timed jobs, the embedding worker, clustering profiles, and the Traefik labels for a public domain. The setup script writes the same file, so there is no switch to flip later.
 
-To build from source instead of pulling images, clone the repository and use the build override:
+To build from source instead of pulling images:
 
 ```sh
 git clone https://github.com/poesterlin/sole.git
