@@ -22,6 +22,38 @@ workers through the packaging-only compatibility installer
 
 ## Install
 
+### Local first run
+
+With Bun and Docker Compose installed, run:
+
+```sh
+bun --no-env-file scripts/setup-local.ts /absolute/path/to/music
+```
+
+This creates `.env.local` without reading or changing `.env`, starts a private local
+PostgreSQL database and the web app, and installs the schema. Open
+`http://127.0.0.1:4933/register`, then **Setup**. Add Music Assistant and Home
+Assistant details to `.env.local` when ready and restart the web service:
+
+```sh
+docker compose --project-name music-recommender-local --env-file .env.local up -d --force-recreate web
+```
+
+To resume after an interrupted first run, start the local database, migrate
+with the local URL (never the production `.env`), then start web:
+
+```sh
+docker compose --project-name music-recommender-local --env-file .env.local --profile database up -d postgres
+DATABASE_URL="$(sed -n 's/^DATABASE_URL=//p' .env.local)" bun --no-env-file run db:migrate
+docker compose --project-name music-recommender-local --env-file .env.local up -d --build web
+```
+
+The local stack starts only web and PostgreSQL. Embedding and scheduled jobs
+can be enabled after connecting the integrations. For a public deployment,
+use the Compose setup below.
+
+### Public deployment
+
 1. Create the environment file:
 
    ```sh
@@ -34,10 +66,10 @@ workers through the packaging-only compatibility installer
    - `MUSIC_LIBRARY_PATH`
    - `MUSIC_HOST` and `MA_TOKEN`
    - `HA_HOST`, `TOKEN`, and `CONFIG_ID`
-   - `WORKER_TOKEN` for the default Compose worker and internal jobs (optional
-     when using a UI-created worker key for an external worker)
-   - `PLAYBACK_API_KEY` for the default Home Assistant integration (optional
-     when using a UI-created playback key)
+    - `WORKER_TOKEN` for the default Compose internal jobs (external workers
+      can use a UI-created worker key)
+    - `PLAYBACK_API_KEY` only if using the bootstrap Home Assistant playback key
+      rather than a UI-created playback key
 
 3. Choose a database.
 

@@ -12,6 +12,7 @@ const options: Options = {
 	strict: args.includes('--strict'),
 	skipAudio: args.includes('--skip-audio')
 };
+const local = process.env.SETUP_MODE === 'local';
 const checks: Check[] = [];
 
 function add(level: CheckLevel, name: string, detail: string): void {
@@ -44,16 +45,22 @@ function required(name: string, value: string | undefined, hint: string): void {
 
 async function main(): Promise<void> {
 	required('DATABASE_URL', process.env.DATABASE_URL, 'copy .env.example to .env and set the PostgreSQL URL');
-	required('DOMAIN', process.env.DOMAIN, 'set the public hostname used by Traefik');
-	required('MUSIC_HOST', process.env.MUSIC_HOST, 'set the Music Assistant base URL');
-	required('MA_TOKEN', process.env.MA_TOKEN, 'set the Music Assistant access token');
-	required('HA_HOST', process.env.HA_HOST, 'set the Home Assistant base URL for library sync');
-	required('TOKEN', process.env.TOKEN, 'set the Home Assistant long-lived access token');
-	required('CONFIG_ID', process.env.CONFIG_ID, 'set the Music Assistant config entry id');
-	required('WORKER_TOKEN', process.env.WORKER_TOKEN, 'set the worker and internal-job bearer token');
-	if (!process.env.PLAYBACK_API_KEY?.trim()) {
-		add('warn', 'PLAYBACK_API_KEY', 'not configured; Home Assistant playback requests will be rejected');
-	}
+  if (!local) required('DOMAIN', process.env.DOMAIN, 'set the public hostname used by Traefik');
+  for (const [name, hint] of [
+    ['MUSIC_HOST', 'set the Music Assistant base URL'],
+    ['MA_TOKEN', 'set the Music Assistant access token'],
+    ['HA_HOST', 'set the Home Assistant base URL for library sync'],
+    ['TOKEN', 'set the Home Assistant long-lived access token'],
+    ['CONFIG_ID', 'set the Music Assistant config entry id']
+  ]) {
+    if (local && !process.env[name]?.trim()) add('ok', name, 'configure before importing music');
+    else required(name, process.env[name], hint);
+  }
+  if (local) add('ok', 'WORKER_TOKEN', 'not needed for the local web-only stack');
+  else required('WORKER_TOKEN', process.env.WORKER_TOKEN, 'required by the default Compose jobs');
+  if (!process.env.PLAYBACK_API_KEY?.trim()) {
+    add('ok', 'PLAYBACK_API_KEY', 'optional; create a playback key in the UI if needed');
+  }
 
 	const musicPath = process.env.MUSIC_LIBRARY_PATH ?? process.env.AUDIO_DIR ?? '/music';
 	if (options.skipAudio) {
@@ -63,7 +70,7 @@ async function main(): Promise<void> {
 	} else {
 		try {
 			const count = libraryFiles(musicPath);
-			add(count > 0 ? 'ok' : 'warn', 'music library', `${count}${count === 20_000 ? '+' : ''} supported files under ${musicPath}`);
+    add(count > 0 || local ? 'ok' : 'warn', 'music library', `${count}${count === 20_000 ? '+' : ''} supported files under ${musicPath}`);
 		} catch (error) {
 			add('fail', 'music library', `could not scan ${musicPath}: ${String(error)}`);
 		}

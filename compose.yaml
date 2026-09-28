@@ -2,10 +2,10 @@
 services:
   web:
     build: ./web
-    env_file: .env
+    env_file: ${APP_ENV_FILE:-.env}
     restart: unless-stopped
     ports:
-      - "4932:3000"
+      - "127.0.0.1:${WEB_PORT:-4932}:3000"
     environment:
       PORT: "3000"
       NODE_ENV: production
@@ -86,7 +86,7 @@ services:
   embeddings-loop:
     build:
       context: embeddings
-    env_file: .env
+    env_file: ${APP_ENV_FILE:-.env}
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
@@ -144,7 +144,7 @@ services:
     build:
       context: .
       dockerfile: embedding-rs/Dockerfile
-    env_file: .env
+    env_file: ${APP_ENV_FILE:-.env}
     profiles: ["embedding-rust"]
     restart: "no"
     init: true
@@ -176,7 +176,7 @@ services:
   embeddings:
     build:
       context: embeddings
-    env_file: .env
+    env_file: ${APP_ENV_FILE:-.env}
     command: python generate-local-embeddings.py
     init: true
     restart: "no"
@@ -205,7 +205,7 @@ services:
   worker:
     build:
       context: embeddings
-    env_file: .env
+    env_file: ${APP_ENV_FILE:-.env}
     profiles: ["worker"]
     command: python worker.py --source-mode api
     depends_on:
@@ -249,7 +249,7 @@ services:
 
 networks:
   traefik_web:
-    external: true
+    external: ${TRAEFIK_EXTERNAL:-true}
     name: ${TRAEFIK_NETWORK:-traefik_web}
   music:
 

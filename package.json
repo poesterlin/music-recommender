@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "setup:local": "bun --no-env-file scripts/setup-local.ts",
     "db:push": "drizzle-kit push",
     "db:ensure-pgvector": "bun scripts/ensure-pgvector.ts",
     "db:migrate": "bun scripts/ensure-pgvector.ts && drizzle-kit migrate",
