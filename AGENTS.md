@@ -32,7 +32,11 @@ External PostgreSQL installations can leave that profile disabled and provide
 
 ## Runtime profiles
 
-- Default: web, Music Assistant sync, analyzer, and the Python embedding loop.
+- Default: web and the Python embedding loop. The maintenance jobs run
+  in-process on `Bun.cron` (`$lib/server/scheduler.ts`), which is why the web
+  image pins Bun rather than tracking `1`. There is no leader election, so a
+  second web replica would run every job; the jobs are idempotent, so that
+  wastes work rather than corrupting anything.
 - `embedding`: bounded/manual Python worker runs.
 - `clustering`: native and Bun/WASM clustering jobs.
 - `embedding-rust`: optional Rust embedding worker.

@@ -19,8 +19,8 @@ curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/.env.example -
 #
 # The setup script writes this next to a .env and starts it. It is deliberately
 # small: PostgreSQL, the app, and an optional API-mode worker. The repository's
-# compose.yaml adds the timed jobs, the clustering profiles, and the Traefik
-# labels for a public deployment.
+# compose.yaml adds the clustering profiles and the Traefik labels for a public
+# deployment. (The maintenance jobs run inside the app in either stack.)
 #
 # To move up to the full stack later, replace this file with the repository's
 # compose.yaml and run `docker compose --profile database up -d`.
@@ -113,7 +113,7 @@ Settings live in a file called `.env`, next to `compose.yaml`. Four of them make
 | `MUSIC_LIBRARY_PATH` | The folder that holds your music. It is mounted into the app read-only, which is what lets the app slice the audio a worker analyses. Nothing writes to it. |
 | `POSTGRES_PASSWORD` | A password for the database this stack creates for you. Only this stack uses it, so any random string will do — the point is not to ship a guessable default. |
 | `WEB_PORT` | The local port the app listens on. You will open `http://127.0.0.1:<port>` in a moment. |
-| `WORKER_TOKEN` | A shared secret between the app and a worker. The app refuses analysis requests that do not carry it, so generate a long random value. Anything that talks to the worker API — the local worker in this stack, or the timed jobs — uses this same string. |
+| `WORKER_TOKEN` | A shared secret between the app and a worker. The app refuses analysis requests that do not carry it, so generate a long random value. Anything that talks to the worker API uses this same string — the local worker in this stack, or a remote one. The maintenance jobs are not separate processes, so they do not use it. |
 
 Create the file in your editor — `nano .env` — and fill in those four lines, or let this do it for you with generated secrets:
 

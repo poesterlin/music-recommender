@@ -37,13 +37,14 @@ Named volumes to keep: `postgres-data`, `cluster-artifacts`, `embedding-artifact
 
 | Value | What it is for |
 |---|---|
-| `WORKER_TOKEN` | The timed jobs (`analyzer`, `sync-favorites`) and the default worker. Those two job endpoints accept **only** this value. |
+| `WORKER_TOKEN` | The default worker. The maintenance job endpoints accept it too, if you want to trigger one from another host. |
 | A `worker` key from **Manage → API keys** | Remote workers. Scoped and revocable; prefer it to sharing the token above off this host. |
 | `PLAYBACK_API_KEY`, or a `playback` key | External callers of `POST /api/play-vibe`. Nothing else accepts it. |
 
 ## Profile-gated services
 
-The default stack is web, `analyzer`, `sync-favorites`, and the local embedding loop. Everything else is opt-in:
+The default stack is web and the local embedding loop; the maintenance jobs run
+inside the web process. Everything else is opt-in:
 
 ```sh
 docker compose --profile worker up -d          # API-mode worker, needs no music mount

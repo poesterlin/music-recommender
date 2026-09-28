@@ -19,6 +19,9 @@ if (!building) {
 	void import('$lib/server/recomendation-engine').then(({ startMABackgroundRefresh }) =>
 		startMABackgroundRefresh()
 	);
+	// The maintenance jobs run in-process on Bun.cron rather than in a
+	// container per job. See $lib/server/scheduler for the tradeoffs.
+	void import('$lib/server/scheduler').then(({ startScheduledJobs }) => startScheduledJobs());
 }
 
 const publicPages = new Set(['/login', '/register']);

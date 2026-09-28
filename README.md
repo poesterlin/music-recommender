@@ -113,7 +113,7 @@ passes it with `--env-file`.
    bun run doctor -- --strict
    ```
 
-6. Start the web and default background services:
+6. Start the web service and the embedding loop:
 
    ```sh
    docker compose up -d
@@ -248,10 +248,14 @@ pipeline tables and columns, and the host audio path without writing data.
 
 ## Background services
 
-The default Compose stack includes the web process, Music Assistant sync, the
-analyzer, and the Python embedding loop. Additional profiles are available for
-manual embedding runs, clustering, the Rust embedding worker, and API-mode
-workers.
+The default Compose stack is the web process and the Python embedding loop.
+Everything else is opt-in: the clustering jobs, the Rust embedding worker, and
+the API-mode worker sit behind profiles.
+
+The maintenance jobs (favourites sync, library index, cluster assignment) run
+inside the web process on `Bun.cron` rather than in a container each, so there
+is nothing extra to run or schedule. They need `MUSIC_HOST` and `MA_TOKEN`; a
+web-only install without them logs that the schedules are disabled.
 
 Cluster benchmark commands are read-only. Applying or rolling back a cluster is
 an explicit operation.

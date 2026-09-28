@@ -14,7 +14,7 @@ The public Compose stack runs an equivalent loop by default, using the same `.en
 
 ## On another machine or in Colab
 
-Sign in and open **Manage → API keys**, then create a **Worker** key. This is the better choice off this machine: it is a scoped credential you can revoke on its own, instead of copying the token that also drives the timed jobs. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
+Sign in and open **Manage → API keys**, then create a **Worker** key. This is the better choice off this machine: it is a scoped credential you can revoke on its own, rather than sharing the stack's `WORKER_TOKEN`. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
 
 ```sh
 export WORKER_URL=https://your-sole.example.com

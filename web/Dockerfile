@@ -1,4 +1,6 @@
-FROM oven/bun:1 AS base
+# Pinned: the in-process scheduler uses Bun.cron, so a floating 1.x tag would
+# make the exact runtime a silent dependency rather than a declared one.
+FROM oven/bun:1.4.2 AS base
 WORKDIR /app
 
 # The portable worker API serves bounded audio snippets to remote workers.
