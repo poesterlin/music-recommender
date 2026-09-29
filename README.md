@@ -113,7 +113,7 @@ passes it with `--env-file`.
    bun run doctor -- --strict
    ```
 
-6. Start the web service and the embedding loop:
+6. Start the app and the embedding worker:
 
    ```sh
    docker compose up -d
@@ -218,10 +218,10 @@ Useful settings:
 | `EMBEDDING_DOWNLOAD_MAX_BYTES` | Maximum bytes per snippet |
 | `EMBEDDING_STATE_FILE` | Optional local cursor/progress file |
 
-The Compose profile runs API mode beside the web service:
+Compose runs API mode beside the web service as the default `worker` service:
 
 ```sh
-docker compose --profile worker up -d worker
+docker compose up -d worker
 ```
 
 For Colab or Jupyter, open **API keys** in the web UI, create a Worker key, and
@@ -253,9 +253,12 @@ pipeline tables and columns, and the host audio path without writing data.
 
 ## Background services
 
-The default Compose stack is the web process and the Python embedding loop.
-Everything else is opt-in: the clustering jobs, the Rust embedding worker, and
-the API-mode worker sit behind profiles.
+The default Compose stack is the web process and the embedding worker. The
+worker fetches bounded audio snippets over the worker API and uploads vectors
+back, so it needs neither a music mount nor a database — which is also why it
+can run on another host or in a notebook. Everything else is opt-in: the
+clustering jobs, the Rust embedding worker, and `embeddings-loop` (the loop that
+reads the mount and writes to PostgreSQL directly) sit behind profiles.
 
 The maintenance jobs (favourites sync, library index, cluster assignment) run
 inside the web process on `Bun.cron` rather than in a container each, so there

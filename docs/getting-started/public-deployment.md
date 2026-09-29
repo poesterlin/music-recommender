@@ -59,11 +59,12 @@ Self-registration is off by default, and `MAX_USERS` defaults to `1`. Create an 
 
 ## Profile-gated services
 
-The default stack is web and the local embedding loop; the maintenance jobs run
-inside the web process. Everything else is opt-in:
+The default stack is web plus the API-mode embedding worker, which needs no music
+mount and no database; the maintenance jobs run inside the web process.
+Everything else is opt-in:
 
 ```sh
-docker compose --profile worker up -d          # API-mode worker, needs no music mount
+docker compose --profile local up -d embeddings-loop   # reads the mount and the database directly
 docker compose --profile embedding run --rm embeddings
 docker compose --profile clustering run --rm clusterer-bun benchmark   # read-only
 docker compose --profile clustering run --rm clusterer                 # apply and rollback

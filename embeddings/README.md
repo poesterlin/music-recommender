@@ -66,10 +66,10 @@ Useful API-mode settings are `EMBEDDING_PREFETCH_WORKERS`,
 `EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
 `EMBEDDING_DOWNLOAD_RETRIES`, and `EMBEDDING_DOWNLOAD_MAX_BYTES`.
 
-The Compose `worker` profile runs this mode against `http://web:3000`:
+Compose runs this mode against `http://web:3000` as the default `worker` service:
 
 ```sh
-docker compose --profile worker up -d worker
+docker compose up -d worker
 ```
 
 The API must be reachable from the worker, and its PostgreSQL/audio services

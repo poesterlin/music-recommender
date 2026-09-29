@@ -80,11 +80,13 @@ class WorkerAPIClientTests(unittest.TestCase):
                 ),
             ]
         )
+        recipe = worker_api.build_recipe(0.5, 60.0, "kapre")
         client = worker_api.WorkerAPIClient(
             "https://example.test/base/",
             "secret-token",
             session=session,
             retry_delay=0,
+            recipe=recipe,
         )
 
         page = client.get_tracks(after="library://track/0", limit=3)
@@ -101,7 +103,11 @@ class WorkerAPIClientTests(unittest.TestCase):
         self.assertEqual(
             post_call[1], "https://example.test/base/api/worker/embeddings"
         )
-        self.assertEqual(post_call[2]["json"], {"embeddings": [item]})
+        # The recipe travels with the batch so the server can centre the vectors
+        # against the space they were actually produced for.
+        self.assertEqual(
+            post_call[2]["json"], {"recipe": recipe, "embeddings": [item]}
+        )
         self.assertEqual(
             post_call[2]["headers"]["Authorization"], "Bearer secret-token"
         )
@@ -190,3 +196,182 @@ class PrefetchTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class _FakeArgs:
+    """Minimal stand-in for the parsed argparse namespace."""
+
+    def __init__(self, **overrides):
+        defaults = {
+            "after": None,
+            "audio_backend": "soundfile",
+            "batch_size": 32,
+            "download_max_bytes": 32 * 1024 * 1024,
+            "download_retries": 0,
+            "download_timeout": 5.0,
+            "dry_run": False,
+            "duration": 60.0,
+            "fail_fast": False,
+            "hop": 1.0,
+            "infer_batch_size": 8,
+            "limit": 1,
+            "max_errors": 5,
+            "prefetch_depth": 1,
+            "prefetch_workers": 1,
+            "restart": False,
+            "state_file": None,
+            "worker_token": "secret-token",
+            "worker_url": "https://example.test",
+        }
+        defaults.update(overrides)
+        for key, value in defaults.items():
+            setattr(self, key, value)
+
+
+class _FakeCore:
+    """Records the arguments process_audio_file is called with."""
+
+    # Mirrors the core's single source of truth for the OpenL3 frontend, so the
+    # recipe the worker uploads cannot drift from the model it loaded.
+    EMBEDDING_FRONTEND = "kapre"
+
+    def __init__(self):
+        self.calls = []
+
+    class StageStats:
+        def __init__(self, *args, **kwargs):
+            self.timings = {}
+
+        def add(self, key, value):
+            self.timings[key] = value
+
+        def summary(self, *args, **kwargs):
+            return dict(self.timings)
+
+    @staticmethod
+    def configure_tensorflow_threads():
+        return {}
+
+    @staticmethod
+    def load_openl3_model(stats):
+        return object()
+
+    def process_audio_file(
+        self, audio_path, model, duration, audio_backend, stats, infer_batch_size=8, **kwargs
+    ):
+        self.calls.append(
+            {
+                "duration": duration,
+                "infer_batch_size": infer_batch_size,
+                **kwargs,
+            }
+        )
+        return [0.5] * 512, {"hop_seconds": kwargs.get("hop_seconds")}
+
+    @staticmethod
+    def validate_embedding(embedding):
+        return embedding
+
+
+class _FakeWorkerClient:
+    def __init__(self):
+        self.uploads = []
+        self.recipe = None
+
+    def get_tracks(self, after=None, limit=None):
+        return {
+            "tracks": [
+                {
+                    "uri": "library://track/1",
+                    "name": "Example",
+                    "artist": ["Someone"],
+                    "album": "Record",
+                    "media_type": "track",
+                    "is_playable": True,
+                }
+            ],
+            "nextCursor": None,
+        }
+
+    def download_audio(self, uri, duration, path):
+        with open(path, "wb") as handle:
+            handle.write(b"ID3")
+        return path
+
+    def post_embeddings(self, items):
+        self.uploads.append(items)
+        return {
+            "accepted": [{"uri": item["uri"], "status": "written"} for item in items],
+            "rejected": [],
+            "ok": True,
+        }
+
+    def close(self):
+        return None
+
+
+class ApiWorkerHopTests(unittest.TestCase):
+    """API mode must embed at the configured hop, not OpenL3's default."""
+
+    def _run(self, hop):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _FakeWorkerClient()
+            client.recipe = worker_api.build_recipe(hop, 60.0, "kapre")
+            core = _FakeCore()
+            args = _FakeArgs(
+                hop=hop,
+                state_file=str(Path(tmp) / "state.json"),
+            )
+            worker_api.run_api_worker(core, args, client)
+            return core.calls, client
+
+    def test_the_configured_hop_reaches_process_audio_file(self):
+        # Regression: API mode dropped `hop`, so --mode/--hop were silently a
+        # no-op and every API worker sat at the 0.1s default.
+        calls, _ = self._run(1.0)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0]["hop_seconds"], 1.0)
+
+    def test_a_non_default_hop_is_not_silently_replaced(self):
+        calls, _ = self._run(0.5)
+        self.assertEqual(calls[0]["hop_seconds"], 0.5)
+
+    def test_the_uploaded_recipe_matches_the_hop(self):
+        # The recipe is what lets the server refuse a batch it cannot attribute
+        # to a registered space, so it has to reflect the hop actually used.
+        _, client = self._run(0.5)
+        self.assertEqual(client.recipe["hopSeconds"], 0.5)
+        self.assertEqual(client.recipe["model"], worker_api.API_MODEL)
+        self.assertEqual(client.recipe["frontend"], "kapre")
+
+
+class RecipeTests(unittest.TestCase):
+    def test_recipe_reports_the_recipe_that_produced_the_vectors(self):
+        recipe = worker_api.build_recipe(0.5, 60.0, "kapre")
+        self.assertEqual(
+            recipe,
+            {
+                "model": "openl3-512",
+                "hopSeconds": 0.5,
+                "maxSampleSeconds": 60.0,
+                "frontend": "kapre",
+            },
+        )
+
+    def test_recipe_rejects_a_nonsensical_hop(self):
+        for bad in (0.0, -1.0, float("inf"), float("nan")):
+            with self.subTest(hop=bad):
+                with self.assertRaises(worker_api.WorkerAPIValidationError):
+                    worker_api.build_recipe(bad, 60.0, "kapre")
+
+    def test_a_payload_without_a_recipe_is_refused(self):
+        item = {
+            "uri": "library://track/1",
+            "name": "Example",
+            "artist": ["Someone"],
+            "album": "Record",
+            "model": "openl3-512",
+            "embedding": [0.25] * 512,
+        }
+        with self.assertRaises(worker_api.WorkerAPIValidationError):
+            worker_api.build_embeddings_payload([item])

@@ -304,7 +304,41 @@ def _validate_embedding_item(value: Mapping[str, Any]) -> dict[str, Any]:
     return item
 
 
-def build_embeddings_payload(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+def build_recipe(
+    hop_seconds: float, max_sample_seconds: float, frontend: str
+) -> dict[str, Any]:
+    """Describe the recipe that produced a batch of vectors.
+
+    OpenL3 is frame-based, so `hop_seconds` changes what a vector averages over
+    and not merely how long it takes to compute. `max_sample_seconds` records how
+    much of the track was read, and `frontend` which OpenL3 implementation did
+    it. The server matches the triple against `embedding_space` and refuses
+    anything unregistered, because a vector centred against the wrong corpus
+    mean is silently worse rather than visibly broken.
+
+    `frontend` comes from the core's `EMBEDDING_FRONTEND` rather than being
+    restated here, so the two cannot drift apart.
+    """
+
+    hop = float(hop_seconds)
+    sample = float(max_sample_seconds)
+    if not math.isfinite(hop) or hop <= 0:
+        raise WorkerAPIValidationError("recipe hop must be a positive finite number")
+    if not math.isfinite(sample) or sample <= 0:
+        raise WorkerAPIValidationError("recipe max sample seconds must be positive")
+    if not isinstance(frontend, str) or not frontend.strip():
+        raise WorkerAPIValidationError("recipe frontend must be a non-empty string")
+    return {
+        "model": API_MODEL,
+        "hopSeconds": hop,
+        "maxSampleSeconds": sample,
+        "frontend": frontend.strip(),
+    }
+
+
+def build_embeddings_payload(
+    items: Sequence[Mapping[str, Any]], recipe: Mapping[str, Any] | None = None
+) -> dict[str, Any]:
     if not isinstance(items, Sequence) or isinstance(items, (str, bytes)):
         raise WorkerAPIValidationError("embeddings must be a sequence")
     if not 1 <= len(items) <= MAX_UPLOAD_BATCH:
@@ -315,7 +349,11 @@ def build_embeddings_payload(items: Sequence[Mapping[str, Any]]) -> dict[str, An
     uris = [item["uri"] for item in normalized]
     if len(set(uris)) != len(uris):
         raise WorkerAPIValidationError("embedding items contain duplicate uris")
-    return {"embeddings": normalized}
+    if recipe is None:
+        raise WorkerAPIValidationError(
+            "a recipe is required so the server can centre against the right space"
+        )
+    return {"recipe": dict(recipe), "embeddings": normalized}
 
 
 def validate_upload_response(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -404,6 +442,7 @@ class WorkerAPIClient:
         session: Any | None = None,
         session_factory: Callable[[], Any] | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        recipe: Mapping[str, Any] | None = None,
     ) -> None:
         self.base_url = normalize_worker_url(base_url)
         if not isinstance(token, str) or not token.strip():
@@ -427,6 +466,9 @@ class WorkerAPIClient:
         self._sessions: list[Any] = []
         self._sessions_lock = threading.Lock()
         self._sleep = sleep
+        # Fixed for the run: every batch this client uploads was produced by the
+        # same recipe, so it is resolved once rather than per batch.
+        self.recipe = dict(recipe) if recipe else None
         self._closed = False
 
     def __repr__(self) -> str:  # pragma: no cover - defensive diagnostic helper
@@ -665,7 +707,7 @@ class WorkerAPIClient:
         raise AudioDownloadError("audio download failed after retries")
 
     def post_embeddings(self, items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-        payload = build_embeddings_payload(items)
+        payload = build_embeddings_payload(items, self.recipe)
         response, _ = self._request_json(
             "POST",
             build_endpoint_url(self.base_url, "embeddings"),
@@ -978,6 +1020,12 @@ def run_api_worker(
     client: Any | None = None
     owns_client = False
     state = WorkerStateStore(_arg(args, "state_file"), secret=token)
+    # The hop is the same value the core validates and uses locally; API mode
+    # used to drop it, which silently pinned every API worker to OpenL3's 0.1s
+    # default and made --mode a no-op.
+    hop_seconds = float(_arg(args, "hop", 0.1))
+    duration = float(_arg(args, "duration", 60.0))
+    recipe = build_recipe(hop_seconds, duration, core.EMBEDDING_FRONTEND)
     failures: list[dict[str, Any]] = []
     after: str | None = _arg(args, "after")
     processed = 0
@@ -999,6 +1047,7 @@ def run_api_worker(
                 timeout=float(_arg(args, "download_timeout", 60.0)),
                 retries=int(_arg(args, "download_retries", 3)),
                 max_bytes=int(_arg(args, "download_max_bytes", 32 * 1024 * 1024)),
+                recipe=recipe,
             )
             owns_client = True
         else:
@@ -1124,6 +1173,7 @@ def run_api_worker(
                                 audio_backend,
                                 stats,
                                 infer_batch_size,
+                                hop_seconds=hop_seconds,
                             )
                             if hasattr(core, "validate_embedding"):
                                 embedding = core.validate_embedding(embedding)

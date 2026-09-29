@@ -32,15 +32,17 @@ External PostgreSQL installations can leave that profile disabled and provide
 
 ## Runtime profiles
 
-- Default: web and the Python embedding loop. The maintenance jobs run
-  in-process on `Bun.cron` (`$lib/server/scheduler.ts`), which is why the web
-  image pins Bun rather than tracking `1`. There is no leader election, so a
+- Default: web and the API-mode embedding worker, which needs no music mount and
+  no database. The maintenance jobs run in-process on `Bun.cron`
+  (`$lib/server/scheduler.ts`), which is why the web image pins Bun rather than
+  tracking `1`. There is no leader election, so a
   second web replica would run every job; the jobs are idempotent, so that
   wastes work rather than corrupting anything.
 - `embedding`: bounded/manual Python worker runs.
 - `clustering`: native and Bun/WASM clustering jobs.
 - `embedding-rust`: optional Rust embedding worker.
-- `worker`: API-mode Python worker; it uses the web worker API and no database.
+- `local`: `embeddings-loop`, which reads the music mount and writes to
+  PostgreSQL directly instead of using the worker API.
 
 The app uses database-backed user/session authentication. Registration is
 opt-in with `ALLOW_REGISTRATION=true` and limited by `MAX_USERS` (default 1);

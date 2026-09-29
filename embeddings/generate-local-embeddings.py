@@ -45,6 +45,9 @@ except ImportError:  # API mode does not need PostgreSQL bindings.
     DictCursor = None  # type: ignore[assignment]
 
 EMBEDDING_SIZE = 512
+# Recorded on the embedding space so a vector is attributable to the model that
+# produced it. Must match `embedding_space.model`.
+EMBEDDING_MODEL = "openl3-512"
 TARGET_SAMPLE_RATE = 48_000
 DEFAULT_DURATION_SECONDS = 60.0
 # OpenL3's own default. Each window is one second of audio, so at 0.1 a
@@ -52,6 +55,10 @@ DEFAULT_DURATION_SECONDS = 60.0
 # pooled. Raising this removes duplicated work and changes what the
 # pooled vector averages over, so it is recorded per embedding.
 DEFAULT_HOP_SECONDS = 0.1
+# The OpenL3 frontend this worker loads. Recorded on the embedding space so a
+# vector can be attributed to the implementation that produced it; API mode
+# declares the same value on every upload.
+EMBEDDING_FRONTEND = "kapre"
 
 # Quality/speed presets. The numbers are measured, not guessed: on a 10-core
 # CPU over a 60s clip, hop 0.1 is the shipped baseline, 0.5 is ~4.8x faster
@@ -595,7 +602,7 @@ def load_openl3_model(stats: StageStats) -> Any:
     openl3 = openl3_module
     started = time.perf_counter()
     model = openl3.models.load_audio_embedding_model(
-        "mel256", "music", EMBEDDING_SIZE, frontend="kapre"
+        "mel256", "music", EMBEDDING_SIZE, frontend=EMBEDDING_FRONTEND
     )
     stats.add("model_load", time.perf_counter() - started)
     return model
@@ -969,11 +976,49 @@ def count_unembedded(conn: Any) -> int:
         cursor.close()
 
 
+def resolve_space_version(
+    conn: Any, hop_seconds: float, max_sample_seconds: float
+) -> int:
+    """Return the embedding space this run's recipe is registered as.
+
+    The centring trigger falls back to "newest space" for writers that do not
+    declare one, which is only safe while every embedding in the system comes
+    from one recipe. `EMBEDDING_MODE` is configured here, on the worker, while
+    the space is registered in the database, so the two can disagree without
+    anyone noticing. Resolving it explicitly turns that into a loud failure.
+    """
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT version
+            FROM embedding_space
+            WHERE model = %s
+              AND hop_seconds IS NOT DISTINCT FROM %s
+              AND max_sample_seconds IS NOT DISTINCT FROM %s
+              AND COALESCE(frontend, 'kapre') = %s
+            ORDER BY version DESC
+            LIMIT 1
+            """,
+            (EMBEDDING_MODEL, hop_seconds, max_sample_seconds, EMBEDDING_FRONTEND),
+        )
+        row = cursor.fetchone()
+    if row is None:
+        raise RuntimeError(
+            "no embedding space is registered for this recipe "
+            f"(hop {hop_seconds}s, {max_sample_seconds}s, {EMBEDDING_FRONTEND}). "
+            "Register it before embedding, or the vectors would be centred "
+            "against a mean they were not produced for."
+        )
+    return int(row[0])
+
+
 def write_batch(
     conn: Any,
     job_id: int,
     updates: Sequence[tuple[str, str]],
     detail: dict[str, Any],
+    space_version: int | None = None,
 ) -> tuple[int, int]:
     """Write vectors and advance the cursor in one short transaction."""
     cursor = conn.cursor()
@@ -984,10 +1029,12 @@ def write_batch(
             cursor.execute(
                 """
                 UPDATE track
-                SET embedding = %s::vector, updated_at = NOW()
+                SET embedding = %s::vector,
+                    embedding_space_version = %s,
+                    updated_at = NOW()
                 WHERE uri = %s AND embedding IS NULL
                 """,
-                (literal, uri),
+                (literal, space_version, uri),
             )
             if cursor.rowcount == 1:
                 written += 1
@@ -1108,6 +1155,13 @@ def run(args: argparse.Namespace) -> int:
         acquire_single_writer_lock(conn, args.lock_key)
         lock_acquired = True
         print(f"Acquired singleton embedding lock {args.lock_key}", flush=True)
+
+        space_version = resolve_space_version(conn, args.hop, args.duration)
+        print(
+            f"embedding space v{space_version} "
+            f"(hop={args.hop}s, max_sample={args.duration}s, {EMBEDDING_FRONTEND})",
+            flush=True,
+        )
 
         index_started = time.perf_counter()
         file_index = build_file_index(args.audio_dir)
@@ -1260,7 +1314,7 @@ def run(args: argparse.Namespace) -> int:
                 write_started = time.perf_counter()
                 batch_written, conflicts = retry_db_operation(
                     conn,
-                    lambda: write_batch(conn, job_id, updates, detail),
+                    lambda: write_batch(conn, job_id, updates, detail, space_version),
                     args.db_retries,
                     args.db_retry_delay,
                     "batch write",

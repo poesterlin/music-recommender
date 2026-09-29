@@ -127,7 +127,7 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sole
         run: bun run db:migrate
-      - name: Verify first embeddings and centering backfill
+      - name: Verify first embeddings and trigger-derived centering
         env:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/sole
           FRESH_DATABASE: '1'
@@ -158,6 +158,6 @@ jobs:
       - name: Prepare example environment
         run: cp .env.example .env
       - name: Validate Compose profiles
-        run: docker compose --profile database --profile clustering --profile embedding-rust --profile embedding --profile worker config --quiet
+        run: docker compose --profile database --profile clustering --profile embedding-rust --profile embedding --profile local config --quiet
       - name: Build release services
-        run: docker compose --profile clustering --profile embedding-rust --profile embedding --profile worker build
+        run: docker compose --profile clustering --profile embedding-rust --profile embedding --profile local build

@@ -48,11 +48,16 @@ services:
   # Periodic audio embedding generation (OpenL3, CPU). Idempotent: only
   # processes tracks with embedding IS NULL. First run has a backlog
   # (~6k tracks) and will take a while; tune/disable via sleep interval.
+  # Opt-in. Reads audio straight off the library mount and writes vectors to
+  # PostgreSQL itself. The default `worker` service does the same job over the
+  # worker API, needing neither a music mount nor a database, so this exists
+  # for the low-latency local case.
   embeddings-loop:
     image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     build:
       context: embeddings
     env_file: ${APP_ENV_FILE:-.env}
+    profiles: ["local"]
     restart: unless-stopped
     environment:
       DATABASE_URL: "${DATABASE_INTERNAL_URL:-${DATABASE_URL}}"
@@ -62,11 +67,12 @@ services:
       - music:/music:ro
     networks:
       - music
+    # Centring is derived by the `track_centered_embedding_sync` trigger on every
+    # write, so there is no backfill step to run here any more.
     entrypoint: >
       sh -c "while true; do
         echo \"[embeddings-loop] $$(date): generating...\";
         python generate-local-embeddings.py || echo failed;
-        python migrate-centered-embeddings.py || echo centering-failed;
         sleep 43200;
       done"
 
@@ -157,19 +163,33 @@ services:
 
   # Portable worker mode. The worker talks only to the authenticated worker
   # API; it does not need PostgreSQL or a music volume.
+  # The embedding worker. Reads bounded audio snippets and uploads vectors over
+  # the worker API, so it needs no music mount and no database -- which is what
+  # makes it runnable on another host, in a container, or on Colab.
+  #
+  # It sleeps between passes rather than exiting: `worker.py` returns after one
+  # pass, so a `restart: unless-stopped` one-shot would re-run in a tight loop.
   worker:
     image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     build:
       context: embeddings
     env_file: ${APP_ENV_FILE:-.env}
-    profiles: ["worker"]
-    command: python worker.py --source-mode api
     depends_on:
       web:
         condition: service_healthy
     environment:
       WORKER_URL: "${WORKER_URL:-http://web:3000}"
       WORKER_TOKEN: "${WORKER_TOKEN:-}"
+      # How finely each track is sampled: low | medium | high. See .env.example.
+      # Must match a space registered in the database; the worker refuses to run
+      # otherwise rather than centre vectors against the wrong mean.
+      EMBEDDING_MODE: "${EMBEDDING_MODE:-low}"
+    entrypoint: >
+      sh -c "while true; do
+        echo \"[worker] $$(date): embedding...\";
+        python worker.py --source-mode api || echo failed;
+        sleep 43200;
+      done"
     restart: unless-stopped
     init: true
     networks:

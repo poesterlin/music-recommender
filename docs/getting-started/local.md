@@ -74,13 +74,16 @@ services:
       start_period: 60s
       retries: 3
 
-  # Optional: analyse the library on this machine. API mode needs no music
-  # volume and no database — it downloads snippets from the app and uploads
-  # vectors back. Start it with `docker compose --profile worker up -d`.
+  # The embedding worker. API mode needs no music volume and no database — it
+  # downloads bounded snippets from the app and uploads vectors back.
   worker:
     image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
-    profiles: ['worker']
-    command: python worker.py --source-mode api
+    entrypoint: >
+      sh -c "while true; do
+        echo \"[worker] $$(date): embedding...\";
+        python worker.py --source-mode api || echo failed;
+        sleep 43200;
+      done"
     restart: unless-stopped
     init: true
     depends_on:

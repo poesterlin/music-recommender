@@ -12,10 +12,10 @@ Click **Start setup**. Sole checks the database, refreshes Music Assistant, and 
 
 ## 2. Start audio analysis
 
-The local install does not start an analysis worker automatically. From the **sole folder on your computer** (the one containing `compose.yaml` and `.env`), run:
+The install already starts the analysis worker. To have it work through the library right now, from the **sole folder on your computer** (the one containing `compose.yaml` and `.env`), run:
 
 ```sh
-docker compose --profile worker up -d
+docker compose up -d worker
 ```
 
 The worker downloads short snippets from Sole and sends back its analysis. It uses the `WORKER_TOKEN` you generated in `.env` during local installation; **you do not need to create a key in the app**. The worker does not need your music folder or database, and you do not need to open a container shell.

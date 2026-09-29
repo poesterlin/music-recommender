@@ -4,13 +4,11 @@ A worker turns each track into a vector. It talks to the app's API only: it down
 
 ## On this machine
 
-A local install ships the worker behind a profile. It authenticates with `WORKER_TOKEN` from your `.env`, which the install steps had you generate. Start it when you want to analyse the library:
+The worker runs alongside the app by default and authenticates with `WORKER_TOKEN` from your `.env`, which the install steps had you generate. It loops every twelve hours; to make it analyse the library now:
 
 ```sh
-docker compose --profile worker up -d
+docker compose up -d worker
 ```
-
-The public Compose stack runs an equivalent loop by default, using the same `.env` value.
 
 ## On another machine or in Colab
 

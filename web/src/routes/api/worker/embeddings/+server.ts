@@ -9,6 +9,19 @@ const DIMENSIONS = 512;
 const MAX_BATCH = 16;
 const MAX_BODY_BYTES = 512 * 1024;
 
+/**
+ * The recipe that produced a batch. OpenL3 is frame-based, so the hop changes
+ * what a vector averages over and not just how long it takes; a vector centred
+ * against the wrong corpus mean is silently worse rather than visibly broken,
+ * so the upload must be attributable to a registered space.
+ */
+type Recipe = {
+	model: string;
+	hopSeconds: number;
+	maxSampleSeconds: number;
+	frontend: string;
+};
+
 type UploadItem = {
 	uri: string;
 	name: string;
@@ -51,6 +64,47 @@ function isValidItem(value: unknown): value is UploadItem {
 	);
 }
 
+function isValidRecipe(value: unknown): value is Recipe {
+	if (!value || typeof value !== 'object') return false;
+	const recipe = value as Partial<Recipe>;
+	return (
+		typeof recipe.model === 'string' &&
+		recipe.model === MODEL &&
+		typeof recipe.frontend === 'string' &&
+		recipe.frontend.length > 0 &&
+		recipe.frontend.length <= 64 &&
+		typeof recipe.hopSeconds === 'number' &&
+		Number.isFinite(recipe.hopSeconds) &&
+		recipe.hopSeconds > 0 &&
+		typeof recipe.maxSampleSeconds === 'number' &&
+		Number.isFinite(recipe.maxSampleSeconds) &&
+		recipe.maxSampleSeconds > 0
+	);
+}
+
+/**
+ * Find the space this recipe was registered as.
+ *
+ * Deliberately an exact match with no fallback. `embedding_space_for_settings`
+ * falls back to the newest space, which is precisely the silent mix this is here
+ * to prevent: an unregistered hop would land in some other space and read as
+ * fine. Returning null lets the caller reject instead.
+ */
+async function resolveSpaceVersion(recipe: Recipe): Promise<number | null> {
+	const rows = (await db.execute(sql`
+		SELECT "version"
+		FROM "embedding_space"
+		WHERE "model" = ${recipe.model}
+			AND "hop_seconds" IS NOT DISTINCT FROM ${recipe.hopSeconds}
+			AND "max_sample_seconds" IS NOT DISTINCT FROM ${recipe.maxSampleSeconds}
+			AND COALESCE("frontend", 'kapre') = ${recipe.frontend}
+		ORDER BY "version" DESC
+		LIMIT 1
+	`)) as unknown as Array<{ version: number }>;
+	const found = rows[0]?.version;
+	return typeof found === 'number' ? found : null;
+}
+
 function vectorLiteral(embedding: number[]): string {
 	return `[${embedding.map((value) => value.toFixed(8)).join(',')}]`;
 }
@@ -79,7 +133,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		return errorResponse('request body is too large', 413);
 	}
 
-	let body: { embeddings?: unknown };
+	let body: { recipe?: unknown; embeddings?: unknown };
 	try {
 		const raw = await request.text();
 		if (Buffer.byteLength(raw, 'utf8') > MAX_BODY_BYTES) {
@@ -89,9 +143,19 @@ export const POST: RequestHandler = async ({ request }) => {
 		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
 			return errorResponse('request body must be a JSON object', 400);
 		}
-		body = parsed as { embeddings?: unknown };
+		body = parsed as { recipe?: unknown; embeddings?: unknown };
 	} catch {
 		return errorResponse('request body must be valid JSON', 400);
+	}
+
+	if (!isValidRecipe(body.recipe)) {
+		// Required, not defaulted. Without it the write cannot be attributed to
+		// a space, which is the one thing that makes a wrong-space mix
+		// detectable.
+		return errorResponse(
+			`a recipe is required: {model: "${MODEL}", hopSeconds, maxSampleSeconds, frontend}`,
+			400
+		);
 	}
 
 	if (
@@ -105,6 +169,25 @@ export const POST: RequestHandler = async ({ request }) => {
 		return errorResponse(
 			`each embedding must be a finite ${DIMENSIONS}-value ${MODEL} vector with track metadata`,
 			400
+		);
+	}
+
+	let spaceVersion: number | null;
+	try {
+		spaceVersion = await resolveSpaceVersion(body.recipe);
+	} catch (error) {
+		console.error('Embedding space lookup failed:', error);
+		return errorResponse('could not resolve the embedding space', 500);
+	}
+	if (spaceVersion === null) {
+		// Refusing is the whole point: accepting would centre these vectors
+		// against a mean they were not produced for, and nothing downstream
+		// would ever notice.
+		return errorResponse(
+			`no embedding space is registered for this recipe ` +
+				`(hop ${body.recipe.hopSeconds}s, ${body.recipe.maxSampleSeconds}s, ` +
+				`${body.recipe.frontend}). Register that recipe before uploading.`,
+			409
 		);
 	}
 
@@ -148,6 +231,7 @@ export const POST: RequestHandler = async ({ request }) => {
 				await tx.execute(sql`
 					UPDATE track
 					SET embedding = ${vectorLiteral(item.embedding)}::vector,
+						embedding_space_version = ${spaceVersion},
 						updated_at = NOW()
 					WHERE uri = ${item.uri}
 					  AND embedding IS NULL
