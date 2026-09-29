@@ -7,8 +7,106 @@ if (!databaseUrl) {
 
 const sql = postgres(databaseUrl, { max: 1 });
 
-try {
+/**
+ * Bump when the DDL below changes in a way that must be re-applied.
+ *
+ * This script duplicates drizzle/0004-0015 on purpose: a fresh install runs the
+ * migrations, while every deploy runs only this. They therefore have to stay in
+ * step, and a plain "IF NOT EXISTS" cannot notice a function body that drifted.
+ * The marker is a comment inside each function body, so the preflight below can
+ * compare it against what is live.
+ *
+ * Rev 2: the centring trigger honours a declared `embedding_space_version`
+ *        (drizzle/0015). It had drifted back to "latest wins" here, so each
+ *        deploy silently reverted the fix.
+ */
+const SCHEMA_REVISION = 2;
+
+const REQUIRED_TABLES = [
+	'embedding_space',
+	'cluster_centroid',
+	'cluster_run',
+	'cluster_run_assignment',
+	'cluster_centroid_backup',
+	'cluster_run_match'
+];
+const REQUIRED_INDEXES = [
+	'cluster_run_assignment_run_uri_idx',
+	'cluster_centroid_backup_run_cluster_idx',
+	'cluster_run_match_run_cluster_idx',
+	'embeddingCenteredIndex'
+];
+const REQUIRED_COLUMNS = [
+	['track', 'embedding_centered'],
+	['track', 'embedding_space_version'],
+	['cluster_centroid', 'embedding_space_version'],
+	['cluster_run', 'applied_at'],
+	['embedding_space', 'hop_seconds'],
+	['embedding_space', 'max_sample_seconds'],
+	['embedding_space', 'frontend']
+] as const;
+const REQUIRED_FUNCTIONS = [
+	'center_openl3_embedding',
+	'normalize_cluster_embedding',
+	'sync_track_centered_embedding'
+];
+
+/**
+ * Whether the schema already matches this revision.
+ *
+ * Every statement in the DDL block takes a strong lock *before* deciding it is a
+ * no-op -- `CREATE TABLE IF NOT EXISTS` wants ACCESS EXCLUSIVE even when the
+ * table is there -- so on an already-current database the whole block is pure
+ * risk. One cheap read first means a routine deploy takes no locks at all and
+ * cannot be blocked by a long-running query.
+ */
+async function isSchemaCurrent(): Promise<boolean> {
+	const tables = await sql<{ name: string }[]>`
+		SELECT c.relname AS name
+		FROM pg_class c
+		JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind IN ('r', 'p')
+			AND n.nspname = current_schema()
+			AND c.relname IN ${sql(REQUIRED_TABLES)}
+	`;
+	const indexes = await sql<{ name: string }[]>`
+		SELECT indexname AS name
+		FROM pg_indexes
+		WHERE schemaname = current_schema()
+			AND indexname IN ${sql(REQUIRED_INDEXES)}
+	`;
+	// Compared as "table.column" so a single text array covers every pair.
+	const columns = await sql<{ qualified: string }[]>`
+		SELECT table_name || '.' || column_name AS qualified
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+			AND table_name || '.' || column_name IN ${sql(REQUIRED_COLUMNS.map(([table, column]) => `${table}.${column}`))}
+	`;
+	const functions = await sql<{ proname: string; prosrc: string }[]>`
+		SELECT p.proname, p.prosrc
+		FROM pg_proc p
+		JOIN pg_namespace n ON n.oid = p.pronamespace
+		WHERE n.nspname = current_schema()
+			AND p.proname IN ${sql(REQUIRED_FUNCTIONS)}
+	`;
+
+	if (tables.length !== REQUIRED_TABLES.length) return false;
+	if (indexes.length !== REQUIRED_INDEXES.length) return false;
+	if (columns.length !== REQUIRED_COLUMNS.length) return false;
+	if (functions.length !== REQUIRED_FUNCTIONS.length) return false;
+
+	const marker = `sole-schema: ${SCHEMA_REVISION}`;
+	return functions.every((fn) => fn.prosrc.includes(marker));
+}
+
+async function applySchema(): Promise<boolean> {
+	if (await isSchemaCurrent()) return false;
+
 	await sql.begin(async (tx) => {
+		// Fail fast rather than queue behind whatever holds the lock. Without
+		// this a colliding read turns a deploy into a silent multi-minute stall.
+		// LOCAL so it resets itself when the transaction ends.
+		await tx.unsafe(`SET LOCAL lock_timeout = '10s'`);
 		await tx.unsafe(`
 			CREATE TABLE IF NOT EXISTS "embedding_space" (
 				"version" integer PRIMARY KEY NOT NULL,
@@ -101,6 +199,7 @@ try {
 			IMMUTABLE
 			STRICT
 			AS $func$
+			-- sole-schema: 2
 			DECLARE
 				centered vector;
 				norm double precision;
@@ -130,6 +229,7 @@ try {
 			IMMUTABLE
 			STRICT
 			AS $func$
+			-- sole-schema: 2
 			DECLARE
 				norm double precision;
 			BEGIN
@@ -194,6 +294,7 @@ try {
 			RETURNS trigger
 			LANGUAGE plpgsql
 			AS $func$
+			-- sole-schema: 2
 			DECLARE
 				active_mean vector;
 				active_version integer;
@@ -206,6 +307,21 @@ try {
 
 				IF TG_OP = 'UPDATE' AND NEW.embedding IS NOT DISTINCT FROM OLD.embedding THEN
 					RETURN NEW;
+				END IF;
+
+				-- A writer that knows its recipe sets the version; centre against
+				-- that. Everything else keeps the original "latest wins" behaviour.
+				-- See drizzle/0015_embedding_space_recipe.sql.
+				IF NEW.embedding_space_version IS NOT NULL THEN
+					SELECT mean_embedding, version
+					INTO active_mean, active_version
+					FROM embedding_space
+					WHERE version = NEW.embedding_space_version;
+
+					IF active_mean IS NOT NULL THEN
+						NEW.embedding_centered := center_openl3_embedding(NEW.embedding, active_mean);
+						RETURN NEW;
+					END IF;
 				END IF;
 
 				SELECT mean_embedding, version
@@ -236,6 +352,16 @@ try {
 			EXECUTE FUNCTION sync_track_centered_embedding();
 		`);
 	});
+	return true;
+}
+
+try {
+	const changed = await applySchema();
+	if (!changed) {
+		console.log(
+			`Centered space schema is already at revision ${SCHEMA_REVISION}; skipped.`
+		);
+	}
 
 	const [summary] = await sql`
 		SELECT
