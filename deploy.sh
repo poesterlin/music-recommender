@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 
 COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}"
 BRANCH="${BRANCH:-main}"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:4932/api/health}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:3000/api/health}"
 
 die() {
   echo "ERROR: $*" >&2

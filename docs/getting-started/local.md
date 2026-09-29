@@ -18,9 +18,10 @@ curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/.env.example -
 # Minimal first-run stack: published images only, no clone required.
 #
 # The setup script writes this next to a .env and starts it. It is deliberately
-# small: PostgreSQL, the app, and an optional API-mode worker. The repository's
-# compose.yaml adds the clustering profiles and the Traefik labels for a public
-# deployment. (The maintenance jobs run inside the app in either stack.)
+# small: PostgreSQL, the app, and an optional API-mode worker. Maintenance jobs
+# run inside the app on a timer, so nothing here schedules them. The repository's
+# compose.yaml adds the embedding loop, the clustering profiles, and the Traefik
+# labels for a public deployment.
 #
 # To move up to the full stack later, replace this file with the repository's
 # compose.yaml and run `docker compose --profile database up -d`.
@@ -51,9 +52,9 @@ services:
       DATABASE_URL: postgres://sole:${POSTGRES_PASSWORD}@postgres:5432/sole
       # SvelteKit rejects a login whose Origin does not match the app's own
       # host. Set ORIGIN in .env when serving through a domain or proxy.
-      ORIGIN: ${ORIGIN:-http://127.0.0.1:${WEB_PORT:-4932}}
+      ORIGIN: ${ORIGIN:-http://127.0.0.1:3000}
     ports:
-      - '${WEB_PORT:-4932}:3000'
+      - '3000:3000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -106,22 +107,20 @@ Two things worth noticing: the app's port is published, so anyone who can reach 
 
 ## 2. Create `.env`
 
-Settings live in a file called `.env`, next to `compose.yaml`. Four of them make a working install:
+Settings live in a file called `.env`, next to `compose.yaml`. Three of them make a working install:
 
 | Setting | What it is |
 |---|---|
 | `MUSIC_LIBRARY_PATH` | The folder that holds your music. It is mounted into the app read-only, which is what lets the app slice the audio a worker analyses. Nothing writes to it. |
 | `POSTGRES_PASSWORD` | A password for the database this stack creates for you. Only this stack uses it, so any random string will do — the point is not to ship a guessable default. |
-| `WEB_PORT` | The local port the app listens on. You will open `http://127.0.0.1:<port>` in a moment. |
 | `WORKER_TOKEN` | A shared secret between the app and a worker. The app refuses analysis requests that do not carry it, so generate a long random value. Anything that talks to the worker API uses this same string — the local worker in this stack, or a remote one. The maintenance jobs are not separate processes, so they do not use it. |
 
-Create the file in your editor — `nano .env` — and fill in those four lines, or let this do it for you with generated secrets:
+Create the file in your editor — `nano .env` — and fill in those three lines, or let this do it for you with generated secrets:
 
 ```sh
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 MUSIC_LIBRARY_PATH=$HOME/Music
-WEB_PORT=4932
 WORKER_TOKEN=$(openssl rand -hex 24)
 EOF
 chmod 600 .env
@@ -153,7 +152,7 @@ docker compose run --rm --entrypoint bun web \
   web/scripts/create-user.ts --username admin
 ```
 
-Open **http://127.0.0.1:4932/login** and sign in.
+Open **http://127.0.0.1:3000/login** and sign in.
 
 Self-registration is off and the account limit is one by default. To add people later, set `MAX_USERS` to the number of accounts you want in `.env` and run the account command again with a different username. For self-service sign-ups up to that limit, also set `ALLOW_REGISTRATION=true` and run `docker compose up -d` to apply the setting. The registration link disappears when the limit is reached.
 
@@ -176,14 +175,14 @@ The app's port is published on every interface, so it is reachable from your net
 
 ```yaml
     ports:
-      - '127.0.0.1:4932:3000'
+      - '127.0.0.1:3000:3000'
 ```
 
 Opening the app from another device needs one more setting. The login form is refused unless `ORIGIN` matches the address in your browser, so set it to the one you will actually use:
 
 ```sh
 # in .env, then: docker compose up -d
-ORIGIN=http://192.168.1.20:4932
+ORIGIN=http://192.168.1.20:3000
 ```
 
 ## Common changes
@@ -193,8 +192,7 @@ Edit `.env`, then run `docker compose up -d` again.
 | Want to change | Setting |
 |---|---|
 | Music folder | `MUSIC_LIBRARY_PATH` |
-| Web port | `WEB_PORT` (default `4932`) |
-| Login host, behind a proxy | `ORIGIN` — must match the address you actually open, defaults to `http://127.0.0.1:4932` |
+| Login host, behind a proxy | `ORIGIN` — must match the address you actually open, defaults to `http://127.0.0.1:3000` |
 
 PostgreSQL is not published to your machine, so it cannot collide with a database you already run. To look inside it:
 
