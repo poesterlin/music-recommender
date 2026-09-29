@@ -673,6 +673,16 @@ def process_audio_file(
 
 
 def run(args: argparse.Namespace) -> int:
+    if str(getattr(args, "source_mode", DEFAULT_SOURCE_MODE)).strip().lower() == "api":
+        try:
+            from worker_api import run_api_worker
+        except ModuleNotFoundError as error:
+            if error.name != "worker_api":
+                raise
+            from embeddings.worker_api import run_api_worker
+
+        return run_api_worker(sys.modules[__name__], args)
+
     if str(getattr(args, "source_mode", DEFAULT_SOURCE_MODE)).strip().lower() != "api":
         # Local mode resolved audio by matching track titles against filenames,
         # and only stripped a leading "NN - " from them. Music Assistant

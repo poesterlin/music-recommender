@@ -3,9 +3,11 @@ import importlib.util
 import io
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -15,6 +17,9 @@ SCRIPT = Path(__file__).parents[1] / "generate-local-embeddings.py"
 SPEC = importlib.util.spec_from_file_location("local_embeddings", SCRIPT)
 assert SPEC and SPEC.loader
 local_embeddings = importlib.util.module_from_spec(SPEC)
+# run() hands worker_api `sys.modules[__name__]`, so the module has to be
+# registered or the dispatcher raises KeyError before it gets anywhere.
+sys.modules[SPEC.name] = local_embeddings
 SPEC.loader.exec_module(local_embeddings)
 
 
@@ -77,6 +82,24 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         # endpoint. These tests are about hop/mode resolution, not the URL.
         os.environ.setdefault("WORKER_URL", "https://worker-api.example.test")
         os.environ.setdefault("WORKER_TOKEN", "test-token")
+
+    def test_main_dispatches_to_the_api_worker(self):
+        # Regression: `run()` once kept only the local-mode refusal and no api
+        # branch, so main() returned None and the worker exited with
+        # "int() argument must be ... not 'NoneType'". The tests above all
+        # exercise internals, so only going through main() catches that.
+        seen = {}
+
+        def fake_api_worker(core, args):
+            seen["core"] = core
+            seen["source_mode"] = args.source_mode
+            return 0
+
+        with patch.dict(sys.modules, {"worker_api": SimpleNamespace(run_api_worker=fake_api_worker)}):
+            code = local_embeddings.main(["--dry-run", "--limit", "1"])
+        self.assertEqual(code, 0)
+        self.assertEqual(seen["source_mode"], "api")
+        self.assertIs(seen["core"], sys.modules[local_embeddings.__name__])
 
     def test_stage_stats_reports_percentiles(self):
         stats = local_embeddings.StageStats()
