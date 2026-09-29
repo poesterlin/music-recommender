@@ -21,7 +21,6 @@ STACK_FILE="stack.yaml"
 COMPOSE_FILE="compose.yaml"
 EXAMPLE_FILE=".env.example"
 ENV_FILE=".env"
-DEFAULT_WEB_PORT="4932"
 
 # .env.example documents every setting, including placeholder hosts. A fresh
 # install must not point at those, so an installer leaves them empty. Blanking
@@ -122,7 +121,7 @@ database_internal_url="postgres://sole:${password}@postgres:5432/sole"
 
 declare -A settings=(
   [DOMAIN]="localhost"
-  [ORIGIN]="http://127.0.0.1:${DEFAULT_WEB_PORT}"
+  [ORIGIN]="http://127.0.0.1:3000"
   [MUSIC_LIBRARY_PATH]="$library"
   [POSTGRES_PASSWORD]="$password"
   [DATABASE_URL]="$database_url"
@@ -154,11 +153,9 @@ for key in "${BLANKED[@]}"; do blanked["$key"]=1; done
     done <"$example"
   fi
 
-  # Ports belong to the stack rather than the example file, and any setting the
-  # example file does not document is appended once. PostgreSQL is deliberately
-  # not published: nothing outside the stack needs it, and a host that already
-  # runs PostgreSQL would otherwise collide on 5432.
-  [ -n "${seen[WEB_PORT]+set}" ] || printf 'WEB_PORT=%s\n' "$DEFAULT_WEB_PORT"
+  # Any setting the example file does not document is appended once. PostgreSQL
+  # is deliberately not published: nothing outside the stack needs it, and a
+  # host that already runs PostgreSQL would otherwise collide on 5432.
   for key in "${!settings[@]}"; do
     [ -n "${seen[$key]+set}" ] || printf '%s=%s\n' "$key" "${settings[$key]}"
   done
@@ -194,7 +191,7 @@ cat <<EOF
 
 Ready.
 
-  Open      http://127.0.0.1:${DEFAULT_WEB_PORT}/login
+  Open      http://127.0.0.1:3000/login
   Username  admin
   Password  ${admin_password}
 

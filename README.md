@@ -35,7 +35,6 @@ curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/stack.yaml -o 
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 MUSIC_LIBRARY_PATH=$HOME/Music
-WEB_PORT=4932
 EOF
 chmod 600 .env
 
@@ -48,7 +47,7 @@ docker compose run --rm --entrypoint bun web \
 ```
 
 The last command prints a generated password once. Open
-`http://127.0.0.1:4932/login`, then follow **Setup**. Add your Music Assistant
+`http://127.0.0.1:3000/login`, then follow **Setup**. Add your Music Assistant
 details to `.env` and run `docker compose up -d` again.
 
 The same steps are automated in `setup.sh` if you would rather not type them:

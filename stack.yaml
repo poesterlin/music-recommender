@@ -1,8 +1,9 @@
 # Minimal first-run stack: published images only, no clone required.
 #
 # The setup script writes this next to a .env and starts it. It is deliberately
-# small: PostgreSQL, the app, and an optional API-mode worker. The repository's
-# compose.yaml adds the timed jobs, the clustering profiles, and the Traefik
+# small: PostgreSQL, the app, and an optional API-mode worker. Maintenance jobs
+# run inside the app on a timer, so nothing here schedules them. The repository's
+# compose.yaml adds the embedding loop, the clustering profiles, and the Traefik
 # labels for a public deployment.
 #
 # To move up to the full stack later, replace this file with the repository's
@@ -34,9 +35,9 @@ services:
       DATABASE_URL: postgres://sole:${POSTGRES_PASSWORD}@postgres:5432/sole
       # SvelteKit rejects a login whose Origin does not match the app's own
       # host. Set ORIGIN in .env when serving through a domain or proxy.
-      ORIGIN: ${ORIGIN:-http://127.0.0.1:${WEB_PORT:-4932}}
+      ORIGIN: ${ORIGIN:-http://127.0.0.1:3000}
     ports:
-      - '${WEB_PORT:-4932}:3000'
+      - '3000:3000'
     depends_on:
       postgres:
         condition: service_healthy
