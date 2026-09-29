@@ -16,6 +16,15 @@ and resampy 0.2.2. The model code and versions are unchanged.
 
 - The cursor lives in the optional state file, and the server's upload endpoint
   is idempotent and never overwrites, so a re-run is safe.
+- **A track whose audio file no longer exists is recorded, not retried.** The
+  audio endpoint answers 404 when it cannot resolve a track to a file, which is
+  what happens when music is deleted without telling the library. That is
+  permanent, so the worker emits `track_missing_audio`, counts it under
+  `missing_this_run`, and lets the page and cursor advance — one deleted file
+  must not stop every other track on that page from being embedded. Anything
+  else (5xx, timeout, rejected upload) still ends the page without moving the
+  cursor, because it may succeed later. Use **Manage → Duplicates → Prune**, or
+  mark the rows skipped, to stop even asking for them.
 - Audio and model work happens outside database write transactions.
 - Successful vectors are written only when the target embedding is still empty,
   so a manual or newer writer is never overwritten.

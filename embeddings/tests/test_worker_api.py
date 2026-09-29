@@ -279,21 +279,23 @@ class _FakeWorkerClient:
         self.recipe = None
 
     def get_tracks(self, after=None, limit=None):
-        return {
-            "tracks": [
-                {
-                    "uri": "library://track/1",
-                    "name": "Example",
-                    "artist": ["Someone"],
-                    "album": "Record",
-                    "media_type": "track",
-                    "is_playable": True,
-                }
-            ],
-            "nextCursor": None,
+        track = lambda uri: {
+            "uri": uri,
+            "name": "Example",
+            "artist": ["Someone"],
+            "album": "Record",
+            "media_type": "track",
+            "is_playable": True,
         }
+        # Honour the cursor the way the real endpoint does, so a run that
+        # advances actually terminates instead of seeing the same page forever.
+        all_tracks = [track("library://track/1"), track("library://track/2")]
+        remaining = [t for t in all_tracks if after is None or t["uri"] > after]
+        return {"tracks": remaining, "nextCursor": None}
 
     def download_audio(self, uri, duration, path):
+        if uri in getattr(self, "missing", ()):
+            raise worker_api.WorkerAPIError("audio download failed with HTTP 404", status=404)
         with open(path, "wb") as handle:
             handle.write(b"ID3")
         return path
@@ -343,6 +345,52 @@ class ApiWorkerHopTests(unittest.TestCase):
         self.assertEqual(client.recipe["hopSeconds"], 0.5)
         self.assertEqual(client.recipe["model"], worker_api.API_MODEL)
         self.assertEqual(client.recipe["frontend"], "kapre")
+
+
+class MissingAudioTests(unittest.TestCase):
+    """A 404 is permanent, so it must never hold the cursor."""
+
+    def test_a_404_is_classified_as_missing_audio(self):
+        self.assertTrue(worker_api.is_missing_audio(worker_api.WorkerAPIError("gone", status=404)))
+
+    def test_other_statuses_are_retryable(self):
+        for status in (408, 429, 500, 503):
+            with self.subTest(status=status):
+                self.assertFalse(
+                    worker_api.is_missing_audio(worker_api.WorkerAPIError("x", status=status))
+                )
+        self.assertFalse(worker_api.is_missing_audio(RuntimeError("boom")))
+        self.assertFalse(worker_api.is_missing_audio(worker_api.WorkerAPIError("no status")))
+
+    def test_a_wrapped_404_is_still_missing_audio(self):
+        # The download happens in the prefetcher, so the 404 arrives wrapped.
+        wrapped = worker_api.PrefetchDownloadError(
+            {"uri": "library://track/1"}, worker_api.WorkerAPIError("gone", status=404)
+        )
+        self.assertTrue(worker_api.is_missing_audio(wrapped))
+
+    def test_a_missing_file_does_not_stop_the_run(self):
+        # Regression: one deleted file used to end the run without advancing the
+        # cursor, so every 12-hour run retried the same page and no later track
+        # was ever embedded. The second track here is perfectly good.
+        client = _FakeWorkerClient()
+        client.recipe = worker_api.build_recipe(0.1, 60.0, "kapre")
+        client.missing = {"library://track/1"}
+
+        core = _FakeCore()
+        with tempfile.TemporaryDirectory() as tmp:
+            args = _FakeArgs(
+                hop=0.1,
+                state_file=str(Path(tmp) / "state.json"),
+                dry_run=False,
+                limit=10,
+            )
+            code = worker_api.run_api_worker(core, args, client)
+        self.assertEqual(code, 0)
+        # The good track on the same page was still embedded and uploaded.
+        self.assertEqual(len(core.calls), 1)
+        self.assertEqual(len(client.uploads), 1)
+        self.assertEqual(client.uploads[0][0]["uri"], "library://track/2")
 
 
 class RecipeTests(unittest.TestCase):

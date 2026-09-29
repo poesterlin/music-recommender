@@ -73,6 +73,22 @@ class PrefetchDownloadError(RuntimeError):
         super().__init__("audio prefetch failed")
 
 
+def is_missing_audio(error: BaseException) -> bool:
+    """Whether this failure means the file is not there, rather than a hiccup.
+
+    The audio endpoint answers 404 when it cannot resolve a track to a local
+    file, which happens whenever the listener deletes music without telling the
+    library about it. That is permanent: the same request will fail identically
+    forever, so retrying it cannot succeed and must not be allowed to stall the
+    run. Everything else -- a 5xx, a timeout, a rejected upload -- may well
+    succeed later and is treated as retryable.
+    """
+
+    if isinstance(error, PrefetchDownloadError):
+        error = error.cause
+    return isinstance(error, WorkerAPIError) and error.status == 404
+
+
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -905,6 +921,12 @@ def prefetch_audio(
     The executor is used only for ``downloader``.  The consumer receives paths
     in input order and remains responsible for all decoding/inference, so
     TensorFlow is never called concurrently.
+
+    A track whose file does not exist yields ``(track, None)`` and the pipeline
+    continues. It used to raise, which abandoned every download still in flight
+    and ended the page, so a single deleted file meant no other track on that
+    page was embedded and the cursor never moved past it. Any other download
+    failure still raises, since it may well succeed on a later run.
     """
 
     workers = _nonnegative_int(workers, "prefetch workers")
@@ -953,6 +975,9 @@ def prefetch_audio(
             try:
                 result = future.result()
             except Exception as error:
+                if is_missing_audio(error):
+                    yield track, None
+                    continue
                 raise PrefetchDownloadError(track, error) from error
             yield track, _result_path(result, fallback)
     finally:
@@ -1034,6 +1059,8 @@ def run_api_worker(
     inferred_this_run = 0
     written_this_run = 0
     failures_this_run = 0
+    missing_total = 0
+    missing_this_run = 0
     limit_reached = False
     complete = False
     stop_reason: str | None = None
@@ -1153,6 +1180,7 @@ def run_api_worker(
 
                 page_results: list[dict[str, Any]] = []
                 page_failure_count = 0
+                page_missing_count = 0
                 stopped_early = False
                 iterator = prefetch_audio(
                     page,
@@ -1165,6 +1193,31 @@ def run_api_worker(
                 try:
                     for track, audio_path in iterator:
                         examined_this_run += 1
+                        if audio_path is None:
+                            # Reported by the prefetcher: no such file. Counted
+                            # and recorded so it stays visible, but it never
+                            # blocks the page or the cursor.
+                            page_missing_count += 1
+                            missing_total += 1
+                            missing_this_run += 1
+                            failed_total += 1
+                            failures_this_run += 1
+                            _record_failure(
+                                failures,
+                                track,
+                                WorkerAPIError(
+                                    "audio download failed with HTTP 404", status=404
+                                ),
+                                secret=token,
+                            )
+                            _print_event(
+                                {
+                                    "event": "track_missing_audio",
+                                    "uri": track.get("uri"),
+                                    "reason": "no local audio file",
+                                }
+                            )
+                            continue
                         try:
                             embedding, timings = core.process_audio_file(
                                 audio_path,
@@ -1188,18 +1241,33 @@ def run_api_worker(
                                 }
                             )
                         except Exception as error:
-                            page_failure_count += 1
+                            terminal = is_missing_audio(error)
+                            # A terminal failure is still recorded and still
+                            # counted, but it does not make the page
+                            # uncheckpointable: it can never succeed, so holding
+                            # the cursor behind it would wedge the run forever.
+                            if not terminal:
+                                page_failure_count += 1
+                            else:
+                                page_missing_count += 1
                             _record_failure(failures, track, error, secret=token)
                             failed_total += 1
                             failures_this_run += 1
+                            if terminal:
+                                missing_total += 1
+                                missing_this_run += 1
                             _print_event(
                                 {
-                                    "event": "track_failed",
+                                    "event": "track_missing_audio"
+                                    if terminal
+                                    else "track_failed",
                                     "uri": track.get("uri"),
                                     "reason": _short_error(error, token),
                                 }
                             )
-                            if fail_fast or (max_errors and failures_this_run >= max_errors):
+                            if not terminal and (
+                                fail_fast or (max_errors and failures_this_run >= max_errors)
+                            ):
                                 stopped_early = True
                                 stop_reason = _short_error(error, token)
                                 break
@@ -1209,19 +1277,30 @@ def run_api_worker(
                     # failures rather than becoming an untracked fatal error.
                     track = error.track
                     examined_this_run += 1
-                    page_failure_count += 1
+                    terminal = is_missing_audio(error)
+                    if terminal:
+                        # The file is gone. Stopping here would wedge the run on
+                        # a track that can never succeed, so the page continues
+                        # and the cursor still advances past it.
+                        page_missing_count += 1
+                        missing_total += 1
+                        missing_this_run += 1
+                    else:
+                        page_failure_count += 1
+                        stopped_early = True
+                        stop_reason = _short_error(error.cause, token)
                     _record_failure(failures, track, error.cause, secret=token)
                     failed_total += 1
                     failures_this_run += 1
                     _print_event(
                         {
-                            "event": "track_failed",
+                            "event": "track_missing_audio"
+                            if terminal
+                            else "track_failed",
                             "uri": track.get("uri"),
                             "reason": _short_error(error.cause, token),
                         }
                     )
-                    stopped_early = True
-                    stop_reason = _short_error(error.cause, token)
                 finally:
                     close_iterator = getattr(iterator, "close", None)
                     if callable(close_iterator):
@@ -1374,6 +1453,7 @@ def run_api_worker(
                     "inferred_this_run": inferred_this_run,
                     "written_this_run": written_this_run,
                     "failures_this_run": failures_this_run,
+                    "missing_this_run": missing_this_run,
                 },
                 sort_keys=True,
             ),
