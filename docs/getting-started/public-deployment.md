@@ -64,8 +64,7 @@ mount and no database; the maintenance jobs run inside the web process.
 Everything else is opt-in:
 
 ```sh
-docker compose --profile local up -d embeddings-loop   # reads the mount and the database directly
-docker compose --profile embedding run --rm embeddings
+docker compose run --rm worker python worker.py --source-mode api --dry-run --limit 10
 docker compose --profile clustering run --rm clusterer-bun benchmark   # read-only
 docker compose --profile clustering run --rm clusterer                 # apply and rollback
 docker compose --profile embedding-rust up -d

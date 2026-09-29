@@ -14,9 +14,8 @@ and resampy 0.2.2. The model code and versions are unchanged.
 
 ## Safety and recovery
 
-- Local mode uses a PostgreSQL advisory lock and durable `job_run.detail` cursor.
-- API mode keeps its cursor in the optional state file and relies on the server's
-  idempotent, no-overwrite upload endpoint.
+- The cursor lives in the optional state file, and the server's upload endpoint
+  is idempotent and never overwrites, so a re-run is safe.
 - Audio and model work happens outside database write transactions.
 - Successful vectors are written only when the target embedding is still empty,
   so a manual or newer writer is never overwritten.
@@ -24,18 +23,14 @@ and resampy 0.2.2. The model code and versions are unchanged.
 - The centered vector is still derived by the database trigger; this worker
   writes only the raw `embedding` vector.
 
-The default job name is `python-local-embeddings`. Use a different name only
-for an intentionally separate run. Keep the default lock key unchanged for
-all workers targeting the same database; changing it can allow concurrent
-writers. The `job_run` table must exist before starting the worker.
+The worker needs no database of its own: it asks the app for tracks and bounded
+audio, and uploads vectors back. `WORKER_URL` must be reachable from wherever
+the worker runs.
 
 ## Run
 
 ```sh
-python embeddings/generate-local-embeddings.py \
-  --audio-dir /music \
-  --duration 60 \
-  --batch-size 8
+python worker.py --source-mode api --duration 60 --batch-size 8
 ```
 
 ## API worker mode
@@ -83,24 +78,19 @@ unattended Compose jobs.
 | Variable | Default | Purpose |
 |---|---:|---|
 | `DATABASE_URL` | — | PostgreSQL connection string |
-| `AUDIO_DIR` | `/music` | Local audio root |
 | `EMBEDDING_DURATION_SECONDS` | `60` | Per-track duration cap |
 | `EMBEDDING_AUDIO_BACKEND` | `fast` | `fast` uses parity-checked soundfile/soxr; `librosa` restores the legacy decoder/resampler path |
 | `EMBEDDING_BATCH_SIZE` | `8` | Keyset page/write batch size |
 | `EMBEDDING_INFER_BATCH_SIZE` | `64` | One-second windows per OpenL3 predict call; raise on a GPU |
-| `EMBEDDING_JOB_NAME` | `python-local-embeddings` | Durable `job_run` name |
-| `EMBEDDING_LOCK_KEY` | fixed bigint | Singleton advisory-lock key |
 | `EMBEDDING_MAX_ERRORS` | `0` | Stop after N failures; zero continues |
 | `EMBEDDING_FAIL_FAST` | `false` | Stop on the first failure |
 | `EMBEDDING_TF_INTRA_THREADS` | `0` | Optional TensorFlow intra-op thread limit |
 | `EMBEDDING_TF_INTER_THREADS` | `0` | Optional TensorFlow inter-op thread limit |
-| `EMBEDDING_DB_RETRIES` | `3` | Transient PostgreSQL retry attempts |
-| `EMBEDDING_DB_RETRY_DELAY` | `1.0` | Initial exponential retry delay in seconds |
 
-API mode additionally uses `WORKER_URL`, `WORKER_TOKEN`,
-`EMBEDDING_PREFETCH_WORKERS`, `EMBEDDING_PREFETCH_DEPTH`,
-`EMBEDDING_DOWNLOAD_TIMEOUT`, `EMBEDDING_DOWNLOAD_RETRIES`,
-`EMBEDDING_DOWNLOAD_MAX_BYTES`, and `EMBEDDING_STATE_FILE`.
+The worker also uses `WORKER_URL`, `WORKER_TOKEN`, `EMBEDDING_PREFETCH_WORKERS`,
+`EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
+`EMBEDDING_DOWNLOAD_RETRIES`, `EMBEDDING_DOWNLOAD_MAX_BYTES`, and
+`EMBEDDING_STATE_FILE`.
 
 `--dry-run` performs the file lookup, model work, and profiling without writing
 `job_run` or embeddings. A bounded dry-run may exit with status `2` simply

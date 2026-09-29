@@ -8,9 +8,6 @@ services:
     build:
       context: .
       dockerfile: web/Dockerfile
-  embeddings-loop:
-    build:
-      context: embeddings
   embeddings:
     build:
       context: embeddings

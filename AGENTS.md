@@ -41,8 +41,6 @@ External PostgreSQL installations can leave that profile disabled and provide
 - `embedding`: bounded/manual Python worker runs.
 - `clustering`: native and Bun/WASM clustering jobs.
 - `embedding-rust`: optional Rust embedding worker.
-- `local`: `embeddings-loop`, which reads the music mount and writes to
-  PostgreSQL directly instead of using the worker API.
 
 The app uses database-backed user/session authentication. Registration is
 opt-in with `ALLOW_REGISTRATION=true` and limited by `MAX_USERS` (default 1);

@@ -66,45 +66,17 @@ class FakeOpenL3:
         return np.ones((3, 512), dtype=np.float32), np.arange(3)
 
 
-class FakeCursor:
-    def __init__(self):
-        self.calls = []
-        self.rowcount = 1
-
-    def execute(self, statement, params=None):
-        self.calls.append((statement, params))
-        self.rowcount = 1
-
-    def close(self):
-        pass
 
 
-class FakeConnection:
-    def __init__(self):
-        self.cursor_instance = FakeCursor()
-        self.commits = 0
-        self.rollbacks = 0
-
-    def cursor(self):
-        return self.cursor_instance
-
-    def commit(self):
-        self.commits += 1
-
-    def rollback(self):
-        self.rollbacks += 1
 
 
 class LocalEmbeddingWorkerTests(unittest.TestCase):
-    def test_vector_literal_validates_shape_and_finiteness(self):
-        vector = np.ones(512, dtype=np.float32)
-        literal = local_embeddings.vector_literal(vector)
-        self.assertTrue(literal.startswith("[1.00000000"))
-        with self.assertRaises(ValueError):
-            local_embeddings.vector_literal(np.ones(511))
-        with self.assertRaises(ValueError):
-            vector[0] = np.nan
-            local_embeddings.vector_literal(vector)
+    @classmethod
+    def setUpClass(cls):
+        # API mode is the only mode left, and it refuses to start without an
+        # endpoint. These tests are about hop/mode resolution, not the URL.
+        os.environ.setdefault("WORKER_URL", "https://worker-api.example.test")
+        os.environ.setdefault("WORKER_TOKEN", "test-token")
 
     def test_stage_stats_reports_percentiles(self):
         stats = local_embeddings.StageStats()
@@ -115,22 +87,6 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(summary["p50_seconds"], 2.0)
         self.assertEqual(summary["max_seconds"], 3.0)
 
-    def test_file_index_is_deterministic_and_supports_track_numbers(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            (root / "Artist" / "Album").mkdir(parents=True)
-            (root / "Artist" / "Album" / "01 - Song.mp3").write_bytes(b"mp3")
-            (root / "Artist" / "Album" / "02 - Other.flac").write_bytes(b"flac")
-            (root / "Artist" / "Album" / "cover.jpg").write_bytes(b"jpg")
-
-            index = local_embeddings.build_file_index(root)
-            self.assertEqual(
-                index["song"], [str(root / "Artist" / "Album" / "01 - Song.mp3")]
-            )
-            self.assertEqual(
-                index["other"], [str(root / "Artist" / "Album" / "02 - Other.flac")]
-            )
-            self.assertNotIn("cover", index)
 
     def test_soundfile_fast_path_matches_librosa_mono_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -284,49 +240,19 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
         self.assertEqual(FakeOpenL3.calls, [256])
         self.assertEqual(timings["infer_batch_size"], 256)
 
-    def test_transient_database_errors_are_retried(self):
-        connection = FakeConnection()
-        calls = []
 
-        def operation():
-            calls.append(True)
-            if len(calls) == 1:
-                raise local_embeddings.psycopg2.OperationalError("temporary")
-            return "ok"
 
-        self.assertEqual(
-            local_embeddings.retry_db_operation(
-                connection, operation, 3, 0, "test"
-            ),
-            "ok",
-        )
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(connection.rollbacks, 1)
 
-    def test_write_batch_checkpoints_successful_vectors_atomically(self):
-        connection = FakeConnection()
-        written, conflicts = local_embeddings.write_batch(
-            connection,
-            job_id=17,
-            updates=[("track-a", "[1.0]"), ("track-b", "[2.0]")],
-            detail={"cursor": "track-b", "processed": 4, "failed": 1},
-        )
-        self.assertEqual((written, conflicts), (2, 0))
-        self.assertEqual(connection.commits, 1)
-        checkpoint_sql, checkpoint_params = connection.cursor_instance.calls[-1]
-        self.assertIn("UPDATE job_run", checkpoint_sql)
-        checkpoint = json.loads(checkpoint_params[0])
-        self.assertEqual(checkpoint["processed"], 6)
-        self.assertEqual(checkpoint["last_batch_written"], 2)
-
-    def test_parse_detail_tolerates_legacy_or_invalid_values(self):
-        self.assertEqual(local_embeddings.parse_detail(None), {})
-        self.assertEqual(local_embeddings.parse_detail("not-json"), {})
-        self.assertEqual(local_embeddings.parse_detail('{"cursor":"x"}'), {"cursor": "x"})
+    def test_local_mode_is_refused_with_an_explanation(self):
+        # Local mode matched track titles against filenames by stripping only a
+        # leading "NN - ", which never worked against Plex-sanitised names. The
+        # app does the matching now, so the mode is gone rather than left broken.
+        with self.assertRaises(SystemExit):
+            local_embeddings.parse_args(["--source-mode", "local"])
 
     def test_args_default_to_tract_compatible_values(self):
         args = local_embeddings.parse_args(
-            ["--database-url", "postgresql://example", "--duration", "2"]
+            ["--duration", "2"]
         )
         self.assertEqual(args.batch_size, local_embeddings.DEFAULT_BATCH_SIZE)
         self.assertEqual(args.duration, 2.0)
@@ -338,8 +264,6 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
     def test_args_accept_a_raised_infer_batch_size_and_reject_extremes(self):
         args = local_embeddings.parse_args(
             [
-                "--database-url",
-                "postgresql://example",
                 "--infer-batch-size",
                 "256",
             ]
@@ -351,8 +275,6 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
                 with contextlib.redirect_stderr(io.StringIO()):
                     local_embeddings.parse_args(
                         [
-                            "--database-url",
-                            "postgresql://example",
                             "--infer-batch-size",
                             value,
                         ]
@@ -382,7 +304,7 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
     def test_infer_batch_size_reads_the_environment_default(self):
         with patch.dict(os.environ, {"EMBEDDING_INFER_BATCH_SIZE": "128"}):
             args = local_embeddings.parse_args(
-                ["--database-url", "postgresql://example"]
+                []
             )
         self.assertEqual(args.infer_batch_size, 128)
 

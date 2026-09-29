@@ -20,15 +20,12 @@ The existing centered-embedding trigger remains responsible for deriving
 from __future__ import annotations
 
 import argparse
-import json
 import math
 import os
-import re
 import statistics
 import sys
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NoReturn, Sequence
 
@@ -54,6 +51,8 @@ DEFAULT_DURATION_SECONDS = 60.0
 # 60s clip yields ~596 heavily overlapping windows that are then mean
 # pooled. Raising this removes duplicated work and changes what the
 # pooled vector averages over, so it is recorded per embedding.
+# The worker API pages at most 32 keysets per request.
+MAX_API_PAGE_SIZE = 32
 DEFAULT_HOP_SECONDS = 0.1
 # The OpenL3 frontend this worker loads. Recorded on the embedding space so a
 # vector can be attributed to the implementation that produced it; API mode
@@ -80,7 +79,10 @@ DEFAULT_INFER_BATCH_SIZE = 64
 MAX_INFER_BATCH_SIZE = 1024
 DEFAULT_LOCK_KEY = 0x4D555331454D4201
 DEFAULT_JOB_NAME = "python-local-embeddings"
-DEFAULT_SOURCE_MODE = "local"
+# API mode is the only mode left: local mode resolved audio by matching track
+# titles against filenames, which does not work against the sanitised names
+# the music providers write. The app does the matching now.
+DEFAULT_SOURCE_MODE = "api"
 DEFAULT_WORKER_PREFETCH_WORKERS = 4
 DEFAULT_WORKER_PREFETCH_DEPTH = 4
 DEFAULT_WORKER_DOWNLOAD_TIMEOUT = 60.0
@@ -105,21 +107,10 @@ class _ArgumentParser(argparse.ArgumentParser):
         self.exit(USAGE_EXIT_CODE, f"{self.prog}: error: {message}\n")
 
 
-class LockNotAcquired(RuntimeError):
-    """Raised when another worker owns the singleton advisory lock."""
 
 
-class StopRun(RuntimeError):
-    """Raised for a requested fail-fast/max-errors stop."""
 
 
-def require_postgres_bindings() -> None:
-    """Require the optional PostgreSQL dependency for local mode only."""
-    if psycopg2 is None or DictCursor is None:
-        raise RuntimeError(
-            "local embedding mode requires psycopg2; install psycopg2-binary "
-            "or use --source-mode api"
-        )
 
 
 def env_int(name: str, default: int) -> int:
@@ -202,17 +193,6 @@ def parse_args(
         help="Source mode: local PostgreSQL/filesystem or authenticated worker API",
     )
     parser.add_argument(
-        "--database-url",
-        default=os.getenv("DATABASE_URL"),
-        help="PostgreSQL URL (local mode; defaults to DATABASE_URL)",
-    )
-    parser.add_argument(
-        "--audio-dir",
-        type=Path,
-        default=Path(os.getenv("AUDIO_DIR", "/music")),
-        help="Root directory containing local audio files (local mode)",
-    )
-    parser.add_argument(
         "--duration",
         type=positive_float,
         default=env_float("EMBEDDING_DURATION_SECONDS", DEFAULT_DURATION_SECONDS),
@@ -268,33 +248,10 @@ def parse_args(
         help="One-second windows per OpenL3 model.predict call (higher saturates a GPU)",
     )
     parser.add_argument(
-        "--job-name",
-        default=os.getenv("EMBEDDING_JOB_NAME", DEFAULT_JOB_NAME),
-        help="job_run name used for the local durable checkpoint",
-    )
-    parser.add_argument(
-        "--lock-key",
-        type=int,
-        default=env_int("EMBEDDING_LOCK_KEY", DEFAULT_LOCK_KEY),
-        help="PostgreSQL bigint advisory-lock key (local mode)",
-    )
-    parser.add_argument(
         "--max-errors",
         type=nonnegative_int,
         default=env_int("EMBEDDING_MAX_ERRORS", 0),
         help="Stop after this many failures; zero means continue",
-    )
-    parser.add_argument(
-        "--db-retries",
-        type=positive_int,
-        default=env_int("EMBEDDING_DB_RETRIES", 3),
-        help="Retries for transient PostgreSQL errors (local mode)",
-    )
-    parser.add_argument(
-        "--db-retry-delay",
-        type=float,
-        default=env_float("EMBEDDING_DB_RETRY_DELAY", 1.0),
-        help="Initial exponential retry delay in seconds (local mode)",
     )
     parser.add_argument(
         "--fail-fast",
@@ -379,22 +336,21 @@ def parse_args(
     args = parser.parse_args(argv)
 
     args.source_mode = str(args.source_mode).strip().lower()
-    if args.source_mode not in {"local", "api"}:
-        parser.error("--source-mode must be local or api")
+    if args.source_mode != "api":
+        parser.error(
+            "--source-mode must be api: local mode was removed because it could "
+            "not match track titles to the sanitised filenames the music "
+            "providers write. The app resolves them instead."
+        )
     if args.audio_backend not in {"fast", "librosa"}:
         parser.error("--audio-backend must be fast or librosa")
-    if args.batch_size > (32 if args.source_mode == "api" else 512):
-        page_limit = 32 if args.source_mode == "api" else 512
+    if args.batch_size > MAX_API_PAGE_SIZE:
+        page_limit = MAX_API_PAGE_SIZE
         parser.error(
-            f"--batch-size is the keyset page and write batch (max {page_limit} in "
-            f"{args.source_mode} mode) and is not the OpenL3 predict batch. To change "
-            "inference batching use --infer-batch-size or "
-            "EMBEDDING_INFER_BATCH_SIZE."
+            f"--batch-size is the keyset page and write batch (max {page_limit}) "
+            "and is not the OpenL3 predict batch. To change inference batching use "
+            "--infer-batch-size or EMBEDDING_INFER_BATCH_SIZE."
         )
-    if not args.job_name.strip():
-        parser.error("--job-name must not be empty")
-    if not -(2**63) <= args.lock_key < 2**63:
-        parser.error("--lock-key must fit in a signed PostgreSQL bigint")
     if args.duration <= 0 or not math.isfinite(args.duration):
         parser.error("--duration must be positive and finite")
 
@@ -422,8 +378,6 @@ def parse_args(
             "--hop must not exceed --duration; every window would be a repeat "
             "of the same audio"
         )
-    if args.db_retry_delay < 0 or not math.isfinite(args.db_retry_delay):
-        parser.error("--db-retry-delay must be a finite non-negative number")
     if args.max_errors < 0:
         parser.error("--max-errors must be zero or greater")
     if args.infer_batch_size < 1 or args.infer_batch_size > MAX_INFER_BATCH_SIZE:
@@ -452,13 +406,9 @@ def parse_args(
             parser.error("--worker-token or WORKER_TOKEN is required in API mode")
         if args.duration > 120:
             parser.error("--duration must be 120 seconds or less in API mode")
-    elif not args.database_url:
-        parser.error("--database-url or DATABASE_URL is required in local mode")
     return args
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
 
 
 def short_error(error: BaseException) -> str:
@@ -477,9 +427,6 @@ def validate_embedding(value: Any) -> np.ndarray:
     return vector
 
 
-def vector_literal(value: Any) -> str:
-    vector = validate_embedding(value)
-    return "[" + ",".join(f"{float(x):.8f}" for x in vector) + "]"
 
 
 class StageStats:
@@ -512,63 +459,10 @@ class StageStats:
         return result
 
 
-def sanitize(name: Any) -> str:
-    if not isinstance(name, str):
-        return ""
-    return name.replace("/", "_").replace(":", "_").replace("?", "_").strip()
 
 
-def build_file_index(base_path: Path | str) -> dict[str, list[str]]:
-    base = Path(base_path)
-    if not base.exists():
-        raise FileNotFoundError(f"audio directory does not exist: {base}")
-
-    index: dict[str, list[str]] = {}
-    for root, dirs, files in os.walk(base):
-        dirs.sort()
-        for filename in sorted(files):
-            name_part, extension = os.path.splitext(filename)
-            if extension.lower() not in SUPPORTED_EXTENSIONS:
-                continue
-
-            path = os.path.join(root, filename)
-            name_lower = name_part.lower()
-            index.setdefault(name_lower, []).append(path)
-
-            match = re.match(r"^(\d{2})\s*-\s*(.+)$", name_part, re.IGNORECASE)
-            if match:
-                alternate = match.group(2).lower()
-                index.setdefault(alternate, []).append(path)
-
-    print(f"Indexed {len(index)} unique track names from {base}", flush=True)
-    return index
 
 
-def find_local_audio_file(
-    track_metadata: dict[str, Any], file_index: dict[str, list[str]]
-) -> str | None:
-    track_name = sanitize(track_metadata.get("name"))
-    artist_names = track_metadata.get("artist", [])
-    if isinstance(artist_names, str):
-        artist_names = [artist_names]
-    artist_names = [sanitize(value) for value in artist_names if value]
-
-    if not track_name or not artist_names:
-        return None
-
-    candidates = file_index.get(track_name.lower(), [])
-    if not candidates:
-        return None
-    if len(candidates) == 1:
-        return candidates[0]
-
-    album_name = sanitize(track_metadata.get("album", ""))
-    if album_name:
-        album_lower = album_name.lower()
-        for path in candidates:
-            if album_lower in path.lower():
-                return path
-    return candidates[0]
 
 
 def configure_tensorflow_threads() -> dict[str, int]:
@@ -750,680 +644,48 @@ def process_audio_file(
     return vector, timings
 
 
-def parse_detail(raw: Any) -> dict[str, Any]:
-    if isinstance(raw, dict):
-        return dict(raw)
-    if not raw:
-        return {}
-    try:
-        value = json.loads(raw)
-    except (TypeError, ValueError):
-        return {}
-    return value if isinstance(value, dict) else {}
 
 
-def serialize_detail(detail: dict[str, Any]) -> str:
-    return json.dumps(detail, sort_keys=True, separators=(",", ":"))
 
 
-def acquire_single_writer_lock(conn: Any, lock_key: int) -> None:
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT pg_try_advisory_lock(%s)", (lock_key,))
-        acquired = bool(cursor.fetchone()[0])
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
-    if not acquired:
-        raise LockNotAcquired(
-            f"another embedding worker holds advisory lock {lock_key}"
-        )
 
 
-def release_single_writer_lock(conn: Any, lock_key: int) -> None:
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT pg_advisory_unlock(%s)", (lock_key,))
-        conn.commit()
-    except Exception:
-        conn.rollback()
-    finally:
-        cursor.close()
 
 
-def retry_db_operation(
-    conn: Any,
-    operation: Any,
-    attempts: int,
-    initial_delay: float,
-    label: str,
-) -> Any:
-    require_postgres_bindings()
-    retryable = (psycopg2.OperationalError, psycopg2.InterfaceError)
-    for attempt in range(1, attempts + 1):
-        try:
-            return operation()
-        except retryable as error:
-            try:
-                conn.rollback()
-            except Exception:
-                pass
-            if attempt >= attempts:
-                raise
-            delay = initial_delay * (2 ** (attempt - 1))
-            print(
-                f"transient database error during {label}; retry {attempt}/{attempts - 1} "
-                f"in {delay:.1f}s: {short_error(error)}",
-                flush=True,
-            )
-            if delay > 0:
-                time.sleep(delay)
 
 
-def connect_database(
-    database_url: str, attempts: int, initial_delay: float
-) -> Any:
-    require_postgres_bindings()
-    last_error: BaseException | None = None
-    for attempt in range(1, attempts + 1):
-        try:
-            return psycopg2.connect(
-                database_url,
-                connect_timeout=env_int("DATABASE_CONNECT_TIMEOUT", 10),
-                application_name=os.getenv("EMBEDDING_JOB_NAME", DEFAULT_JOB_NAME),
-            )
-        except psycopg2.OperationalError as error:
-            last_error = error
-            if attempt >= attempts:
-                raise
-            delay = initial_delay * (2 ** (attempt - 1))
-            print(
-                f"database connection failed; retry {attempt}/{attempts - 1} "
-                f"in {delay:.1f}s: {short_error(error)}",
-                flush=True,
-            )
-            if delay > 0:
-                time.sleep(delay)
-    assert last_error is not None
-    raise last_error
 
 
-def start_or_resume_job(
-    conn: Any, job_name: str, restart: bool
-) -> tuple[int, dict[str, Any]]:
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            SELECT id, detail
-            FROM job_run
-            WHERE job = %s AND finished_at IS NULL
-            ORDER BY id DESC
-            LIMIT 1
-            """,
-            (job_name,),
-        )
-        row = cursor.fetchone()
-        if row and not restart:
-            detail = parse_detail(row[1])
-            detail["resumed_at"] = utc_now()
-            cursor.execute(
-                "UPDATE job_run SET started_at = NOW(), detail = %s WHERE id = %s",
-                (serialize_detail(detail), row[0]),
-            )
-            conn.commit()
-            return int(row[0]), detail
-
-        if row and restart:
-            cursor.execute(
-                """
-                UPDATE job_run
-                SET finished_at = NOW(), ok = FALSE, detail = %s
-                WHERE id = %s
-                """,
-                (serialize_detail({"restarted_at": utc_now()}), row[0]),
-            )
-
-        initial = {
-            "cursor": None,
-            "processed": 0,
-            "failed": 0,
-            "failures": [],
-            "started_at": utc_now(),
-        }
-        cursor.execute(
-            """
-            INSERT INTO job_run (job, started_at, detail)
-            VALUES (%s, NOW(), %s)
-            RETURNING id
-            """,
-            (job_name, serialize_detail(initial)),
-        )
-        job_id = int(cursor.fetchone()[0])
-        conn.commit()
-        return job_id, initial
-    except Exception as error:
-        conn.rollback()
-        if error.__class__.__name__ == "UndefinedTable":
-            raise RuntimeError(
-                "job_run table is missing; run the database migrations before embedding"
-            ) from error
-        raise
-    finally:
-        cursor.close()
 
 
-def fetch_page(conn: Any, after: str | None, limit: int) -> list[dict[str, Any]]:
-    require_postgres_bindings()
-    cursor = conn.cursor(cursor_factory=DictCursor)
-    try:
-        if after is None:
-            cursor.execute(
-                """
-                SELECT uri, name, artist, album
-                FROM track
-                WHERE embedding IS NULL
-                  AND (skip IS NULL OR skip = FALSE)
-                ORDER BY uri COLLATE "C"
-                LIMIT %s
-                """,
-                (limit,),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT uri, name, artist, album
-                FROM track
-                WHERE embedding IS NULL
-                  AND (skip IS NULL OR skip = FALSE)
-                  AND (uri COLLATE "C") > (%s::text COLLATE "C")
-                ORDER BY uri COLLATE "C"
-                LIMIT %s
-                """,
-                (after, limit),
-            )
-        rows = [dict(row) for row in cursor.fetchall()]
-        conn.commit()
-        return rows
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
 
 
-def count_unembedded(conn: Any) -> int:
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            SELECT count(*)::bigint
-            FROM track
-            WHERE embedding IS NULL
-              AND (skip IS NULL OR skip = FALSE)
-            """
-        )
-        count = int(cursor.fetchone()[0])
-        conn.commit()
-        return count
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
 
 
-def resolve_space_version(
-    conn: Any, hop_seconds: float, max_sample_seconds: float
-) -> int:
-    """Return the embedding space this run's recipe is registered as.
-
-    The centring trigger falls back to "newest space" for writers that do not
-    declare one, which is only safe while every embedding in the system comes
-    from one recipe. `EMBEDDING_MODE` is configured here, on the worker, while
-    the space is registered in the database, so the two can disagree without
-    anyone noticing. Resolving it explicitly turns that into a loud failure.
-    """
-
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT version
-            FROM embedding_space
-            WHERE model = %s
-              AND hop_seconds IS NOT DISTINCT FROM %s
-              AND max_sample_seconds IS NOT DISTINCT FROM %s
-              AND COALESCE(frontend, 'kapre') = %s
-            ORDER BY version DESC
-            LIMIT 1
-            """,
-            (EMBEDDING_MODEL, hop_seconds, max_sample_seconds, EMBEDDING_FRONTEND),
-        )
-        row = cursor.fetchone()
-    if row is None:
-        raise RuntimeError(
-            "no embedding space is registered for this recipe "
-            f"(hop {hop_seconds}s, {max_sample_seconds}s, {EMBEDDING_FRONTEND}). "
-            "Register it before embedding, or the vectors would be centred "
-            "against a mean they were not produced for."
-        )
-    return int(row[0])
 
 
-def write_batch(
-    conn: Any,
-    job_id: int,
-    updates: Sequence[tuple[str, str]],
-    detail: dict[str, Any],
-    space_version: int | None = None,
-) -> tuple[int, int]:
-    """Write vectors and advance the cursor in one short transaction."""
-    cursor = conn.cursor()
-    written = 0
-    conflicts = 0
-    try:
-        for uri, literal in updates:
-            cursor.execute(
-                """
-                UPDATE track
-                SET embedding = %s::vector,
-                    embedding_space_version = %s,
-                    updated_at = NOW()
-                WHERE uri = %s AND embedding IS NULL
-                """,
-                (literal, space_version, uri),
-            )
-            if cursor.rowcount == 1:
-                written += 1
-            else:
-                conflicts += 1
-
-        checkpoint = dict(detail)
-        checkpoint["processed"] = int(checkpoint.get("processed", 0) or 0) + written
-        checkpoint["last_batch_written"] = written
-        checkpoint["last_batch_conflicts"] = conflicts
-        checkpoint["checkpointed_at"] = utc_now()
-        cursor.execute(
-            """
-            UPDATE job_run
-            SET started_at = NOW(), detail = %s
-            WHERE id = %s
-            """,
-            (serialize_detail(checkpoint), job_id),
-        )
-        conn.commit()
-        return written, conflicts
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
 
 
-def finish_job(conn: Any, job_id: int, ok: bool, detail: dict[str, Any]) -> None:
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            """
-            UPDATE job_run
-            SET finished_at = NOW(), ok = %s, detail = %s
-            WHERE id = %s
-            """,
-            (ok, serialize_detail(detail), job_id),
-        )
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
 
 
-def record_unexpected_failure(
-    conn: Any, job_id: int | None, error: BaseException, detail: dict[str, Any]
-) -> None:
-    if job_id is None:
-        return
-    try:
-        conn.rollback()
-        detail = dict(detail)
-        detail["last_error"] = short_error(error)
-        detail["last_error_at"] = utc_now()
-        cursor = conn.cursor()
-        try:
-            cursor.execute(
-                "UPDATE job_run SET started_at = NOW(), detail = %s WHERE id = %s",
-                (serialize_detail(detail), job_id),
-            )
-            conn.commit()
-        finally:
-            cursor.close()
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
 
 
-def track_failure(
-    failures: list[dict[str, Any]], track: dict[str, Any], error: BaseException
-) -> None:
-    failures.append(
-        {
-            "uri": track.get("uri"),
-            "name": track.get("name"),
-            "error": short_error(error),
-            "at": utc_now(),
-        }
-    )
-    if len(failures) > MAX_FAILURE_DETAILS:
-        del failures[:-MAX_FAILURE_DETAILS]
 
 
 def run(args: argparse.Namespace) -> int:
-    if str(getattr(args, "source_mode", DEFAULT_SOURCE_MODE)).strip().lower() == "api":
-        try:
-            from worker_api import run_api_worker
-        except ModuleNotFoundError as error:
-            if error.name != "worker_api":
-                raise
-            from embeddings.worker_api import run_api_worker
-
-        return run_api_worker(sys.modules[__name__], args)
-
-    require_postgres_bindings()
-    run_started = time.perf_counter()
-    stats = StageStats()
-    conn: Any | None = None
-    lock_acquired = False
-    job_id: int | None = None
-    detail: dict[str, Any] = {}
-    written_this_run = 0
-    inferred_this_run = 0
-    failures_this_run = 0
-    examined_this_run = 0
-    limit_reached = False
-
-    try:
-        conn = connect_database(
-            args.database_url, args.db_retries, args.db_retry_delay
+    if str(getattr(args, "source_mode", DEFAULT_SOURCE_MODE)).strip().lower() != "api":
+        # Local mode resolved audio by matching track titles against filenames,
+        # and only stripped a leading "NN - " from them. Music Assistant
+        # providers sanitise filenames -- Plex replaces /, :, ? and \" with
+        # "_", escapes a trailing dot, and strips diacritics -- so those keys
+        # never matched and every lookup failed. The worker API has the server
+        # do the matching instead (web/src/lib/server/audio-library.ts), which is
+        # the only implementation that handles it, so this path is gone rather
+        # than left as a broken opt-in.
+        raise ValueError(
+            "local mode has been removed: it could not match files to tracks. "
+            "Use --source-mode api, which fetches audio from the app."
         )
-        conn.autocommit = False
-        acquire_single_writer_lock(conn, args.lock_key)
-        lock_acquired = True
-        print(f"Acquired singleton embedding lock {args.lock_key}", flush=True)
-
-        space_version = resolve_space_version(conn, args.hop, args.duration)
-        print(
-            f"embedding space v{space_version} "
-            f"(hop={args.hop}s, max_sample={args.duration}s, {EMBEDDING_FRONTEND})",
-            flush=True,
-        )
-
-        index_started = time.perf_counter()
-        file_index = build_file_index(args.audio_dir)
-        stats.add("file_index", time.perf_counter() - index_started)
-
-        if not args.dry_run:
-            job_id, detail = start_or_resume_job(conn, args.job_name, args.restart)
-            print(f"job_run_id={job_id} action={'restart' if args.restart else 'resume'}", flush=True)
-        else:
-            detail = {
-                "cursor": None,
-                "processed": 0,
-                "failed": 0,
-                "failures": [],
-                "dry_run": True,
-            }
-            print("dry-run: no job_run or embedding writes will be made", flush=True)
-
-        thread_config = configure_tensorflow_threads()
-        if thread_config:
-            print(f"TensorFlow thread limits: {thread_config}", flush=True)
-        model = load_openl3_model(stats)
-
-        print(
-            f"embedding settings: mode={args.mode} "
-
-            f"(hop={args.hop}s, max_sample={args.duration}s, "
-
-            f"infer_batch={args.infer_batch_size}, source={args.source_mode})",            flush=True,
-        )
-        cursor_uri = detail.get("cursor") if isinstance(detail.get("cursor"), str) else None
-        processed = int(detail.get("processed", 0) or 0)
-        failed_total = int(detail.get("failed", 0) or 0)
-        raw_failures = detail.get("failures", [])
-        failures = list(raw_failures) if isinstance(raw_failures, list) else []
-        after = cursor_uri
-
-        while True:
-            page_started = time.perf_counter()
-            page = retry_db_operation(
-                conn,
-                lambda: fetch_page(conn, after, args.batch_size),
-                args.db_retries,
-                args.db_retry_delay,
-                "page fetch",
-            )
-            stats.add("page_fetch", time.perf_counter() - page_started)
-            if not page:
-                break
-
-            if args.limit is not None:
-                remaining_limit = args.limit - examined_this_run
-                if remaining_limit <= 0:
-                    limit_reached = True
-                    break
-                if len(page) > remaining_limit:
-                    page = page[:remaining_limit]
-                    limit_reached = True
-
-            page_last_uri = page[-1]["uri"]
-            updates: list[tuple[str, str]] = []
-            for track in page:
-                examined_this_run += 1
-                lookup_started = time.perf_counter()
-                try:
-                    audio_path = find_local_audio_file(track, file_index)
-                finally:
-                    stats.add("file_lookup", time.perf_counter() - lookup_started)
-
-                if audio_path is None:
-                    failure = ValueError("no local audio file matched")
-                    track_failure(failures, track, failure)
-                    failed_total += 1
-                    failures_this_run += 1
-                    print(
-                        json.dumps(
-                            {
-                                "event": "track_failed",
-                                "uri": track.get("uri"),
-                                "reason": short_error(failure),
-                            }
-                        ),
-                        flush=True,
-                    )
-                else:
-                    try:
-                        embedding, timings = process_audio_file(
-                            audio_path,
-                            model,
-                            args.duration,
-                            args.audio_backend,
-                            stats,
-                            args.infer_batch_size,
-                            args.hop,
-                        )
-                        serialize_started = time.perf_counter()
-                        literal = vector_literal(embedding)
-                        stats.add("vector_serialize", time.perf_counter() - serialize_started)
-                        updates.append((track["uri"], literal))
-                        inferred_this_run += 1
-                        print(
-                            json.dumps(
-                                {
-                                    "event": "track_inferred",
-                                    "uri": track.get("uri"),
-                                    "path": str(audio_path),
-                                    "timings": timings,
-                                }
-                            ),
-                            flush=True,
-                        )
-                    except Exception as error:
-                        track_failure(failures, track, error)
-                        failed_total += 1
-                        failures_this_run += 1
-                        print(
-                            json.dumps(
-                                {
-                                    "event": "track_failed",
-                                    "uri": track.get("uri"),
-                                    "path": str(audio_path),
-                                    "reason": short_error(error),
-                                }
-                            ),
-                            flush=True,
-                        )
-
-                if args.fail_fast and failures_this_run > 0:
-                    raise StopRun("stopping after the first failure (--fail-fast)")
-                if args.max_errors and failures_this_run >= args.max_errors:
-                    raise StopRun(
-                        f"stopping after {failures_this_run} failures (--max-errors)"
-                    )
-
-            # Advance the cursor only after every successful vector and the
-            # failure details for this page are checkpointed together.
-            after = page_last_uri
-            detail = {
-                "cursor": after,
-                "processed": processed,
-                "failed": failed_total,
-                "failures": failures[-MAX_FAILURE_DETAILS:],
-                "last_batch_at": utc_now(),
-                "last_batch_written": len(updates),
-            }
-            batch_written = 0
-            if args.dry_run:
-                batch_written = 0
-            else:
-                write_started = time.perf_counter()
-                batch_written, conflicts = retry_db_operation(
-                    conn,
-                    lambda: write_batch(conn, job_id, updates, detail, space_version),
-                    args.db_retries,
-                    args.db_retry_delay,
-                    "batch write",
-                )
-                stats.add("database_batch_write", time.perf_counter() - write_started)
-                processed += batch_written
-                written_this_run += batch_written
-                detail["last_batch_conflicts"] = conflicts
-
-            print(
-                f"batch cursor={after} inferred={len(updates)} written={batch_written} "
-                f"processed={processed} failed={failed_total}",
-                flush=True,
-            )
-            if limit_reached:
-                break
-
-        remaining = retry_db_operation(
-            conn,
-            lambda: count_unembedded(conn),
-            args.db_retries,
-            args.db_retry_delay,
-            "remaining-count query",
-        )
-        complete = remaining == 0 and not limit_reached
-        detail.update(
-            {
-                "cursor": after,
-                "processed": processed,
-                "failed": failed_total,
-                "failures": failures[-MAX_FAILURE_DETAILS:],
-                "remaining": remaining,
-                "complete": complete,
-                "finished_at": utc_now(),
-            }
-        )
-        if not args.dry_run:
-            retry_db_operation(
-                conn,
-                lambda: finish_job(conn, job_id, complete, detail),
-                args.db_retries,
-                args.db_retry_delay,
-                "job completion",
-            )
-
-        print(
-            json.dumps(
-                {
-                    "event": "run_summary",
-                    "job_run_id": job_id,
-                    "examined_this_run": examined_this_run,
-                    "written_this_run": written_this_run,
-                    "inferred_this_run": inferred_this_run,
-                    "processed_total": processed,
-                    "failed_total": failed_total,
-                    "remaining": remaining,
-                    "infer_batch_size": args.infer_batch_size,
-                    "complete": complete,
-                }
-            ),
-            flush=True,
-        )
-        return 0 if complete else 2
-
-    except LockNotAcquired as error:
-        print(f"embedding worker skipped: {error}", flush=True)
-        return 0
-    except StopRun as error:
-        print(f"embedding worker stopped: {error}", flush=True)
-        if conn is not None and job_id is not None:
-            detail.update({"stopped_at": utc_now(), "stop_reason": short_error(error)})
-            retry_db_operation(
-                conn,
-                lambda: finish_job(conn, job_id, False, detail),
-                args.db_retries,
-                args.db_retry_delay,
-                "job stop",
-            )
-        return 2
-    except Exception as error:
-        record_unexpected_failure(conn, job_id, error, detail)
-        print(f"embedding worker failed: {short_error(error)}", flush=True)
-        return 1
-    finally:
-        stats.add("run_total", time.perf_counter() - run_started)
-        print(
-            "PROFILE "
-            + json.dumps(
-                {
-                    "job_run_id": job_id,
-                    "stages": stats.summary(),
-                    "written_this_run": written_this_run,
-                    "inferred_this_run": inferred_this_run,
-                    "failures_this_run": failures_this_run,
-                },
-                sort_keys=True,
-            ),
-            flush=True,
-        )
-        if conn is not None and lock_acquired:
-            try:
-                release_single_writer_lock(conn, args.lock_key)
-            except Exception as error:
-                print(f"warning: could not explicitly release lock: {short_error(error)}")
-        if conn is not None:
-            try:
-                conn.close()
-            except Exception:
-                pass
 
 
 def main(

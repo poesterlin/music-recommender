@@ -1,7 +1,0 @@
-services:
-  processor:
-    build: .
-    environment:
-      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL before starting this Compose file}
-    volumes:
-      - ${AUDIO_DIR:-./music}:/music:ro

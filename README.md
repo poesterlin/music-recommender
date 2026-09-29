@@ -170,20 +170,16 @@ Browser requests use the session cookie automatically.
 
 ## Python worker
 
-The worker has two source modes.
+### One-off runs
 
-### Local mode
-
-Local mode keeps the existing PostgreSQL advisory lock and `job_run` checkpoint.
-It reads files from `AUDIO_DIR` and writes embeddings directly to PostgreSQL.
+The default `worker` service loops every twelve hours. To do a bounded pass
+instead, override its command:
 
 ```sh
-python embeddings/generate-local-embeddings.py --dry-run --limit 10
+docker compose run --rm worker python worker.py --source-mode api --dry-run --limit 10
 ```
 
-### API mode
-
-API mode is portable. It needs only the worker API URL and a worker-scoped
+It needs only the worker API URL and a worker-scoped
 bearer key; it does not need PostgreSQL, a music mount, or access to your files.
 Create the key under **API keys** in the UI, or use the bootstrap `WORKER_TOKEN`
 for an existing deployment.
@@ -257,8 +253,7 @@ The default Compose stack is the web process and the embedding worker. The
 worker fetches bounded audio snippets over the worker API and uploads vectors
 back, so it needs neither a music mount nor a database — which is also why it
 can run on another host or in a notebook. Everything else is opt-in: the
-clustering jobs, the Rust embedding worker, and `embeddings-loop` (the loop that
-reads the mount and writes to PostgreSQL directly) sit behind profiles.
+clustering jobs and the Rust embedding worker sit behind profiles.
 
 The maintenance jobs (favourites sync, library index, cluster assignment) run
 inside the web process on `Bun.cron` rather than in a container each, so there

@@ -158,6 +158,6 @@ jobs:
       - name: Prepare example environment
         run: cp .env.example .env
       - name: Validate Compose profiles
-        run: docker compose --profile database --profile clustering --profile embedding-rust --profile embedding --profile local config --quiet
+        run: docker compose --profile database --profile clustering --profile embedding-rust config --quiet
       - name: Build release services
-        run: docker compose --profile clustering --profile embedding-rust --profile embedding --profile local build
+        run: docker compose --profile clustering --profile embedding-rust build

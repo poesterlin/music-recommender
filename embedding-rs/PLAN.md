@@ -7,6 +7,12 @@ Replace the Python embedding worker with a Rust implementation while preserving
 migration is staged and does not write production embeddings until parity gates
 pass.
 
+> **Status note.** The Python worker's *local* mode has since been removed: it
+> resolved audio by matching track titles against filenames, which does not work
+> against the sanitised names the music providers write. The worker API is now
+> the only embedding path, and it asks the app to do the matching. Gates 4 and 5
+> below ("stop the Python writer") therefore refer to the API-mode worker.
+
 ## Current reference pipeline
 
 The active Python path is `embeddings/generate-local-embeddings.py`:
