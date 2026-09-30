@@ -64,13 +64,28 @@ services:
   #
   # It sleeps between passes rather than exiting: `worker.py` returns after one
   # pass, so a `restart: unless-stopped` one-shot would re-run in a tight loop.
+  #
+  # The idle interval follows the backlog. `worker.py` exits 0 when it drained
+  # and 2 when it stopped with tracks still pending, so a fixed 12h sleep made
+  # new music wait behind an idle library — 1,900 tracks queued while the loop
+  # was asleep with nothing to do. Pending resumes in 5m, drained backs off to
+  # 12h, and a failure retries in 15m rather than hiding for 12h.
   worker:
     image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
     entrypoint: >
       sh -c "while true; do
         echo \"[worker] $$(date): embedding...\";
-        python worker.py --source-mode api || echo failed;
-        sleep 43200;
+        python worker.py --source-mode api;
+        rc=$$?;
+        if [ \"$$rc\" -eq 0 ]; then
+          sleep 43200;
+        elif [ \"$$rc\" -eq 2 ]; then
+          echo '[worker] tracks still pending, continuing in 5m';
+          sleep 300;
+        else
+          echo \"[worker] failed (exit $$rc), retrying in 15m\";
+          sleep 900;
+        fi
       done"
     restart: unless-stopped
     init: true
