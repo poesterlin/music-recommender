@@ -235,6 +235,12 @@ class _FakeCore:
     # recipe the worker uploads cannot drift from the model it loaded.
     EMBEDDING_FRONTEND = "kapre"
 
+    # The worker falls back to these when it has to infer before it has heard
+    # from the server. Mirroring them keeps the double honest about the contract
+    # rather than letting the worker depend on attributes it does not have.
+    DEFAULT_HOP_SECONDS = 0.5
+    DEFAULT_DURATION_SECONDS = 90.0
+
     def __init__(self):
         self.calls = []
 
@@ -276,6 +282,7 @@ class _FakeCore:
 class _FakeWorkerClient:
     def __init__(self):
         self.uploads = []
+        self.server_recipe = None
         self.recipe = None
 
     def get_tracks(self, after=None, limit=None):
@@ -291,7 +298,30 @@ class _FakeWorkerClient:
         # advances actually terminates instead of seeing the same page forever.
         all_tracks = [track("library://track/1"), track("library://track/2")]
         remaining = [t for t in all_tracks if after is None or t["uri"] > after]
-        return {"tracks": remaining, "nextCursor": None}
+        # Honour the requested page size, as the real endpoint does. Returning
+        # more than was asked for is a contract violation the validator rejects,
+        # and a fake that hides it would let a paging bug pass here and fail in
+        # production.
+        if limit is not None:
+            remaining = remaining[:limit]
+        # Mirror the real endpoint's paging shape. The old stub hard-coded
+        # nextCursor to None, which the real validator rejects once a page has
+        # tracks -- the cursor has to be the last uri or null only when the page
+        # is empty.
+        page = {
+            "tracks": remaining,
+            "nextCursor": remaining[-1]["uri"] if remaining else None,
+            "hasMore": limit is not None and len(remaining) == limit,
+        }
+        # The real endpoint sends its registered recipe with every page. Absent
+        # here by default, which is the pre-feature case.
+        if self.server_recipe is not None:
+            page["recipe"] = self.server_recipe
+        # Run the payload through the real validator, as WorkerAPIClient does.
+        # Returning a hand-built dict instead would let a malformed recipe -- or a
+        # malformed track, or a bad cursor -- reach the worker unvalidated, and
+        # the tests would pass while the production path rejected it.
+        return worker_api.validate_tracks_response(page, requested_limit=limit)
 
     def download_audio(self, uri, duration, path):
         if uri in getattr(self, "missing", ()):
@@ -345,6 +375,70 @@ class ApiWorkerHopTests(unittest.TestCase):
         self.assertEqual(client.recipe["hopSeconds"], 0.5)
         self.assertEqual(client.recipe["model"], worker_api.API_MODEL)
         self.assertEqual(client.recipe["frontend"], "kapre")
+
+
+class ServerRecipeTests(unittest.TestCase):
+    """The worker follows the server's recipe unless it is told otherwise.
+
+    The server resolves an upload by exact match against `embedding_space` with no
+    fallback and answers 409 on a miss. That is correct -- mixing two vector
+    spaces is worse than failing -- but it means any disagreement between the
+    worker's defaults and the server's rejects every upload, with the only
+    recovery being for a human to register the right recipe by hand. So the
+    server sends its recipe with every page and the worker adopts it.
+    """
+
+    def _run(self, *, args_hop, args_duration, server_recipe):
+        with tempfile.TemporaryDirectory() as tmp:
+            client = _FakeWorkerClient()
+            client.recipe = worker_api.build_recipe(0.5, 90.0, "kapre")
+            client.server_recipe = server_recipe
+            core = _FakeCore()
+            args = _FakeArgs(
+                hop=args_hop,
+                duration=args_duration,
+                state_file=str(Path(tmp) / "state.json"),
+            )
+            worker_api.run_api_worker(core, args, client)
+            return core.calls, client
+
+    def test_the_worker_adopts_the_servers_recipe(self):
+        calls, client = self._run(
+            args_hop=None,
+            args_duration=None,
+            server_recipe={"model": "openl3-512", "hopSeconds": 0.25,
+                           "maxSampleSeconds": 120.0, "frontend": "kapre"},
+        )
+        self.assertEqual(calls[0]["hop_seconds"], 0.25)
+        # The client stamps every upload, so it has to carry the adopted value
+        # too -- otherwise the run infers at one hop and declares another.
+        self.assertEqual(client.recipe["hopSeconds"], 0.25)
+        self.assertEqual(client.recipe["maxSampleSeconds"], 120.0)
+
+    def test_server_recipe_overrides_local_flags(self):
+        # The escape hatch has to survive, or there is no way to deliberately
+        # embed at a different density from the default.
+        calls, client = self._run(
+            args_hop=1.0,
+            args_duration=None,
+            server_recipe={"model": "openl3-512", "hopSeconds": 0.25,
+                           "maxSampleSeconds": 120.0, "frontend": "kapre"},
+        )
+        self.assertEqual(calls[0]["hop_seconds"], 0.25)
+        self.assertEqual(client.recipe["hopSeconds"], 0.25)
+
+    def test_an_older_server_without_a_recipe_is_not_fatal(self):
+        # Absent is the normal case before this feature existed. The worker falls
+        # back to its own values rather than refusing to run.
+        calls, _ = self._run(args_hop=None, args_duration=None, server_recipe=None)
+        self.assertEqual(calls[0]["hop_seconds"], 0.5)
+
+    def test_a_malformed_recipe_is_rejected(self):
+        # Silently downgrading a broken recipe to a guess is how a mismatch
+        # becomes a 409 much later with nothing pointing at the cause.
+        with self.assertRaises(worker_api.WorkerAPIValidationError):
+            worker_api.parse_recipe({"model": "openl3-512", "hopSeconds": "fast",
+                                     "maxSampleSeconds": 90.0, "frontend": "kapre"})
 
 
 class MissingAudioTests(unittest.TestCase):

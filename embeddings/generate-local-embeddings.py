@@ -46,31 +46,42 @@ EMBEDDING_SIZE = 512
 # produced it. Must match `embedding_space.model`.
 EMBEDDING_MODEL = "openl3-512"
 TARGET_SAMPLE_RATE = 48_000
-DEFAULT_DURATION_SECONDS = 60.0
-# OpenL3's own default. Each window is one second of audio, so at 0.1 a
-# 60s clip yields ~596 heavily overlapping windows that are then mean
-# pooled. Raising this removes duplicated work and changes what the
-# pooled vector averages over, so it is recorded per embedding.
+DEFAULT_DURATION_SECONDS = 90.0
+# OpenL3 is frame-based, so the hop decides how many one-second windows get mean
+# pooled and therefore what the pooled vector averages over. At 0.1 a 90s clip
+# yields ~896 heavily overlapping windows. Raising the hop removes duplicated
+# work, which is why it is recorded per embedding rather than treated as a
+# tuning knob.
 # The worker API pages at most 32 keysets per request.
 MAX_API_PAGE_SIZE = 32
-DEFAULT_HOP_SECONDS = 0.1
+# Must match EMBEDDING_MODES[DEFAULT_MODE]. The CLI resolves the effective hop
+# through the mode table and never reads this constant, so the two drift apart
+# silently if they disagree.
+DEFAULT_HOP_SECONDS = 0.5
 # The OpenL3 frontend this worker loads. Recorded on the embedding space so a
 # vector can be attributed to the implementation that produced it; API mode
 # declares the same value on every upload.
 EMBEDDING_FRONTEND = "kapre"
 
 # Quality/speed presets. The numbers are measured, not guessed: on a 10-core
-# CPU over a 60s clip, hop 0.1 is the shipped baseline, 0.5 is ~4.8x faster
+# CPU over a 60s clip, hop 0.1 was the original baseline, 0.5 is ~4.8x faster
 # for a mean pooled-similarity shift of ~0.004, and 1.0 is ~8.9x for ~0.012.
 # Retrieval order survives all three (identical rank-1 neighbours, 100% top-5
 # overlap), so these trade speed against how finely the vector samples the
-# track, not against whether Sole still works.
+# track, not against whether Sole still works. Those ratios were measured
+# against a 60s clip; the sample length is now 90s, which does not change the
+# per-window cost but means ~1.5x as many windows per track.
 EMBEDDING_MODES = {
     "low": 0.1,
     "medium": 0.5,
     "high": 1.0,
 }
-DEFAULT_MODE = "low"
+# `medium` rather than `low`: the 0.1 baseline existed because OpenL3 defaults to
+# it, not because it was chosen here. Embedding a whole library is dominated by
+# duplicated overlapping windows, and the measured cost of the coarser hop is
+# ~0.004 mean pooled-similarity with retrieval order intact. Anything that wants
+# the finer sampling can pass --mode low explicitly.
+DEFAULT_MODE = "medium"
 DEFAULT_BATCH_SIZE = 8
 # OpenL3's own default is 32 one-second windows per model.predict call. Each
 # window is one second of 48 kHz mono audio, so the default is safe on CPU and

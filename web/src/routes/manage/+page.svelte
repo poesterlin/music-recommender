@@ -4,6 +4,21 @@
 	import { post } from '$lib/api';
 
 	let { data } = $props();
+	let embeddingMode = $state('medium');
+	let sampleSeconds = $state(90);
+	let settingsMessage = $state('');
+	$effect(() => {
+		embeddingMode = data.embeddingSettings.mode;
+		sampleSeconds = data.embeddingSettings.maxSampleSeconds;
+	});
+	async function saveEmbeddingSettings() {
+		const response = await fetch('/api/embedding-settings', {
+			method: 'PUT', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ mode: embeddingMode, maxSampleSeconds: sampleSeconds })
+		});
+		const result = await response.json();
+		settingsMessage = response.ok ? 'Saved. Workers use this recipe on their next run.' : result.error;
+	}
 
 	let artistName = $state('');
 	let lidarrMsg = $state('');
@@ -91,6 +106,21 @@
 		if (lidarrOk) artistName = '';
 	}
 </script>
+
+<section class="mb-8 rounded-xl border p-6">
+	<h2 class="font-display text-2xl">Embedding settings</h2>
+	<p>Global recipe for all workers. Existing embeddings keep their recorded recipe.</p>
+	<label>Mode
+		<select bind:value={embeddingMode}>
+			<option value="low">Low · 0.1s hop</option>
+			<option value="medium">Medium · 0.5s hop</option>
+			<option value="high">High · 1s hop</option>
+		</select>
+	</label>
+	<label>Sample length (seconds) <input type="number" min="1" max="120" bind:value={sampleSeconds} /></label>
+	<button onclick={saveEmbeddingSettings}>Save embedding settings</button>
+	<p role="status">{settingsMessage}</p>
+</section>
 
 <PageHeader
 	title="Manage"

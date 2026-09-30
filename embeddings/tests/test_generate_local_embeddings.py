@@ -216,16 +216,30 @@ class LocalEmbeddingWorkerTests(unittest.TestCase):
             {"low": 0.1, "medium": 0.5, "high": 1.0},
         )
 
-    def test_mode_resolves_the_hop_and_defaults_to_low(self):
-        # With no EMBEDDING_HOP_SECONDS, --mode alone must decide the hop, and
-        # the default has to stay OpenL3's own so behaviour is unchanged.
+    def test_mode_resolves_the_hop_and_defaults_to_medium(self):
+        # With no EMBEDDING_HOP_SECONDS, --mode alone must decide the hop.
         for name, expected in local_embeddings.EMBEDDING_MODES.items():
             args = self._parse(["--mode", name])
             self.assertEqual(args.hop, expected, name)
 
+        # The default is medium, not OpenL3's own 0.1. Embedding a whole library
+        # is dominated by duplicated overlapping windows, and the coarser hop
+        # costs ~0.004 mean pooled-similarity with retrieval order intact. `low`
+        # is still reachable explicitly.
         args = self._parse([])
-        self.assertEqual(args.mode, "low")
-        self.assertEqual(args.hop, local_embeddings.EMBEDDING_MODES["low"])
+        self.assertEqual(args.mode, local_embeddings.DEFAULT_MODE)
+        self.assertEqual(args.mode, "medium")
+        self.assertEqual(args.hop, local_embeddings.EMBEDDING_MODES["medium"])
+
+        # DEFAULT_HOP_SECONDS is only a function-signature fallback, but it must
+        # not disagree with the mode the CLI actually resolves to.
+        self.assertEqual(
+            local_embeddings.DEFAULT_HOP_SECONDS,
+            local_embeddings.EMBEDDING_MODES[local_embeddings.DEFAULT_MODE],
+        )
+
+    def test_the_default_duration_is_ninety_seconds(self):
+        self.assertEqual(self._parse([]).duration, 90.0)
 
     def test_an_exact_hop_overrides_the_mode(self):
         args = self._parse(["--mode", "low", "--hop", "0.25"])

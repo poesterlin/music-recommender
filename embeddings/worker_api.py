@@ -252,12 +252,15 @@ def validate_tracks_response(
         raise WorkerAPIValidationError("tracks response has an invalid hasMore flag")
     if has_more is None:
         has_more = bool(requested_limit is not None and len(tracks) >= requested_limit)
+    # The persisted server recipe is authoritative for API workers.
+    recipe = parse_recipe(payload.get("recipe"))
     return {
         "model": API_MODEL,
         "dimensions": EMBEDDING_SIZE,
         "tracks": tracks,
         "nextCursor": next_cursor,
         "hasMore": has_more,
+        "recipe": recipe,
     }
 
 
@@ -318,6 +321,38 @@ def _validate_embedding_item(value: Mapping[str, Any]) -> dict[str, Any]:
     if "updatedAt" in track:
         item["updatedAt"] = track["updatedAt"]
     return item
+
+
+def parse_recipe(value: Any) -> dict[str, Any] | None:
+    """Read the recipe the server sent, or None when it did not send one.
+
+    Absent is the normal case for an older server, and is not an error: the
+    worker then falls back to its own flags, which is what it always did. Only a
+    recipe that is present but malformed is rejected, because silently
+    downgrading a broken recipe to a guess is how a mismatch becomes a 409 later.
+    """
+
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise WorkerAPIValidationError("tracks recipe must be an object")
+    model = value.get("model", API_MODEL)
+    if model != API_MODEL:
+        raise WorkerAPIValidationError(f"tracks recipe has unsupported model: {model!r}")
+    hop = value.get("hopSeconds")
+    sample = value.get("maxSampleSeconds")
+    frontend = value.get("frontend")
+    if not isinstance(hop, (int, float)) or isinstance(hop, bool):
+        raise WorkerAPIValidationError("tracks recipe is missing a numeric hopSeconds")
+    if not isinstance(sample, (int, float)) or isinstance(sample, bool):
+        raise WorkerAPIValidationError(
+            "tracks recipe is missing a numeric maxSampleSeconds"
+        )
+    if not isinstance(frontend, str) or not frontend.strip():
+        raise WorkerAPIValidationError("tracks recipe is missing a frontend")
+    if frontend != "kapre" or sample > MAX_AUDIO_SECONDS or hop > sample:
+        raise WorkerAPIValidationError("server recipe is not supported by this worker")
+    return build_recipe(float(hop), float(sample), frontend)
 
 
 def build_recipe(
@@ -1045,12 +1080,13 @@ def run_api_worker(
     client: Any | None = None
     owns_client = False
     state = WorkerStateStore(_arg(args, "state_file"), secret=token)
-    # The hop is the same value the core validates and uses locally; API mode
-    # used to drop it, which silently pinned every API worker to OpenL3's 0.1s
-    # default and made --mode a no-op.
-    hop_seconds = float(_arg(args, "hop", 0.1))
-    duration = float(_arg(args, "duration", 60.0))
+    # API workers always adopt the stored server recipe before inference.
+    # CLI values are only compatibility defaults for older servers.
+    hop_seconds = float(getattr(args, "hop", None) or core.DEFAULT_HOP_SECONDS)
+    duration = float(getattr(args, "duration", None) or core.DEFAULT_DURATION_SECONDS)
     recipe = build_recipe(hop_seconds, duration, core.EMBEDDING_FRONTEND)
+    adopt_server_recipe = True
+    recipe_adopted = False
     failures: list[dict[str, Any]] = []
     after: str | None = _arg(args, "after")
     processed = 0
@@ -1080,6 +1116,8 @@ def run_api_worker(
         else:
             client = provided_client
 
+        client.recipe = dict(recipe)
+
         saved: dict[str, Any] = {}
         if not bool(_arg(args, "restart", False)):
             saved = state.load()
@@ -1108,7 +1146,10 @@ def run_api_worker(
         batch_size = _nonnegative_int(_arg(args, "batch_size", 8), "batch size")
         if not 1 <= batch_size <= MAX_PAGE_SIZE:
             raise ValueError(f"batch size must be between 1 and {MAX_PAGE_SIZE}")
-        duration = float(_arg(args, "duration", 60.0))
+        # `duration` is resolved once at the top of this function and reused for
+        # the recipe. Re-reading it here would give the recipe and the inference a
+        # chance to disagree, and would raise on a namespace where duration is
+        # None -- which is exactly what an unset --duration looks like.
         audio_backend = str(_arg(args, "audio_backend", "fast"))
         infer_batch_size = _nonnegative_int(
             _arg(
@@ -1152,6 +1193,54 @@ def run_api_worker(
                 page_started = time.perf_counter()
                 page_info = client.get_tracks(after, request_limit)
                 stats.add("page_fetch", time.perf_counter() - page_started)
+                # Adopt the server's recipe from the first page, before anything
+                # is inferred or uploaded. Doing it here rather than up front
+                # means no extra request and no window in which the worker could
+                # be using a hop the server has not registered.
+                server_recipe = parse_recipe(page_info.get("recipe"))
+                if server_recipe and not recipe_adopted:
+                    recipe_adopted = True
+                    if adopt_server_recipe:
+                        recipe = dict(server_recipe)
+                        hop_seconds = float(recipe["hopSeconds"])
+                        duration = float(recipe["maxSampleSeconds"])
+                        # The client stamps every upload with its own copy of the
+                        # recipe, so it has to be updated too -- otherwise the run
+                        # would infer at one hop and declare another, and the
+                        # server would reject the batch it had just declared.
+                        if client is not None:
+                            client.recipe = dict(recipe)
+                        _print_event(
+                            {
+                                "event": "recipe_adopted",
+                                "hop_seconds": hop_seconds,
+                                "max_sample_seconds": duration,
+                                "frontend": recipe.get("frontend"),
+                                "source": "server",
+                            }
+                        )
+                elif (
+                    server_recipe
+                    and recipe_adopted
+                    and adopt_server_recipe
+                    and (
+                        float(server_recipe["hopSeconds"]) != hop_seconds
+                        or float(server_recipe["maxSampleSeconds"]) != duration
+                    )
+                ):
+                    # The operator changed the setting mid-run. Vectors already in
+                    # flight belong to the space they were produced for, so the run
+                    # finishes as it is rather than mixing two spaces inside one
+                    # page. The next run adopts the new value.
+                    _print_event(
+                        {
+                            "event": "recipe_changed_midrun",
+                            "running_hop_seconds": hop_seconds,
+                            "server_hop_seconds": float(server_recipe["hopSeconds"]),
+                            "note": "finishing this run; the next run adopts the "
+                            "new recipe",
+                        }
+                    )
                 page = list(page_info.get("tracks", []))
                 if limit is not None and len(page) > limit - examined_this_run:
                     remaining = max(0, limit - examined_this_run)

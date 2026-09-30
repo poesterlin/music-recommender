@@ -118,6 +118,15 @@ export const embeddingSpaceTable = pgTable('embedding_space', {
 	createdAt: timestamp('created_at', { mode: 'string' }).defaultNow()
 });
 
+export const embeddingSettingsTable = pgTable('embedding_settings', {
+	id: integer('id').primaryKey().default(1),
+	mode: text('mode').notNull().default('medium'),
+	hopSeconds: real('hop_seconds').notNull().default(0.5),
+	maxSampleSeconds: real('max_sample_seconds').notNull().default(90),
+	frontend: text('frontend').notNull().default('kapre'),
+	updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' }).notNull().defaultNow()
+});
+
 // Frozen centroids for stable incremental clustering.
 // Computed once from current assignments (see backfill), then only
 // new tracks are assigned to the nearest centroid - existing

@@ -95,7 +95,7 @@ services:
     environment:
       WORKER_URL: 'http://web:3000'
       WORKER_TOKEN: '${WORKER_TOKEN:-}'
-      EMBEDDING_MODE: '${EMBEDDING_MODE:-low}'
+      EMBEDDING_MODE: '${EMBEDDING_MODE:-medium}'
 
 volumes:
   postgres-data:

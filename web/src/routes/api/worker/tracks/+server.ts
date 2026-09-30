@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { workerAuthError } from '$lib/server/worker-auth';
+import { getWorkerRecipe } from '$lib/server/embedding-settings';
 import type { RequestHandler } from './$types';
 
 const MAX_LIMIT = 32;
@@ -63,6 +64,12 @@ export const GET: RequestHandler = async ({ request, url }) => {
 			{
 				model: 'openl3-512',
 				dimensions: 512,
+				// The recipe the server has registered. Sent on every page so the
+				// worker cannot drift onto a different hop and start collecting 409s:
+				// the server resolves uploads by exact match with no fallback, so a
+				// worker guessing its own recipe is the most common way to wedge this
+				// pipeline. API workers adopt this recipe before inference.
+				recipe: await getWorkerRecipe(),
 				tracks,
 				nextCursor: tracks.at(-1)?.uri ?? null,
 				hasMore: tracks.length === limit

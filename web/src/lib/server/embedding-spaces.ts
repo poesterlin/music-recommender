@@ -1,35 +1,16 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
+import { EMBEDDING_MODES, modeForHop, getEmbeddingSettings } from './embedding-settings';
 
 /**
- * Worker sampling presets, mirroring EMBEDDING_MODES in the Python worker.
+ * Re-exported so existing importers keep working.
  *
- * The numbers are measured, not chosen: over a 60s clip on a 10-core CPU these
- * are ~1.0x, ~4.8x and ~8.9x the low setting, for a mean pooled-similarity
- * shift of 0, ~0.004 and ~0.012. Retrieval order survives all three, so the
- * choice is how finely the vector samples a track, not whether Sole
- * still works.
+ * These now live in `embedding-settings.ts`, which is the single server-side
+ * home for the recipe. They used to be defined here and mirrored again in the
+ * Python core -- three copies of the same default, which is how the defaults
+ * drifted apart in the first place.
  */
-export const EMBEDDING_MODES: Record<string, number> = {
-	low: 0.1,
-	medium: 0.5,
-	high: 1.0
-};
-
-/**
- * The preset a hop corresponds to, or null when it is a custom value.
- *
- * An exact hop is still recorded even when it has no name, so a library using
- * one is identifiable rather than rounded to the nearest preset.
- */
-export function modeForHop(hopSeconds: number | null): string | null {
-	if (hopSeconds === null) return null;
-	for (const [name, hop] of Object.entries(EMBEDDING_MODES)) {
-		// Exact match: a hop between presets must not be reported as one.
-		if (hop === hopSeconds) return name;
-	}
-	return null;
-}
+export { EMBEDDING_MODES, modeForHop };
 
 export type EmbeddingSpaceUsage = {
 	version: number;
@@ -91,9 +72,14 @@ export async function ensureEmbeddingSpace(input: {
 	maxSampleSeconds: number;
 }> {
 	const model = input.model ?? 'openl3-512';
-	const frontend = input.frontend ?? 'kapre';
 
-	const maxSampleSeconds = input.maxSampleSeconds ?? 60;
+	// With nothing requested, use the recipe the deployment has agreed on rather
+	// than a constant compiled into this file. That is the whole point of
+	// embedding_settings: the defaults live in one row, so "register whatever the
+	// server thinks is current" cannot drift from what workers are told.
+	const settings = await getEmbeddingSettings();
+	const frontend = input.frontend ?? settings.frontend;
+	const maxSampleSeconds = input.maxSampleSeconds ?? settings.maxSampleSeconds;
 
 	// A named mode is the interface; an exact hop is the escape hatch, matching
 	// the worker's --mode / --hop precedence.
@@ -113,8 +99,8 @@ export async function ensureEmbeddingSpace(input: {
 		hopSeconds = hop;
 		mode = requested;
 	} else {
-		hopSeconds = EMBEDDING_MODES.low;
-		mode = 'low';
+		hopSeconds = settings.hopSeconds;
+		mode = settings.mode;
 	}
 
 	if (!Number.isFinite(hopSeconds) || hopSeconds <= 0) {
@@ -176,10 +162,9 @@ export async function ensureEmbeddingSpace(input: {
 	}
 
 	const [meanRow] = (await db.execute(sql`
-		SELECT avg(embedding)::vector AS mean_embedding, count(*)::int AS n
+		SELECT COALESCE(avg(embedding)::vector, array_fill(0::real, ARRAY[512])::vector) AS mean_embedding, count(*)::int AS n
 		FROM track
 		WHERE embedding IS NOT NULL AND COALESCE(skip, FALSE) = FALSE
-		HAVING count(*) >= 2
 	`)) as unknown as Array<{ mean_embedding: string | null; n: number }>;
 
 	if (!meanRow?.mean_embedding) {

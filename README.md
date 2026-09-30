@@ -240,6 +240,20 @@ The web UI uses database-backed accounts and an opaque session cookie. Run
 pages. Self-registration is disabled by default. To create an account or reset
 a password, run:
 
+For the **prebuilt Docker image**, create the first account inside the container
+(the helper is included in the image; no local Bun installation is needed):
+
+```sh
+docker compose run --rm --entrypoint bun web \
+  web/scripts/create-user.ts --username admin
+```
+
+There is no default username/password and no automatic first-user registration.
+The command prints a generated password once. Run it again with the same username
+to reset the password and revoke that account's sessions.
+
+From a source checkout:
+
 ```sh
 bun run auth:create-user --username admin
 ```
@@ -277,6 +291,14 @@ curl -X POST https://sole.example.com/api/play-vibe \
 ```
 
 Browser requests use the session cookie automatically.
+
+### Global embedding settings
+
+**Manage → Embedding settings** stores the recipe in PostgreSQL. New installs
+use **medium (0.5-second hop), 90 seconds of audio**. Every API worker reads that
+recipe before inference, including notebook workers; local flags cannot override
+it. Changes take effect on the next run. Existing vectors retain their recorded
+recipe. Upgrades inherit the existing recipe so old embeddings are not relabelled.
 
 ### Python worker
 
