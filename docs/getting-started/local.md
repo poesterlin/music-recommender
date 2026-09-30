@@ -82,8 +82,17 @@ services:
     entrypoint: >
       sh -c "while true; do
         echo \"[worker] $$(date): embedding...\";
-        python worker.py --source-mode api || echo failed;
-        sleep 43200;
+        python worker.py --source-mode api;
+        rc=$$?;
+        if [ \"$$rc\" -eq 0 ]; then
+          sleep 43200;
+        elif [ \"$$rc\" -eq 2 ]; then
+          echo '[worker] tracks still pending, continuing in 5m';
+          sleep 300;
+        else
+          echo \"[worker] failed (exit $$rc), retrying in 15m\";
+          sleep 900;
+        fi
       done"
     restart: unless-stopped
     init: true

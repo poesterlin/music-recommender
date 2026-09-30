@@ -122,11 +122,26 @@ services:
       # Must match a space registered in the database; the worker refuses to run
       # otherwise rather than centre vectors against the wrong mean.
       EMBEDDING_MODE: "${EMBEDDING_MODE:-low}"
+    # The worker reports 0 when it drained the backlog and 2 when it stopped
+    # with tracks still pending, so the idle interval can follow the work
+    # instead of being fixed. Sleeping 12h regardless meant new music waited up
+    # to half a day behind an idle library: 1,900 tracks were queued while the
+    # loop was asleep with nothing to do.
     command: >
       sh -c "while true; do
         echo \"[worker] $$(date): embedding...\";
-        python worker.py --source-mode api || echo failed;
-        sleep 43200;
+        python worker.py --source-mode api;
+        rc=$$?;
+        if [ \"$$rc\" -eq 0 ]; then
+          echo '[worker] backlog drained, backing off to 12h';
+          sleep 43200;
+        elif [ \"$$rc\" -eq 2 ]; then
+          echo '[worker] tracks still pending, continuing in 5m';
+          sleep 300;
+        else
+          echo \"[worker] failed (exit $$rc), retrying in 15m\";
+          sleep 900;
+        fi
       done"
     restart: unless-stopped
     init: true
