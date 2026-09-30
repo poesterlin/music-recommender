@@ -35,28 +35,82 @@ jobs:
       # VitePress emits root-absolute asset and link URLs unless told otherwise,
       # and GitHub serves a project site from /<repo>/, so without this every
       # asset 404s. A repository named <owner>.github.io is served from the root.
+      #
+      # `github.repository_name` is a context field and is populated for every
+      # event. The event-payload spelling (`github.event.repository_name`) is
+      # not: on a push it is empty, which produced a base of "//" and a site
+      # whose assets pointed at a host called "assets".
       - name: Resolve the Pages base path
         id: base
+        env:
+          REPO: ${{ github.repository_name }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          if [ "${{ github.event.repository_name }}" = "${{ github.repository_owner }}.github.io" ]; then
-            echo "value=/" >> "$GITHUB_OUTPUT"
-          else
-            echo "value=/${{ github.event.repository_name }}/" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ -z "$REPO" ]; then
+            echo "::error::github.repository_name was empty; cannot resolve the base path"
+            exit 1
           fi
+          if [ "$REPO" = "$OWNER.github.io" ]; then
+            base="/"
+          else
+            base="/$REPO/"
+          fi
+          echo "value=$base" >> "$GITHUB_OUTPUT"
+          echo "resolved base path: $base"
 
       - name: Build the site
         env:
           DOCS_BASE: ${{ steps.base.outputs.value }}
         run: bun run build
 
-      # Fails the build rather than publishing a site with broken asset paths.
-      - name: Check the base path was applied
+      # The failure mode is a site that renders but is entirely unstyled, so it
+      # is worth catching here rather than in a browser. The expected prefix is
+      # recomputed from the repo name rather than read back from the previous
+      # step, and the degenerate cases are rejected outright. An earlier version
+      # grepped for whatever base it had just computed, so a base of "//"
+      # "passed" and the breakage it existed to catch was published anyway.
+      # The failure mode is a site that renders but is entirely unstyled, so it
+      # is worth catching here rather than in a browser. Each branch asserts both
+      # what the output must contain and what it must not: an earlier version
+      # only checked the required prefix, so on a user site -- where the prefix is
+      # "/" -- it asserted nothing and any base passed, and the forbidden check
+      # then rejected the correct root-absolute build.
+      - name: Check the built HTML matches the base path
+        env:
+          REPO: ${{ github.repository_name }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          base="${{ steps.base.outputs.value }}"
-          if [ "$base" != "/" ]; then
-            grep -q "src=\"${base}assets/" .vitepress/dist/index.html \
-              || { echo "::error::assets are not prefixed with ${base}"; exit 1; }
+          set -euo pipefail
+          if [ "$REPO" = "$OWNER.github.io" ]; then
+            expected="/"
+          else
+            expected="/$REPO/"
           fi
+          html=".vitepress/dist/index.html"
+
+          # "//" is protocol-relative, not a path, and would point at a host.
+          if grep -qE '(src|href)="//' "$html"; then
+            echo "::error::built HTML contains protocol-relative URLs"
+            exit 1
+          fi
+
+          if [ "$expected" = "/" ]; then
+            grep -q 'src="/assets/' "$html" \
+              || { echo "::error::expected root-absolute assets for a user site"; exit 1; }
+            if grep -qE '(src|href)="/[^"]+/assets/' "$html"; then
+              echo "::error::assets carry a repository prefix on a user site"
+              exit 1
+            fi
+          else
+            grep -q "src=\"${expected}assets/" "$html" \
+              || { echo "::error::assets are not prefixed with ${expected}"; exit 1; }
+            if grep -qE '(src|href)="/(assets|logo\.png)' "$html"; then
+              echo "::error::built HTML contains unprefixed asset URLs"
+              exit 1
+            fi
+          fi
+          echo "base path $expected verified in $html"
 
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
