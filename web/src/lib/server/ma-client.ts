@@ -17,11 +17,22 @@ export function maWsUrl(): string {
 	return base.replace(/^http/, 'ws') + '/ws';
 }
 
+/**
+ * Default ceiling for a single command.
+ *
+ * Without it a command that Music Assistant never answers — a big playlist
+ * export, say — leaves the promise pending forever, and the request that
+ * triggered it hangs until something else gives up. 60s is well past the ~300ms
+ * a 2,900-track export took when measured, so this only ever fires on a stall.
+ */
+const CALL_TIMEOUT_MS = 60_000;
+
 export function maCall(
 	ws: WebSocket,
 	id: number,
 	command: string,
-	args?: Record<string, unknown>
+	args?: Record<string, unknown>,
+	timeoutMs = CALL_TIMEOUT_MS
 ): Promise<any> {
 	return new Promise((resolve, reject) => {
 		const onMessage = (e: MessageEvent) => {
@@ -32,10 +43,22 @@ export function maCall(
 				return;
 			}
 			if (String(m.message_id ?? '') !== String(id)) return;
-			ws.removeEventListener('message', onMessage);
+			settle();
 			if (m.error_code) reject(new Error(`${command} failed: ${m.details ?? m.error_code}`));
 			else resolve(m.result);
 		};
+		const timer = setTimeout(() => {
+			settle();
+			reject(new Error(`${command} timed out after ${timeoutMs}ms`));
+		}, timeoutMs);
+		// A pending timer must not be the reason the process stays alive.
+		(timer as { unref?: () => void }).unref?.();
+
+		function settle() {
+			clearTimeout(timer);
+			ws.removeEventListener('message', onMessage);
+		}
+
 		ws.addEventListener('message', onMessage);
 		ws.send(JSON.stringify({ message_id: id, command, args }));
 	});
