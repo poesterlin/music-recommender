@@ -1,5 +1,8 @@
 # Sole docs
 
+Published at <https://poesterlin.github.io/sole/>, built and deployed by
+`.github/workflows/docs.yml` on any push that touches `docs/`.
+
 This VitePress site has its own package and lockfile. No app build or shared asset is needed.
 
 ```sh
