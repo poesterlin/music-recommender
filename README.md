@@ -483,6 +483,20 @@ page.
   15 minutes means it stopped, since uploads are its only heartbeat.
 - Pending embeddings: inspect `/status`, then use a bounded `--dry-run`.
 
+## Contributing
+
+Issues and pull requests are both welcome, and there is no contributor gate.
+Before you open one, please read [CONTRIBUTING.md](CONTRIBUTING.md) — it lists
+the checks that must pass and explains why a green run in CI is evidence rather
+than proof.
+
+If you find something that looks like a security problem, do not open a public
+issue. See [SECURITY.md](SECURITY.md).
+
+- [Contributing guidelines](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+
 ## License
 
 This project is released under the [MIT License](LICENSE).
