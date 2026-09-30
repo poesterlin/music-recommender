@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { getActiveRunId } from '$lib/server/active-clusters';
-import { clusterRunMatchTable } from '$lib/server/schema';
+import { getActiveClusterMetadata } from '$lib/server/active-clusters';
+import { clusterNameTable } from '$lib/server/schema';
 import type { RequestHandler } from './$types';
 
 const MAX_NAME_LENGTH = 120;
@@ -28,21 +28,20 @@ export const GET: RequestHandler = async ({ params }) => {
 	if (clusterId === null) {
 		return Response.json({ error: 'cluster id must be a non-negative integer' }, { status: 400 });
 	}
-	const runId = await getActiveRunId();
+	const metadata = await getActiveClusterMetadata();
+	const runId = metadata.activeRun?.id ?? null;
 	if (runId === null) {
 		return Response.json({ error: 'no applied clustering run to name' }, { status: 409 });
 	}
-	const [row] = await db
-		.select({ displayName: clusterRunMatchTable.displayName })
-		.from(clusterRunMatchTable)
-		.where(
-			and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
-		)
-		.limit(1);
-	if (!row) {
+	if (!metadata.ids.includes(clusterId)) {
 		return Response.json({ error: 'cluster is not part of the active run' }, { status: 404 });
 	}
-	return Response.json({ name: row.displayName, runId });
+	const [row] = await db
+		.select({ displayName: clusterNameTable.displayName })
+		.from(clusterNameTable)
+		.where(and(eq(clusterNameTable.runId, runId), eq(clusterNameTable.clusterId, clusterId)))
+		.limit(1);
+	return Response.json({ name: row?.displayName ?? '', runId });
 };
 
 export const PUT: RequestHandler = async ({ params, request }) => {
@@ -66,28 +65,22 @@ export const PUT: RequestHandler = async ({ params, request }) => {
 	}
 
 	try {
-		const runId = await getActiveRunId();
+		const metadata = await getActiveClusterMetadata();
+		const runId = metadata.activeRun?.id ?? null;
 		if (runId === null) {
 			return Response.json({ error: 'no applied clustering run to name' }, { status: 409 });
 		}
 
-		// null restores the generic label by clearing the override.
-		//
-		// RETURNING is what makes the 404 below trustworthy. This used to be a raw
-		// UPDATE, which db.execute hands back as an empty array, so the row count
-		// was always 0 and every rename answered 404 — while the write itself
-		// succeeded, leaving the caller told it had failed when it had not.
-		const updated = await db
-			.update(clusterRunMatchTable)
-			.set({ displayName: name ?? '' })
-			.where(
-				and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
-			)
-			.returning({ clusterId: clusterRunMatchTable.clusterId });
-
-		if (updated.length === 0) {
+		if (!metadata.ids.includes(clusterId)) {
 			return Response.json({ error: 'cluster is not part of the active run' }, { status: 404 });
 		}
+		await db
+			.insert(clusterNameTable)
+			.values({ runId, clusterId, displayName: name ?? '', source: 'manual' })
+			.onConflictDoUpdate({
+				target: [clusterNameTable.runId, clusterNameTable.clusterId],
+				set: { displayName: name ?? '', source: 'manual' }
+			});
 		return Response.json({ ok: true, name, runId });
 	} catch (error) {
 		console.error('Cluster rename failed:', error);

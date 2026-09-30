@@ -11,7 +11,7 @@ import { db } from './db';
 const EMBEDDING_SPACE_VERSION = 1;
 const SAMPLE_PER_CLUSTER = 60;
 const CACHE_MS = 10 * 60 * 1000;
-const PCA_COMPONENTS = 3;
+const PCA_COMPONENTS = 2;
 const PCA_ITERATIONS = 18;
 
 type ProjectionRow = {
@@ -180,12 +180,7 @@ function projectPca(points: InternalPoint[]): {
 }
 
 async function buildProjection(): Promise<ClusterProjectionData> {
-	const {
-		ids: clusterIds,
-		names: clusterNames,
-		matches: clusterMatches,
-		activeRun
-	} = await getActiveClusterMetadata();
+	const { ids: clusterIds, names: clusterNames, activeRun } = await getActiveClusterMetadata();
 	const clusterIdSql = sql.join(clusterIds, sql`, `);
 
 	const rows = (await db.execute(sql`
@@ -243,8 +238,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 		album: point.album,
 		clusterId: point.cluster_id,
 		x: pca.coordinates[0]?.[index] ?? 0,
-		y: pca.coordinates[1]?.[index] ?? 0,
-		z: pca.coordinates[2]?.[index] ?? 0
+		y: pca.coordinates[1]?.[index] ?? 0
 	}));
 
 	const dimensions = points[0]?.vector.length ?? 0;
@@ -269,8 +263,7 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 		return {
 			clusterId: centroid.cluster_id,
 			x: coordinates[0] ?? 0,
-			y: coordinates[1] ?? 0,
-			z: coordinates[2] ?? 0
+			y: coordinates[1] ?? 0
 		};
 	});
 
@@ -279,19 +272,11 @@ async function buildProjection(): Promise<ClusterProjectionData> {
 		sampledCounts.set(point.clusterId, (sampledCounts.get(point.clusterId) ?? 0) + 1);
 	}
 	const clusters: ClusterProjectionCluster[] = counts.map((row) => {
-		const match = clusterMatches[row.cluster_id];
 		return {
 			id: row.cluster_id,
 			name: clusterNames[row.cluster_id] ?? `Cluster ${row.cluster_id}`,
 			trackCount: row.track_count,
-			sampleCount: sampledCounts.get(row.cluster_id) ?? 0,
-			...(match
-				? {
-						legacyClusterId: match.legacyClusterId,
-						legacyName: match.legacyName,
-						matchConfidence: match.confidence
-					}
-				: {})
+			sampleCount: sampledCounts.get(row.cluster_id) ?? 0
 		};
 	});
 

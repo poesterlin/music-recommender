@@ -186,6 +186,19 @@ export const clusterCentroidBackupTable = pgTable(
 	]
 );
 
+// Names are current generation state, not overlap-matching evidence.
+export const clusterNameTable = pgTable(
+	'cluster_name',
+	{
+		id: serial('id').primaryKey(),
+		runId: integer('run_id').notNull(),
+		clusterId: integer('cluster_id').notNull(),
+		displayName: text('display_name').notNull().default(''),
+		source: text('source').$type<'manual' | 'automatic'>().notNull().default('manual')
+	},
+	(table) => [uniqueIndex('cluster_name_run_cluster_idx').on(table.runId, table.clusterId)]
+);
+
 export const clusterRunMatchTable = pgTable(
 	'cluster_run_match',
 	{

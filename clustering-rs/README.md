@@ -152,6 +152,11 @@ bun run clusters:match -- <run-id>
 Choose the final names in the app's cluster naming UI; the tooling does not assume
 any particular library, genre, or cluster ID.
 
+Accepted and automatic names live in `cluster_name`, keyed by generation and
+cluster ID. Overlap matches are suggestions only. Auto-naming fills missing or
+reset names from the three dominant artists and never overwrites an existing
+name. Names from previous generations remain available when rolling back.
+
 The numerical core is in `src/lib.rs`; the database and CLI are kept in `src/main.rs`. The library has no PostgreSQL dependency, and the CLI-only dependencies are behind the `cli` feature.
 
 From the repository root, `bun run clusters:native -- --help` exposes all native

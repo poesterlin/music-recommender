@@ -1,7 +1,6 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { db } from './db';
-import { clusterRunMatchTable } from './schema';
-import { getActiveRunId, isHumanNamed } from './active-clusters';
+import { getActiveRunId } from './active-clusters';
 
 /** How many dominant artists make up a name. Three is enough to be unique. */
 const NAME_ARTISTS = 3;
@@ -72,7 +71,7 @@ export async function suggestClusterNames(): Promise<AutoName[]> {
 		),
 		existing AS (
 			SELECT cluster_id, display_name
-			FROM cluster_run_match
+			FROM cluster_name
 			WHERE run_id = (
 				SELECT id FROM cluster_run WHERE status = 'applied'
 				ORDER BY applied_at DESC NULLS LAST, id DESC LIMIT 1
@@ -100,7 +99,7 @@ export async function suggestClusterNames(): Promise<AutoName[]> {
 			trackCount: Number(row.track_count),
 			name: artists.length > 0 ? artists.join(', ') : `Cluster ${row.cluster_id}`,
 			artists,
-			named: isHumanNamed(row.display_name)
+			named: Boolean(row.display_name?.trim())
 		};
 	});
 }
@@ -117,32 +116,17 @@ export async function applyAutoNames(clusterIds: number[]): Promise<number> {
 	const runId = await getActiveRunId();
 	if (runId === null) return 0;
 
-	// One statement per cluster, because each row gets a *different* name. That
-	// needs a VALUES join (`UPDATE ... FROM (VALUES ...)`) to batch, which the
-	// query builder cannot express — so this stays a loop. What it no longer does
-	// is hand-assemble SQL, and it reports rows actually changed rather than
-	// names it intended to write.
-	//
-	// Guarded: a clustering run carries the previous generation's descriptions
-	// forward through `legacy_name`, and those are far better labels than
-	// anything derived from artist frequency — "Dark, Heavy Hip-Hop" says what
-	// the cluster is, "T.I., Dj Khaled, Mustard" only says who is in it. Writing
-	// over one destroyed all 51 of them here, and because the overwrite dropped
-	// the `· old #N` provenance marker, `isHumanNamed` then reported the artist
-	// lists as though a person had chosen them.
+	// Missing or explicitly reset names can be filled; accepted names stay intact.
 	let changed = 0;
 	for (const [clusterId, name] of wanted) {
-		const updated = await db
-			.update(clusterRunMatchTable)
-			.set({ displayName: name })
-			.where(
-				and(
-					eq(clusterRunMatchTable.runId, runId),
-					eq(clusterRunMatchTable.clusterId, clusterId),
-					sql`(cluster_run_match.legacy_name IS NULL OR btrim(cluster_run_match.legacy_name) = '')`
-				)
-			)
-			.returning({ clusterId: clusterRunMatchTable.clusterId });
+		const updated = await db.execute(sql`
+			INSERT INTO cluster_name (run_id, cluster_id, display_name, source)
+			VALUES (${runId}, ${clusterId}, ${name}, 'automatic')
+			ON CONFLICT (run_id, cluster_id) DO UPDATE
+			SET display_name = EXCLUDED.display_name, source = 'automatic'
+			WHERE btrim(cluster_name.display_name) = ''
+			RETURNING cluster_id
+		`);
 		changed += updated.length;
 	}
 	return changed;

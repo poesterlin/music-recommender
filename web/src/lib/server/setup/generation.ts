@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from '../db';
-import { clusterRunTable, clusterRunMatchTable } from '../schema';
-import { isHumanNamed } from '../active-clusters';
+import { clusterRunTable } from '../schema';
 import type { KDerivation } from './derive-k';
 
 export type Generation = {
@@ -10,7 +9,7 @@ export type Generation = {
 	runId: number | null;
 	k: number | null;
 	trackCount: number | null;
-	/** Clusters in that generation carrying a name a person chose or accepted. */
+	/** Clusters in that generation with a manual or automatic name. */
 	named: number;
 };
 
@@ -38,12 +37,12 @@ export async function inspectGeneration(): Promise<Generation> {
 	let named = 0;
 	try {
 		const namedRows = (await db.execute(sql`
-			SELECT count(*)::int AS n FROM cluster_run_match
+			SELECT count(*)::int AS n FROM cluster_name
 			WHERE run_id = ${run.id} AND NULLIF(BTRIM(display_name), '') IS NOT NULL
 		`)) as unknown as Array<{ n: number }>;
 		named = Number(namedRows[0]?.n ?? 0);
 	} catch {
-		// Match rows are additive; a missing table just means nothing is named.
+		// An older database may not have the dedicated name table yet.
 	}
 
 	return {
@@ -60,8 +59,8 @@ export async function inspectGeneration(): Promise<Generation> {
  *
  * A new install has no run row, which would leave the cluster pages falling back
  * to the hardcoded CLUSTER_NAMES map — labels written against some other
- * library's numbering. Creating the run (with blank names, so nothing claims to
- * be a human label) keeps a new install honest from the first render.
+ * library's numbering. Creating the run keeps a new install honest from the
+ * first render; the naming step then fills the dedicated name table.
  */
 export async function createGeneration(
 	k: number,
@@ -95,24 +94,6 @@ export async function createGeneration(
 	const runId = inserted[0]?.id;
 	if (runId === undefined) throw new Error('Could not record the cluster generation');
 
-	for (let clusterId = 0; clusterId < k; clusterId++) {
-		await db.insert(clusterRunMatchTable).values({
-			runId,
-			clusterId,
-			// A fresh generation has nothing to match against, so it is its own
-			// predecessor. Blank display_name keeps isHumanNamed() false until a
-			// person or the auto-namer actually labels it.
-			legacyClusterId: clusterId,
-			legacyName: `Cluster ${clusterId}`,
-			displayName: '',
-			overlapCount: 0,
-			newClusterCount: 0,
-			legacyClusterCount: 0,
-			confidence: 1,
-			relatedLegacyIds: []
-		});
-	}
-
 	return runId;
 }
 
@@ -121,7 +102,7 @@ export async function countNamedClusters(): Promise<number> {
 	const generation = await inspectGeneration();
 	if (!generation.exists || generation.runId === null) return 0;
 	const rows = (await db.execute(sql`
-		SELECT display_name FROM cluster_run_match WHERE run_id = ${generation.runId}
+		SELECT display_name FROM cluster_name WHERE run_id = ${generation.runId}
 	`)) as unknown as Array<{ display_name: string | null }>;
-	return rows.filter((row) => isHumanNamed(row.display_name)).length;
+	return rows.filter((row) => Boolean(row.display_name?.trim())).length;
 }

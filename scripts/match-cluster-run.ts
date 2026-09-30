@@ -59,9 +59,9 @@ try {
 	const parentNames = new Map<number, string>();
 	if (Number.isSafeInteger(parentRunId) && parentRunId > 0) {
 		const parentRows = await sql<{ cluster_id: number; legacy_name: string }[]>`
-			SELECT cluster_id, legacy_name
-			FROM cluster_run_match
-			WHERE run_id = ${parentRunId}
+			SELECT cluster_id, display_name AS legacy_name
+			FROM cluster_name
+			WHERE run_id = ${parentRunId} AND btrim(display_name) <> ''
 		`;
 		for (const row of parentRows) parentNames.set(row.cluster_id, row.legacy_name);
 	}

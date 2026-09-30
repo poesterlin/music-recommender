@@ -6,6 +6,7 @@
 - Web checks/build: `cd web && bun run check && bun run build`
 - Generated images: `cd assets && bun run check` (fails when a committed asset no longer matches its master; rebuild with `bun run build`). Replacing the artwork means rebuilding the knockout master first with `python3 assets/make-alpha.py`, which needs Pillow — see `assets/README.md`
 - Native clustering: `cargo test --manifest-path clustering-rs/Cargo.toml --locked`
+- Cluster naming integration: migrate a disposable PostgreSQL database, then `cd web && TEST_DATABASE_URL=<disposable-url> bun test src/lib/server/cluster-naming.integration.test.ts`
 - Python worker tests: build `embeddings/Dockerfile`, then run `unittest discover` from `embeddings/tests`
 - Fresh database: provide a disposable pgvector URL and run `bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db`
 - Create/reset an account: `bun run auth:create-user --username <name>`

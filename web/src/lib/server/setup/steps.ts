@@ -12,8 +12,7 @@ import type { StepId } from './state';
 export type StepOutcome = {
 	/**
 	 * `pending` means "runnable but not run yet" and is only ever returned by a
-	 * probe, never by a runner. `waiting` means blocked on something outside the
-	 * web process, so the runner should pause rather than fail.
+	 * probe. `waiting` means blocked on something outside the web process.
 	 */
 	status: 'pending' | 'done' | 'failed' | 'skipped' | 'waiting';
 	detail: string;
@@ -28,7 +27,7 @@ export type SetupStep = {
 	blurb: string;
 	/** Read-only. Safe to call on every page load. */
 	probe(): Promise<StepOutcome>;
-	/** Does the work. Only called from the runner. */
+	/** Does the work when explicitly requested. */
 	run(): Promise<StepOutcome>;
 };
 
@@ -138,13 +137,9 @@ const library: SetupStep = {
 				detail: 'MA_TOKEN is not set, so there is no way to read your library.'
 			};
 		}
-		const c = await counts();
-		return {
-			status: 'done',
-			detail: c.total
-				? `${c.total.toLocaleString()} tracks known`
-				: 'Connected, but no tracks indexed yet'
-		};
+		const { withMa } = await import('../ma-client');
+		await withMa(async () => undefined);
+		return { status: 'done', detail: 'Music Assistant connection verified' };
 	},
 	async run() {
 		if (!process.env.MA_TOKEN?.trim()) {
@@ -194,7 +189,8 @@ const embed: SetupStep = {
 	async probe() {
 		const c = await counts();
 		if (c.total === 0) return { status: 'waiting', detail: 'Nothing to analyse yet' };
-		if (c.eligible === 0) return { status: 'waiting', detail: 'No tracks are eligible for analysis' };
+		if (c.eligible === 0)
+			return { status: 'waiting', detail: 'No tracks are eligible for analysis' };
 		if (c.embedded === 0) {
 			return {
 				status: 'waiting',
@@ -217,7 +213,7 @@ const embed: SetupStep = {
 	},
 	async run() {
 		// Embedding belongs to the worker container, not the web process. This
-		// step only reports; the runner pauses here and resumes on a later poll.
+		// step only reports progress.
 		return embed.probe();
 	}
 };
@@ -252,6 +248,8 @@ const cluster: SetupStep = {
 			};
 		}
 
+		const readiness = await embed.probe();
+		if (readiness.status !== 'done') return readiness;
 		const c = await counts();
 		if (c.clusterable === 0) {
 			return { status: 'waiting', detail: 'No analysed tracks to group yet' };
@@ -284,7 +282,7 @@ const name: SetupStep = {
 		if (generation.named === 0) {
 			return { status: 'pending', detail: `${generation.k ?? '?'} clusters are unnamed` };
 		}
-		// Partly named is still runnable: the runner fills only the gaps.
+		// Partly named is still runnable: auto-naming fills only the gaps.
 		if (generation.named < (generation.k ?? 0)) {
 			return {
 				status: 'pending',
@@ -306,9 +304,7 @@ const name: SetupStep = {
 			};
 		}
 
-		// Only fill the gaps. applyAutoNames overwrites display_name for every id
-		// it is given, so handing it the full set would replace names a person
-		// chose or edited with machine-derived ones.
+		// Fill unnamed clusters; the write also guards against concurrent renames.
 		const suggestions = await suggestClusterNames();
 		const unnamed = suggestions.filter((s) => !s.named).map((s) => s.clusterId);
 		if (unnamed.length === 0) {

@@ -127,6 +127,13 @@
       "when": 1790790000000,
       "tag": "0017_embedding_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790793600000,
+      "tag": "0018_cluster_names",
+      "breakpoints": true
     }
   ]
 }

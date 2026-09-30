@@ -8,7 +8,6 @@
 		ClusterProjectionPoint
 	} from '$lib/cluster-projection-types';
 
-	type ViewMode = '2d' | '3d';
 	type HoveredMarker =
 		| {
 				kind: 'point';
@@ -25,7 +24,6 @@
 
 	let projection = $state<ClusterProjectionData | null>(null);
 	let selectedCluster = $state<number | 'all'>('all');
-	let mode = $state<ViewMode>('3d');
 	let loading = $state(true);
 	let error = $state('');
 	let playing = $state(false);
@@ -37,8 +35,6 @@
 	let container = $state<HTMLDivElement>();
 	let width = $state(0);
 	let height = $state(0);
-	let yaw = $state(-0.62);
-	let pitch = $state(0.48);
 	let zoom = $state(1);
 	let panX = $state(0);
 	let panY = $state(0);
@@ -80,40 +76,20 @@
 	}
 
 	function resetView() {
-		yaw = -0.62;
-		pitch = 0.48;
 		zoom = 1;
 		panX = 0;
 		panY = 0;
 	}
 
-	function setMode(next: ViewMode) {
-		mode = next;
-		resetView();
-	}
-
-	function transformPoint(point: { x: number; y: number; z: number }): {
+	function transformPoint(point: { x: number; y: number }): {
 		x: number;
 		y: number;
-		depth: number;
 	} {
 		const scale = Math.min(width, height) * 0.38 * zoom;
 		const centerX = width / 2 + panX;
 		const centerY = height / 2 + panY;
 
-		if (mode === '2d') {
-			return { x: centerX + point.x * scale, y: centerY - point.y * scale, depth: point.z };
-		}
-
-		const cosYaw = Math.cos(yaw);
-		const sinYaw = Math.sin(yaw);
-		const cosPitch = Math.cos(pitch);
-		const sinPitch = Math.sin(pitch);
-		const x1 = point.x * cosYaw - point.z * sinYaw;
-		const z1 = point.x * sinYaw + point.z * cosYaw;
-		const y2 = point.y * cosPitch - z1 * sinPitch;
-		const depth = point.y * sinPitch + z1 * cosPitch;
-		return { x: centerX + x1 * scale, y: centerY - y2 * scale, depth };
+		return { x: centerX + point.x * scale, y: centerY - point.y * scale };
 	}
 
 	function drawGrid(context: CanvasRenderingContext2D) {
@@ -122,15 +98,15 @@
 		for (const value of [-1, 0, 1]) {
 			context.strokeStyle = value === 0 ? 'rgba(23,23,23,0.22)' : 'rgba(23,23,23,0.08)';
 			context.beginPath();
-			const first = transformPoint({ x: value, y: -1, z: -1 });
-			const last = transformPoint({ x: value, y: 1, z: 1 });
+			const first = transformPoint({ x: value, y: -1 });
+			const last = transformPoint({ x: value, y: 1 });
 			context.moveTo(first.x, first.y);
 			context.lineTo(last.x, last.y);
 			context.stroke();
 
 			context.beginPath();
-			const horizontalStart = transformPoint({ x: -1, y: value, z: -1 });
-			const horizontalEnd = transformPoint({ x: 1, y: value, z: 1 });
+			const horizontalStart = transformPoint({ x: -1, y: value });
+			const horizontalEnd = transformPoint({ x: 1, y: value });
 			context.moveTo(horizontalStart.x, horizontalStart.y);
 			context.lineTo(horizontalEnd.x, horizontalEnd.y);
 			context.stroke();
@@ -165,18 +141,16 @@
 				centroid,
 				...transformPoint(centroid)
 			}))
-		].sort((a, b) => a.depth - b.depth);
+		];
 
 		for (const item of rendered) {
-			const depthAlpha =
-				mode === '3d' ? Math.max(0.35, Math.min(1, 0.35 + ((item.depth + 1) / 2) * 0.6)) : 0.9;
 			if (item.kind === 'point') {
 				const isSelected = selectedPoint?.uri === item.point.uri;
 				const isHovered =
 					hoveredMarker?.kind === 'point' && hoveredMarker.point.uri === item.point.uri;
 				context.beginPath();
 				context.fillStyle = clusterColor(item.point.clusterId);
-				context.globalAlpha = isSelected || isHovered ? 1 : depthAlpha;
+				context.globalAlpha = isSelected || isHovered ? 1 : 0.9;
 				context.arc(
 					item.x,
 					item.y,
@@ -200,7 +174,7 @@
 				context.save();
 				context.translate(item.x, item.y);
 				context.rotate(Math.PI / 4);
-				context.globalAlpha = isSelected || isHovered ? 1 : Math.max(0.72, depthAlpha);
+				context.globalAlpha = isSelected || isHovered ? 1 : 0.9;
 				context.fillStyle = '#f8f4e8';
 				context.strokeStyle = clusterColor(item.centroid.clusterId);
 				context.lineWidth = 2.2;
@@ -260,13 +234,8 @@
 			const dx = event.clientX - lastPointerX;
 			const dy = event.clientY - lastPointerY;
 			if (Math.abs(dx) + Math.abs(dy) > 1) dragMoved = true;
-			if (mode === '3d' && !event.shiftKey) {
-				yaw += dx * 0.008;
-				pitch = Math.max(-1.45, Math.min(1.45, pitch + dy * 0.008));
-			} else {
-				panX += dx;
-				panY += dy;
-			}
+			panX += dx;
+			panY += dy;
 			lastPointerX = event.clientX;
 			lastPointerY = event.clientY;
 		} else {
@@ -301,8 +270,6 @@
 		if (event.key === '+' || event.key === '=') zoom = Math.min(5, zoom * 1.15);
 		else if (event.key === '-') zoom = Math.max(0.35, zoom / 1.15);
 		else if (event.key.toLowerCase() === 'r') resetView();
-		else if (event.key === '2') setMode('2d');
-		else if (event.key === '3') setMode('3d');
 		else return;
 		event.preventDefault();
 	}
@@ -319,11 +286,8 @@
 		// Track every input the canvas depends on so any change redraws.
 		void projection;
 		void selectedCluster;
-		void mode;
 		void width;
 		void height;
-		void yaw;
-		void pitch;
 		void zoom;
 		void panX;
 		void panY;
@@ -370,8 +334,8 @@
 				</p>
 				<h2 class="font-display mt-1 text-3xl font-black">See the shape of your library</h2>
 				<p class="text-ink-soft mt-2 max-w-2xl text-sm leading-relaxed">
-					A deterministic PCA sample of every cluster with its full-library centroid. Drag to rotate
-					in 3D, pan in 2D, scroll to zoom, and select a point to inspect the track.
+					A 2D PCA sample of every cluster with its full-library centroid. Drag to pan, scroll to
+					zoom, and select a point to inspect the track.
 				</p>
 			</div>
 			{#if projection}
@@ -393,21 +357,6 @@
 		</div>
 
 		<div class="mt-5 flex flex-wrap items-center gap-2">
-			<div class="bg-ink/5 inline-flex rounded-full p-1">
-				<button
-					class="rounded-full px-4 py-2 text-sm font-bold transition {mode === '2d'
-						? 'bg-ink text-cream shadow'
-						: 'text-ink-soft hover:text-ink'}"
-					onclick={() => setMode('2d')}>2D plane</button
-				>
-				<button
-					class="rounded-full px-4 py-2 text-sm font-bold transition {mode === '3d'
-						? 'bg-ink text-cream shadow'
-						: 'text-ink-soft hover:text-ink'}"
-					onclick={() => setMode('3d')}>3D cloud</button
-				>
-			</div>
-
 			<button
 				class="rounded-full border px-4 py-2.5 text-sm font-bold transition {showCentroids
 					? 'border-accent/30 bg-accent/10 text-accent-deep'
@@ -464,9 +413,7 @@
 				bind:this={canvas}
 				class="block h-[520px] w-full touch-none outline-none sm:h-[600px]"
 				tabindex="0"
-				aria-label="{mode === '3d'
-					? 'Three-dimensional'
-					: 'Two-dimensional'} interactive cluster projection with track samples and centroid markers. Use pointer to rotate or pan, scroll to zoom, select a track, or focus a cluster from its centroid."
+				aria-label="Two-dimensional interactive cluster projection with track samples and centroid markers. Drag to pan, scroll to zoom, select a track, or focus a cluster from its centroid."
 				onpointerdown={onPointerDown}
 				onpointermove={onPointerMove}
 				onpointerup={onPointerUp}
@@ -484,9 +431,6 @@
 					PC1 {((projection.explainedVariance[0] ?? 0) * 100).toFixed(1)}% · PC2 {(
 						(projection.explainedVariance[1] ?? 0) * 100
 					).toFixed(1)}%
-					{#if mode === '3d'}
-						· PC3 {((projection.explainedVariance[2] ?? 0) * 100).toFixed(1)}%
-					{/if}
 				{/if}
 			</div>
 
@@ -560,11 +504,7 @@
 				</div>
 			{:else}
 				<div class="text-faded flex flex-wrap items-center justify-between gap-3 text-sm">
-					<p>
-						{mode === '3d'
-							? 'Drag to orbit · Shift-drag to pan · Scroll to zoom'
-							: 'Drag to pan · Scroll to zoom · Double-click to reset'}
-					</p>
+					<p>Drag to pan · Scroll to zoom · Double-click to reset</p>
 					<p>Click a track to inspect it · Click a centroid to focus its cluster</p>
 				</div>
 			{/if}

@@ -6,7 +6,6 @@ export type ClusterProjectionPoint = {
 	clusterId: number;
 	x: number;
 	y: number;
-	z: number;
 };
 
 export type ClusterProjectionCluster = {
@@ -23,7 +22,6 @@ export type ClusterProjectionCentroid = {
 	clusterId: number;
 	x: number;
 	y: number;
-	z: number;
 };
 
 export type ClusterProjectionData = {
