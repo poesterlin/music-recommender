@@ -31,12 +31,6 @@ jobs:
           - name: clusterer
             context: .
             dockerfile: ./clusterer/Dockerfile
-          - name: clusterer-bun
-            context: .
-            dockerfile: ./clusterer-bun/Dockerfile
-          - name: embedding-rs
-            context: .
-            dockerfile: ./embedding-rs/Dockerfile
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v3

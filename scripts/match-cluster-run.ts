@@ -65,13 +65,6 @@ try {
 		`;
 		for (const row of parentRows) parentNames.set(row.cluster_id, row.legacy_name);
 	}
-	const sourceClusterId = Number(runRow.config.source_cluster_id ?? -1);
-	const newClusterId = Number(runRow.config.new_cluster_id ?? -1);
-	const splitNames = new Map<number, string>();
-	if (runRow.mode === 'split' && sourceClusterId >= 0 && newClusterId >= 0) {
-		splitNames.set(sourceClusterId, 'Melodic Alternative & British Rock');
-		splitNames.set(newClusterId, 'Anthemic Alternative & Stadium Rock');
-	}
 
 	const pairs = await sql<PairRow[]>`
 		SELECT
@@ -127,16 +120,7 @@ try {
 				CLUSTER_NAMES[secondary.previous_cluster_id] ??
 				`Legacy Cluster ${secondary.previous_cluster_id}`
 			: '';
-		const splitName = splitNames.get(clusterId);
-		const splitLabel =
-			primary.previous_cluster_id === sourceClusterId &&
-			(clusterId === sourceClusterId || clusterId === newClusterId)
-				? ` · split ${clusterId === sourceClusterId ? 'A' : 'B'}`
-				: '';
-		const baseName = splitName ?? legacyName;
-		const displayName = splitName
-			? `${splitName}${splitLabel} · old #${primary.previous_cluster_id} (${Math.round(confidence * 100)}%)`
-			: secondary && confidence < 0.35
+		const displayName = secondary && confidence < 0.35
 				? `${legacyName} / ${secondaryName} · old #${primary.previous_cluster_id} (${Math.round(confidence * 100)}%)`
 				: `${legacyName} · old #${primary.previous_cluster_id} (${Math.round(confidence * 100)}%)`;
 		const relatedLegacyIds = ranked

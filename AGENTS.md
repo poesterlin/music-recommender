@@ -6,8 +6,6 @@
 - Web checks/build: `cd web && bun run check && bun run build`
 - Generated images: `cd assets && bun run check` (fails when a committed asset no longer matches its master; rebuild with `bun run build`). Replacing the artwork means rebuilding the knockout master first with `python3 assets/make-alpha.py`, which needs Pillow — see `assets/README.md`
 - Native clustering: `cargo test --manifest-path clustering-rs/Cargo.toml --locked`
-- WASM adapter: `cargo test --manifest-path clustering-wasm/Cargo.toml --locked`
-- Embedding core/CLI: `cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'`
 - Python worker tests: build `embeddings/Dockerfile`, then run `unittest discover` from `embeddings/tests`
 - Fresh database: provide a disposable pgvector URL and run `bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db`
 - Create/reset an account: `bun run auth:create-user --username <name>`
@@ -39,8 +37,7 @@ External PostgreSQL installations can leave that profile disabled and provide
   second web replica would run every job; the jobs are idempotent, so that
   wastes work rather than corrupting anything.
 - `embedding`: bounded/manual Python worker runs.
-- `clustering`: native and Bun/WASM clustering jobs.
-- `embedding-rust`: optional Rust embedding worker.
+- `clustering`: native Rust benchmark, split, apply, and rollback jobs.
 
 The app uses database-backed user/session authentication. Registration is
 opt-in with `ALLOW_REGISTRATION=true` and limited by `MAX_USERS` (default 1);

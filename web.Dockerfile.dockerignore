@@ -18,7 +18,6 @@ clusterer
 clusterer-bun
 clustering-rs
 clustering-wasm
-embedding-rs
 backups_*.sql
 output
 server

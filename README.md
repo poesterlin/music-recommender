@@ -104,7 +104,7 @@ Full walkthrough, including public deployment behind a reverse proxy:
 ## How it fits together
 
 ```
-web (Bun + SvelteKit)  ──  PostgreSQL + pgvector  ──  clusterer (Rust/WASM)
+web (Bun + SvelteKit)  ──  PostgreSQL + pgvector  ──  clusterer (native Rust)
         │                                                   │
         │  bounded audio snippets                          │  writes cluster names
         ▼                                                   │
@@ -401,8 +401,6 @@ an explicit operation.
 cd web && bun install --frozen-lockfile && bun run check && bun run build
 cd assets && bun run check
 cargo test --manifest-path clustering-rs/Cargo.toml --locked
-cargo test --manifest-path clustering-wasm/Cargo.toml --locked
-cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'
 docker build -t sole-embeddings:ci embeddings
 docker run --rm -v "$PWD/embeddings:/workspace-tests:ro" \
   --entrypoint python sole-embeddings:ci \

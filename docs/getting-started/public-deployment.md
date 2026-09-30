@@ -43,7 +43,7 @@ For probes, `GET /api/health` returns `{"status":"ok"}` with `Cache-Control: no-
 
 The web service reads your library through a read-only bind of `MUSIC_LIBRARY_PATH` at `/music`, and resolves each track by matching the path Music Assistant reports. If the mount contains a different tree than MA's paths describe, everything looks healthy while worker audio 404s and nothing ever gets analysed. `ffmpeg` is already in the image.
 
-Named volumes to keep: `postgres-data`, `cluster-artifacts`, `embedding-artifacts`. Clustering writes artifacts and rollback data into `cluster-artifacts`, so treat it as state rather than a cache.
+Named volumes to keep: `postgres-data`, `cluster-artifacts`. Clustering writes artifacts and rollback data into `cluster-artifacts`, so treat it as state rather than a cache.
 
 ## Access and uploads
 
@@ -65,9 +65,7 @@ Everything else is opt-in:
 
 ```sh
 docker compose run --rm worker python worker.py --source-mode api --dry-run --limit 10
-docker compose --profile clustering run --rm clusterer-bun benchmark   # read-only
-docker compose --profile clustering run --rm clusterer                 # apply and rollback
-docker compose --profile embedding-rust up -d
+docker compose --profile clustering run --rm clusterer --help
 docker compose --profile database up -d postgres
 ```
 

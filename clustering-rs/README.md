@@ -60,22 +60,20 @@ Compare several cluster counts by running the command repeatedly with different 
 
 ## Docker batch profile
 
-The repository provides two one-shot services: `clusterer-bun` is the default
-Bun/WASM numerical engine for benchmarks and targeted splits, while the native
-`clusterer` service owns artifact validation, apply, and rollback. Neither
-service publishes a port.
+The one-shot native `clusterer` service handles benchmarks, targeted splits,
+artifact validation, apply, and rollback. It does not publish a port.
 
-Bun/WASM benchmark example:
+Benchmark example:
 
 ```sh
-docker compose --profile clustering run --rm clusterer-bun benchmark \
+docker compose --profile clustering run --rm clusterer \
   --k 50 \
   --pca-dim 32 \
   --evaluation-dim 32 \
   --runs 10 \
   --record-run \
-  --output /artifacts/bun-cluster-run.json \
-  --assignments /artifacts/bun-cluster-assignments.jsonl
+  --output /artifacts/cluster-run.json \
+  --assignments /artifacts/cluster-assignments.jsonl
 ```
 
 The report is persisted in the `cluster_run` table only when `--record-run` is supplied. The JSON artifacts are kept in the `cluster-artifacts` Docker volume. The command remains a dry run: it never updates `track.cluster_id` or `cluster_centroid`.
@@ -136,7 +134,7 @@ Matching uses the dominant track-overlap for each new cluster. It intentionally 
 A targeted split can create a new generation without renumbering the other clusters:
 
 ```sh
-docker compose --profile clustering run --rm clusterer-bun split \
+docker compose --profile clustering run --rm clusterer \
   --split-cluster-id 48 \
   --split-output /artifacts/k51-assignments.jsonl \
   --split-report /artifacts/k51-split-report.json \
@@ -145,13 +143,19 @@ docker compose --profile clustering run --rm clusterer-bun split \
   --record-run
 ```
 
-The command records a `split` run but does not apply it. Validate and apply that run with `--validate-apply` and `--confirm-apply`, just like a benchmark artifact. The previous generation remains available through the normal rollback audit. After listening to the split, provisional display names can be applied with:
+The command records a `split` run but does not apply it. Validate and apply that run with `--validate-apply` and `--confirm-apply`, just like a benchmark artifact. The previous generation remains available through the normal rollback audit. Generate overlap-based name suggestions with:
 
 ```sh
-bun run clusters:name-split
+bun run clusters:match -- <run-id>
 ```
 
-The numerical core is in `src/lib.rs`; the database and CLI are kept in `src/main.rs`. The library has no PostgreSQL dependency, and the CLI-only dependencies are behind the `cli` feature. This leaves the core suitable for a future WASM package.
+Choose the final names in the app's cluster naming UI; the tooling does not assume
+any particular library, genre, or cluster ID.
+
+The numerical core is in `src/lib.rs`; the database and CLI are kept in `src/main.rs`. The library has no PostgreSQL dependency, and the CLI-only dependencies are behind the `cli` feature.
+
+From the repository root, `bun run clusters:native -- --help` exposes all native
+options. `bun run clusters:docker -- --help` uses the same CLI in Docker.
 
 Native parallel assignments are enabled by the default `rayon` feature; use `--threads N` to pin the worker count for repeatable performance tests. To check the portable core without the CLI or Rayon:
 

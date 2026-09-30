@@ -7,4 +7,3 @@ embeddings
 **/target
 artifacts
 *.log
-embedding-rs/models/*.onnx

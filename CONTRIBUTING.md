@@ -26,9 +26,6 @@ docker run --rm \
 
 # rust
 cargo test --manifest-path clustering-rs/Cargo.toml --locked
-cargo test --manifest-path clustering-wasm/Cargo.toml --locked
-cargo test --manifest-path embedding-rs/Cargo.toml --locked \
-  --no-default-features --features 'cli onnxruntime'
 
 # generated assets must still match their source
 cd assets && bun run check

@@ -18,11 +18,3 @@ services:
     build:
       context: .
       dockerfile: clusterer/Dockerfile
-  clusterer-bun:
-    build:
-      context: .
-      dockerfile: clusterer-bun/Dockerfile
-  embedding-rust:
-    build:
-      context: .
-      dockerfile: embedding-rs/Dockerfile

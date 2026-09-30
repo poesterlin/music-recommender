@@ -32,7 +32,7 @@
     "track_total_seconds": 54.042200637981296
   },
   "parity": {
-    "reference": "embedding-rs/fixtures/reference-60s.json",
+    "reference": "embeddings/fixtures/reference-60s.json",
     "cosine": 1.0,
     "max_absolute_error": 0.0,
     "mean_absolute_error": 0.0,

@@ -59,31 +59,16 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: wasm32-unknown-unknown
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            clustering-rs
-            clustering-wasm
-            embedding-rs
+          workspaces: clustering-rs
       - name: Check Rust formatting
-        run: |
-          cargo fmt --manifest-path clustering-rs/Cargo.toml --all -- --check
-          cargo fmt --manifest-path clustering-wasm/Cargo.toml --all -- --check
-          cargo fmt --manifest-path embedding-rs/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path clustering-rs/Cargo.toml --all -- --check
       - name: Test native clustering
         run: cargo test --manifest-path clustering-rs/Cargo.toml --locked
-      - name: Test WASM adapter
-        run: cargo test --manifest-path clustering-wasm/Cargo.toml --locked
-      - name: Check WASM target
-        run: cargo check --manifest-path clustering-wasm/Cargo.toml --locked --target wasm32-unknown-unknown
       - name: Lint native clustering
         run: cargo clippy --manifest-path clustering-rs/Cargo.toml --locked --all-targets -- -D warnings
-      - name: Test embedding core and CLI
-        run: cargo test --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime'
-      - name: Lint embedding core and CLI
-        run: cargo clippy --manifest-path embedding-rs/Cargo.toml --locked --no-default-features --features 'cli onnxruntime' --all-targets -- -D warnings
 
   python:
     name: Python worker tests
@@ -158,6 +143,6 @@ jobs:
       - name: Prepare example environment
         run: cp .env.example .env
       - name: Validate Compose profiles
-        run: docker compose --profile database --profile clustering --profile embedding-rust config --quiet
+        run: docker compose --profile database --profile clustering config --quiet
       - name: Build release services
-        run: docker compose --profile clustering --profile embedding-rust build
+        run: docker compose --profile clustering build
