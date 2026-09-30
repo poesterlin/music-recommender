@@ -1,34 +1,75 @@
 # Sole
 
-A local music-library indexer, OpenL3 embedding worker, pgvector similarity
-search, and clustering service. The web process is the database-backed UI and
-API. The Python worker can run beside it or on another machine.
+[![CI](https://github.com/poesterlin/sole/actions/workflows/ci.yml/badge.svg)](https://github.com/poesterlin/sole/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-guidance-0f7666)](https://poesterlin.github.io/sole/)
+[![License](https://img.shields.io/badge/license-MIT-0f7666)](LICENSE)
 
-Documentation is published at **<https://poesterlin.github.io/sole/>** — a short
-guided install and first-play path. To build or run the site locally, see
-[docs/README.md](docs/README.md).
+**Your music library, indexed by how it sounds instead of what it's tagged as.**
 
-## Requirements
+Sole runs [OpenL3](https://github.com/miraglab/OpenL3) — a self-supervised audio
+model — over every track you own, stores the vectors in pgvector beside your
+metadata, and clusters them into named *vibes*. You can browse those clusters as
+cover art, search them by name, schedule one to play at a given hour, or seed a
+single track and get things that sound like it. It runs on your own hardware.
+
+![The Vibe view: library clusters rendered as cover-art tiles, each auto-named for the artists that dominate it](docs/public/images/first-play/vibes.jpg)
+
+## Why
+
+Every music tool you already use is built around metadata somebody else wrote.
+That works well right up until it doesn't: the misspelled artist, the tagged
+"Live" version filed next to the studio cut, the bootleg with no tags at all, the
+album you ripped years ago and never went back to. Tag-based search can only
+return what a scrobbler already guessed.
+
+An audio model doesn't care. It hears the track, so a badly tagged demo and a
+correctly tagged one land next to each other if they sound alike. OpenL3 is
+self-supervised, which means it needed no training set and no labels — it learned
+from unlabelled audio, so you don't need to have scrobbled anything to use it.
+
+## What it does
+
+- **Vibe** — clusters your library by sound and names each one after the artists
+  that dominate it, so you get "Sade, Gorillaz, Sia" instead of "Cluster 0". Browse
+  the lot, filter by name, or schedule a cluster to play between two hours.
+- **Recommend** — name one track, get the tracks that sit nearest it in embedding
+  space.
+- **Worker** — embedding coverage and worker liveness. Entirely read-only; nothing
+  on that page can start a job.
+- **Manage** — library upkeep, duplicate pruning, and scoped API keys.
+
+Playback is handed to [Music Assistant](https://www.music-assistant.io/), which
+Sole also reads for library metadata. That is a genuine dependency, not an
+optional extra — see below.
+
+<details>
+<summary>More screenshots</summary>
+
+![The Worker view: embedding coverage across the library, with pending, skipped and clustered counts and a progress bar](docs/public/images/first-play/worker.jpg)
+
+![The Setup flow that walks a new install through pointing Sole at Music Assistant and a library path](docs/public/images/first-play/setup.jpg)
+
+</details>
+
+## What you need
 
 - Docker Compose v2
-- Bun
-- PostgreSQL with the `vector` extension
-- A music library available to the web process
-- Music Assistant for library metadata and playback
+- PostgreSQL with the `vector` extension (the optional `database` profile starts
+  one for you)
+- Your own audio files
+- **Music Assistant**, reachable over the network, already set up with your
+  library
 
-Rust `1.78` or newer is needed for the optional native clustering tools. The
-Python worker uses Python 3.11 and the packages in
-`embeddings/requirements.txt`. Python 3.12+ is supported for notebook/API
-workers through the packaging-only compatibility installer
-`embeddings/install_python312.py`; the validated Docker image remains on Python
-3.11.
+That last one is the thing to weigh before you start. Sole does not scan your
+music folder itself; it asks Music Assistant for the library and drives playback
+through it. If you already run Music Assistant this is free. If you don't, this
+is not the project for you yet, and the app will sit on "Music Assistant is not
+connected" until you fix it.
 
-## Install
+## Quick start
 
-### Local first run
-
-Docker is the only requirement. The steps are explicit, so nothing has to be
-piped from a URL into a shell:
+The shortest path that ends with a running app. Nothing is piped from a URL into
+a shell, and every step is explicit.
 
 ```sh
 mkdir sole && cd sole
@@ -48,11 +89,79 @@ docker compose run --rm --entrypoint bun web \
   web/scripts/create-user.ts --username admin
 ```
 
-The last command prints a generated password once. Open
-`http://127.0.0.1:3000/login`, then follow **Setup**. Add your Music Assistant
-details to `.env` and run `docker compose up -d` again.
+The last command prints a generated password once. Open `http://127.0.0.1:3000/login`,
+sign in, and follow **Setup**, which is where you add your Music Assistant details.
+Embedding the library is the slow part and happens in the background; **Worker**
+tells you how far along it is.
 
-The same steps are automated in `setup.sh` if you would rather not type them:
+The same sequence is scripted in [`setup.sh`](setup.sh) if you would rather not
+type it. To build from a checkout instead of pulling the published images, add
+`compose.build.yaml`.
+
+Full walkthrough, including public deployment behind a reverse proxy:
+**<https://poesterlin.github.io/sole/>**
+
+## How it fits together
+
+```
+web (Bun + SvelteKit)  ──  PostgreSQL + pgvector  ──  clusterer (Rust/WASM)
+        │                                                   │
+        │  bounded audio snippets                          │  writes cluster names
+        ▼                                                   │
+worker (Python, OpenL3)  ──  POST /api/worker/embeddings  ──┘
+```
+
+The web process is the database-backed UI and API. It holds the library metadata
+and serves three authenticated worker endpoints: a page of pending tracks, a
+server-generated time-bounded audio snippet, and an idempotent vector batch. The
+Python worker needs a worker-scoped key and nothing else — no database, no music
+mount, no access to your files — so it can run beside the app, on a bigger
+machine, or in a Colab notebook. Maintenance jobs run in-process on `Bun.cron`.
+
+## Honest limitations
+
+- **One contributor, built at weekends.** 134 commits, one author, no SLA.
+- **It needs Music Assistant.** See *What you need*. This is the main reason
+  someone might bounce.
+- **The first embedding pass is slow.** It is CPU inference over short windows.
+  Expect minutes per thousand tracks, and a long quiet stretch for a large library.
+  It checkpoints, so it survives restarts.
+- **Clustering is untuned.** The count scales with library size, and the
+  boundaries are whatever k-means decides they are. It is good enough to browse,
+  not a curated taxonomy.
+- **No mobile app, no multi-user roles.** One account by default (`MAX_USERS`),
+  no permission model beyond the two scoped API keys.
+
+## Reference
+
+Everything below is detail: the long-form install and deployment paths, the
+worker, database and diagnostics commands, configuration, cluster naming,
+duplicates, and troubleshooting.
+
+### Requirements
+
+- Docker Compose v2
+- Bun
+- PostgreSQL with the `vector` extension
+- A music library available to the web process
+- Music Assistant for library metadata and playback
+
+Rust `1.78` or newer is needed for the optional native clustering tools. The
+Python worker uses Python 3.11 and the packages in
+`embeddings/requirements.txt`. Python 3.12+ is supported for notebook/API
+workers through the packaging-only compatibility installer
+`embeddings/install_python312.py`; the validated Docker image remains on Python
+3.11.
+
+### Install
+
+#### Other ways to install
+
+The [Quick start](#quick-start) above is the canonical path. These are the
+variations.
+
+**Let the script do it.** `setup.sh` performs the same steps, so nothing has to
+be typed:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/setup.sh -o setup.sh
@@ -60,16 +169,16 @@ less setup.sh   # read it first
 bash setup.sh "$HOME/Music"
 ```
 
-To build from this checkout instead of pulling images, use the build override:
+**Build from a checkout** instead of pulling the published images:
 
 ```sh
 docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-A machine that also runs another stack keeps its values in a separate `.env` and
-passes it with `--env-file`.
+**Share the machine** with another stack: keep that stack's values in a separate
+`.env` and pass it with `--env-file`.
 
-### Public deployment
+#### Public deployment
 
 1. Create the environment file:
 
@@ -124,7 +233,7 @@ passes it with `--env-file`.
    from `MUSIC_LIBRARY_PATH`. Open the application and run the full tidy-up
    from **Manage**. Use `/status` for embedding coverage and worker liveness.
 
-## Authentication
+### Authentication
 
 The web UI uses database-backed accounts and an opaque session cookie. Run
 `bun run db:migrate` once on an existing database before using the login
@@ -169,9 +278,9 @@ curl -X POST https://sole.example.com/api/play-vibe \
 
 Browser requests use the session cookie automatically.
 
-## Python worker
+### Python worker
 
-### One-off runs
+#### One-off runs
 
 The default `worker` service loops every twelve hours. To do a bounded pass
 instead, override its command:
@@ -233,7 +342,7 @@ starts with `--dry-run --limit 1`; remove those flags only when you are ready to
 write embeddings. Its filesystem is temporary; use `EMBEDDING_STATE_FILE` on
 mounted storage if the job must resume there.
 
-## Database and diagnostics
+### Database and diagnostics
 
 ```sh
 bun run db:migrate
@@ -248,7 +357,7 @@ present.
 `doctor` checks configuration, the database connection, pgvector, the auth and
 pipeline tables and columns, and the host audio path without writing data.
 
-## Background services
+### Background services
 
 The default Compose stack is the web process and the embedding worker. The
 worker fetches bounded audio snippets over the worker API and uploads vectors
@@ -264,7 +373,7 @@ web-only install without them logs that the schedules are disabled.
 Cluster benchmark commands are read-only. Applying or rolling back a cluster is
 an explicit operation.
 
-## Development checks
+### Development checks
 
 ```sh
 cd web && bun install --frozen-lockfile && bun run check && bun run build
@@ -282,7 +391,7 @@ CI runs the same web, Rust, Python, fresh-database, Compose, and Docker checks.
 Tagging a commit as `v*` runs `.github/workflows/release.yml`, which publishes
 versioned service images to GHCR and creates a GitHub release.
 
-## Configuration notes
+### Configuration notes
 
 - Keep `.env`, database URLs, and tokens out of source control.
 - The web and database ports are published on every interface. Set a real
@@ -297,7 +406,7 @@ versioned service images to GHCR and creates a GitHub release.
 - Generated cluster statistics and music-map HTML files are local artifacts and
   are intentionally ignored.
 
-## Naming clusters
+### Naming clusters
 
 Clusters are named by hand, on the Vibe → Browse tab. Click a tile to open the
 naming panel: it shows the tracks nearest that cluster's centroid, the artists
@@ -311,7 +420,7 @@ Cover art is fetched from Music Assistant during indexing and stored as an
 imageproxy path on `track.album_image`. The browser never contacts the media
 server directly; images are proxied through `/api/cover`.
 
-## Duplicates
+### Duplicates
 
 Music Assistant can hold more than one library entry for a single real album,
 with adjacent ids for the same album name. Indexing stores both, so the same
@@ -355,7 +464,7 @@ cannot disagree. Skipped rows are not touched by the indexing upsert, so
 re-indexing does not undo a cleanup. Both actions are reversible from the same
 page.
 
-## Troubleshooting
+### Troubleshooting
 
 - `vector` errors: run `bun run db:ensure-pgvector` or `bun run db:migrate` with
   a database user that can enable the extension.
