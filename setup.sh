@@ -76,7 +76,7 @@ note "Sole setup. Press Enter to accept each default."
 
 if [ -e "$ENV_FILE" ]; then
   printf '\nAn %s already exists, so this is not a first run.\n\n' "$ENV_FILE"
-  printf 'To start or update:\n\n  docker compose up -d\n\n'
+   printf 'To start or update:\n\n  docker compose -f stack.yaml up -d\n\n'
   printf 'To change the music folder or service details, edit %s and rerun.\n' "$ENV_FILE"
   exit 0
 fi
@@ -93,7 +93,7 @@ library="${library%/}"
 
 if [ ! -d "$library" ]; then
   note ""
-  note "Note: $library does not exist yet. The app will start, but cannot read music until it does."
+  die "Music folder does not exist: $library. Create it or provide the correct path."
 fi
 
 if [ ! -e "$STACK_FILE" ]; then
@@ -173,19 +173,19 @@ compose=(docker compose -f "$STACK_FILE" --env-file "$ENV_FILE")
 note ""
 note "Starting PostgreSQL and the app ..."
 "${compose[@]}" up -d --wait ||
-  die "Startup failed. Check the output above, then rerun \`docker compose up -d\`."
+  die "Startup failed. Check the output above, then rerun \`docker compose -f stack.yaml up -d\`."
 
 note ""
 note "Applying the schema ..."
 "${compose[@]}" run --rm --entrypoint sh web \
   -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate' ||
-  die "The schema step failed. Rerun: docker compose run --rm --entrypoint sh web -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate'"
+  die "The schema step failed. Rerun: docker compose -f stack.yaml run --rm --entrypoint sh web -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate'"
 
 note ""
 note "Creating the admin account ..."
 "${compose[@]}" run --rm --entrypoint bun web \
   web/scripts/create-user.ts --username admin --password "$admin_password" >/dev/null ||
-  note "Could not create the account automatically. Create one at the login page."
+  die "Could not create the account. Run: docker compose -f stack.yaml run --rm --entrypoint bun web web/scripts/create-user.ts --username admin"
 
 cat <<EOF
 
@@ -199,7 +199,7 @@ Ready.
   Settings  ${ENV_FILE}
 
 Add your Music Assistant details to ${ENV_FILE}, then run:
-  docker compose up -d
+  docker compose -f stack.yaml up -d
 
-Change the music folder or ports? Edit ${ENV_FILE} and run \`docker compose up -d\` again.
+Change the music folder or ports? Edit ${ENV_FILE} and run \`docker compose -f stack.yaml up -d\` again.
 EOF
