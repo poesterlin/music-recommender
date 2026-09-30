@@ -16,29 +16,21 @@ clusters. The UI calls those groups *vibes*.
 ## Features
 
 - **Vibe:** browse clusters as cover-art tiles, filter by name, and schedule
-  playback. [Auto-naming](web/src/lib/server/cluster-naming.ts) uses the three
-  most frequent artists in each cluster,
-  producing names such as "Sade, Gorillaz, Sia". You can edit them.
+  playback. Editable names use the three most frequent artists in each cluster
+  ([naming code](web/src/lib/server/cluster-naming.ts)).
 - **Recommend:** choose a track and get related tracks.
-  [Selection](web/src/lib/server/recomendation-engine.ts) combines audio
-  similarity with liked tracks, artist limits, and a penalty for similar picks.
+  Selection combines audio similarity with liked tracks, artist limits, and a
+  penalty for similar picks
+  ([recommendation code](web/src/lib/server/recomendation-engine.ts)).
 - **Atlas:** inspect a 2D sample of the clusters, select tracks, and play them.
 - **Worker:** check embedding counts, pending tracks, and recent worker uploads.
 - **Manage:** index the library, review duplicates, change embedding settings,
   and create scoped API keys.
 
-You do not need to train a model or supply listening history. Audio similarity
-does not depend on genre tags, but indexing and playback still depend on the
-metadata and URIs Music Assistant supplies.
+Sole needs no model training and no listening history. Indexing and playback
+still rely on metadata and URIs from Music Assistant.
 
-<details>
-<summary>More screenshots</summary>
-
-![The Worker view: embedding coverage across the library, with pending, skipped and clustered counts and a progress bar](docs/public/images/first-play/worker.jpg)
-
-</details>
-
-## Requirements and limitations
+## Requirements
 
 - Docker Compose v2; `curl` and `openssl` for the quick-start commands
 - PostgreSQL with the `vector` extension (included in the starter stack)
@@ -46,32 +38,36 @@ metadata and URIs Music Assistant supplies.
 - **Music Assistant**, reachable over the network, already set up with your
   library
 
-Configure Music Assistant with your library before installing Sole. Sole imports
-its track list rather than scanning your music folder independently. The folder
-mounted into Sole must contain the audio files Music Assistant reports.
+Sole imports Music Assistant's track list. Its music mount must contain those files.
 
-- **Missing Music Assistant connection:** Setup reports `MA_TOKEN is not set`
-  or a connection error. Set `MUSIC_HOST` and `MA_TOKEN` in `.env`; Sole uses
-  Music Assistant for indexing and playback
-  ([connection code](web/src/lib/server/ma-client.ts)).
-- **Missing audio files:** the worker receives `404` from `/api/worker/audio`.
-  Set `MUSIC_LIBRARY_PATH` to the folder containing your library. Streaming-service
-  catalogues are not supported ([file lookup](web/src/lib/server/audio-library.ts)).
-- **Initial processing:** each pending track needs audio inference. Measure a
-  bounded pass on your hardware with the command under [Python worker](#python-worker).
-  The worker stores completed uploads in PostgreSQL and resumes pending tracks
-  ([worker implementation](embeddings/worker_api.py)).
-- **Embedding settings:** choose the sampling settings before analysing the
-  library. Once embeddings exist, the app rejects recipe changes with
-  `The library already has embeddings`
+## Known problems
+
+- **The app reports `The library already has embeddings` when changing settings:**
+  keep the recorded recipe. Recipe changes require a full re-embedding transition,
+  which the app does not yet provide
   ([settings code](web/src/lib/server/embedding-settings.ts)).
-- **Automatic groups:** cluster boundaries come from k-means, not genre labels.
-  The initial count grows with library size
-  ([count formula](web/src/lib/server/setup/derive-k.ts)).
-- **Accounts:** `MAX_USERS=1` is the default. The app has no account roles or
-  native mobile app ([registration limits](web/src/lib/server/registration.ts)).
-- Development and testing have primarily used the maintainer's library. Other
-  collections and Music Assistant providers have not been tested systematically.
+- **An upgrade's worker receives `500` while listing tracks:** check whether
+  the database has `embedding_settings`. See [Database and diagnostics](#database-and-diagnostics).
+- **A cluster contains tracks you would separate:** inspect its tracks in
+  **Vibe → Browse**. Use the [Rust CLI](clustering-rs/README.md) to benchmark a
+  different cluster count or split a group. K-means does not produce genre labels.
+
+## Limits
+
+- Sole analyses local audio files; it does not analyse streaming-service catalogues.
+- `MAX_USERS=1` is the default. Raise it before creating another account
+  ([authentication](#authentication)). The app has no account roles or native mobile app.
+- Development and testing have primarily used the maintainer's library of about
+  **31,500 tracks**. Other collections and providers have not been tested
+  systematically. For a provider issue, report the provider, visible error, and
+  whether Music Assistant itself can play the affected track.
+- On **2026-09-30**, three CPU passes over the same 90-second excerpt took
+  **5.9 seconds median** on an **AMD Ryzen 7 255**, with 10 CPUs visible to the
+  runtime, a 0.5-second window hop, and batches of 64 windows.
+  That extrapolates to about **99 minutes per 1,000 tracks for inference and
+  audio decoding**, excluding startup, snippet generation/download, and uploads.
+  This is a snippet-based estimate, not measured library throughput. Use the
+  [bounded worker command](#python-worker) to compare your hardware.
 
 ## Quick start
 
@@ -81,17 +77,21 @@ This starts PostgreSQL, the web app, and the Python worker using published image
 mkdir sole && cd sole
 curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/stack.yaml -o compose.yaml
 
+# Write the template, then replace CHANGE_ME values before starting containers.
+# For access from another device, set ORIGIN=http://your-server:3000 too.
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 WORKER_TOKEN=$(openssl rand -hex 24)
 MUSIC_LIBRARY_PATH=$HOME/Music
-MUSIC_HOST=http://your-music-assistant-host:8095
-MA_TOKEN=your-music-assistant-token
+MUSIC_HOST=CHANGE_ME
+MA_TOKEN=CHANGE_ME
 EOF
 chmod 600 .env
 
-# Edit .env: set your actual music folder and Music Assistant connection.
-# For access from another device, also set ORIGIN=http://your-server:3000.
+# Set MUSIC_HOST to the Music Assistant URL and MA_TOKEN to its API token.
+# Set MUSIC_LIBRARY_PATH to your existing music folder.
+${EDITOR:-vi} .env
+grep -q CHANGE_ME .env && { echo 'Replace CHANGE_ME values in .env first'; exit 1; }
 docker compose up -d --wait
 
 docker compose run --rm --entrypoint sh web \
@@ -124,10 +124,9 @@ Music Assistant ── metadata and playback ── web (Bun + SvelteKit)
 web ── PostgreSQL + pgvector ── native Rust clustering CLI
 ```
 
-The web process reads metadata from PostgreSQL, serves audio snippets, and accepts
-embedding uploads. The Python worker downloads those snippets and runs OpenL3.
-It needs the web API URL and a worker key, but no direct database connection or
-music-folder mount. It can run on the same host, another machine, or in a notebook.
+The web process serves audio snippets and accepts embeddings. The Python worker
+runs OpenL3 using a web API URL and worker key; it needs no database connection
+or music mount.
 
 Initial setup uses the web app's k-means implementation. The native Rust CLI
 supports PCA (reducing vector dimensions), spherical k-means, benchmark reports,
@@ -137,19 +136,11 @@ runs inside the web process using `Bun.cron`. See the
 
 ## Reference
 
-The sections below cover deployment, authentication, workers, and maintenance.
-
 ### Source-checkout requirements
 
-Install Bun to run the repository scripts. The Docker quick start runs those
-scripts inside the web image and does not need Bun on the host.
-
-Rust `1.78` or newer is needed for the optional native clustering tools. The
-Python worker uses Python 3.11 and the packages in
-`embeddings/requirements.txt`. Python 3.12+ is supported for notebook/API
-workers through the packaging-only compatibility installer
-`embeddings/install_python312.py`; the validated Docker image remains on Python
-3.11.
+Repository scripts require Bun; optional clustering tools require Rust 1.78+.
+The Docker worker uses Python 3.11 and `embeddings/requirements.txt`.
+Notebook/API workers on Python 3.12+ use `embeddings/install_python312.py`.
 
 ### Install
 
@@ -173,78 +164,30 @@ To use a separate environment file, pass `--env-file <path>` to Compose.
 
 #### Public deployment
 
-1. Create the environment file:
+For Traefik deployment from a checkout, copy `.env.example` to `.env`. Set
+`DOMAIN`, `MUSIC_LIBRARY_PATH`, `MUSIC_HOST`, `MA_TOKEN`, and `WORKER_TOKEN`.
+`DATABASE_URL` is the host connection; `DATABASE_INTERNAL_URL` is the container
+connection. For an external database, set both to reachable URLs.
 
-   ```sh
-   cp .env.example .env
-   ```
+```sh
+docker network create "${TRAEFIK_NETWORK:-traefik_web}" 2>/dev/null || true
+docker compose --profile database up -d postgres
+bun install --frozen-lockfile
+bun run db:migrate
+bun run doctor -- --strict
+docker compose up -d
+```
 
-2. Set at least:
-
-   - `DOMAIN`
-   - `MUSIC_LIBRARY_PATH`
-   - `MUSIC_HOST` and `MA_TOKEN`
-   - `WORKER_TOKEN` for the default Compose internal jobs (external workers
-     can use a UI-created worker key)
-
-3. Choose a database.
-
-   For the optional Compose database:
-
-   ```sh
-   docker network create "${TRAEFIK_NETWORK:-traefik_web}" 2>/dev/null || true
-   docker compose --profile database up -d postgres
-   ```
-
-   `DATABASE_URL` is for commands run on the host. `DATABASE_INTERNAL_URL` is
-   used by containers. For an external database, set both to its reachable URL,
-   or leave `DATABASE_INTERNAL_URL` unset.
-
-4. Install the schema:
-
-   ```sh
-   bun install --frozen-lockfile
-   bun run db:migrate
-   ```
-
-   `db:migrate` enables pgvector when needed. A new database has no centered
-   embedding space until at least two raw embeddings exist.
-
-5. Check the host configuration:
-
-   ```sh
-   bun run doctor -- --strict
-   ```
-
-6. Start the app and the embedding worker:
-
-   ```sh
-   docker compose up -d
-   ```
-
-   The web container reads the library through `/music`; the host path comes
-    from `MUSIC_LIBRARY_PATH`. Create an account with the command under
-    [Authentication](#authentication), then open **Setup** and index the library.
-    Use `/status` for embedding counts and recent uploads.
+Omit the database service command for external PostgreSQL. Create an account
+using [Quick start](#quick-start), then open **Setup**.
 
 ### Authentication
 
-The web UI uses database-backed accounts and a session cookie. Self-registration
-is disabled by default. Apply migrations when installing a new database. An
-existing database without a migration ledger needs its schema checked before
-running `db:migrate`; the command will otherwise attempt to recreate tables.
+The web UI uses database-backed accounts and session cookies. Self-registration
+is disabled by default.
 
-For the **prebuilt Docker image**, create the first account inside the container
-(the helper is included in the image; no local Bun installation is needed):
-
-```sh
-docker compose run --rm --entrypoint bun web \
-  web/scripts/create-user.ts --username admin
-```
-
-There is no default username/password and no automatic first-user registration.
-The command prints a generated password once. Run it again with the same username
-to reset the password and revoke that account's sessions.
+Create the first Docker account using the command in [Quick start](#quick-start).
+There is no default username/password or automatic first-user registration.
 
 From a source checkout:
 
@@ -252,30 +195,22 @@ From a source checkout:
 bun run auth:create-user --username admin
 ```
 
-The command creates the account or replaces its password and revokes that
-user's sessions. Without `--password`, it prints a generated password once.
-The account limit is `MAX_USERS=1` by default. Raise it in `.env` before
-creating more accounts (including with the command above). To allow people to
-create their own accounts up to that limit, set `ALLOW_REGISTRATION=true` in
-`.env` and restart the web service. Once the limit is reached, the registration
-link disappears and `/register` returns to login. Remove the flag and restart
-to close sign-ups earlier; existing accounts keep working.
+To reset a password, rerun the account helper with the same username. It replaces
+the password and revokes that account's sessions.
+Raise `MAX_USERS` before creating additional accounts. Set
+`ALLOW_REGISTRATION=true` and restart the web service to enable sign-ups up to
+that limit. Remove the flag and restart to close sign-ups.
 
-There are two bootstrap service credentials for Compose and existing automations:
+Environment credentials:
 
 - `WORKER_TOKEN` authenticates the default Python worker and the two internal
   maintenance endpoints. It is not accepted by ordinary application routes.
 - `PLAYBACK_API_KEY` lets an external caller `POST /api/play-vibe` trigger
   playback. It is not accepted by other application routes.
 
-Signed-in users can also create scoped keys under **API keys** in the
-web UI. A `worker` key is accepted only by `/api/worker/*`; a `playback` key is
-accepted only by the playback POST. The secret is displayed once, stored only as
-a hash, and can be revoked without affecting the account. The environment
-credentials configure the default Compose worker and playback integrations.
-
-For example, an external playback trigger can use either the bootstrap key or a
-UI-created playback key:
+Under **API keys**, users can create revocable `worker` keys for `/api/worker/*`
+or `playback` keys for the playback POST. Secrets appear once and are stored
+hashed. Either playback key type works here:
 
 ```sh
 curl -X POST https://sole.example.com/api/play-vibe \
@@ -284,20 +219,14 @@ curl -X POST https://sole.example.com/api/play-vibe \
   -d '{}'
 ```
 
-Browser requests use the session cookie automatically.
-
 ### Global embedding settings
 
 **Manage → Embedding settings** stores the sampling recipe in PostgreSQL. New
 installs use **medium: one window every 0.5 seconds, up to 90 seconds of audio**.
 The API worker fetches those settings before inference. Choose them before the
 first embedding upload; a populated library keeps its existing recipe.
-See [`embedding-settings.ts`](web/src/lib/server/embedding-settings.ts) and
-[`worker_api.py`](embeddings/worker_api.py).
 
 ### Python worker
-
-#### One-off runs
 
 After each pass, the default worker waits twelve hours if the backlog is drained,
 five minutes if tracks remain, or fifteen minutes after an error. For a bounded
@@ -308,10 +237,8 @@ time docker compose run --rm --entrypoint python worker \
   worker.py --source-mode api --dry-run --limit 10
 ```
 
-It needs only the worker API URL and a worker-scoped
-bearer key; it reads audio through the API rather than a local music mount.
-Create the key under **API keys** in the UI, or use the bootstrap `WORKER_TOKEN`
-for an existing deployment.
+For a remote worker, install the Python dependencies and create a Worker key
+under **API keys**:
 
 ```sh
 export WORKER_URL=https://sole.example.com
@@ -319,50 +246,14 @@ export WORKER_TOKEN='a-worker-scoped-key'
 python embeddings/worker.py --source-mode api
 ```
 
-The web service provides three authenticated endpoints:
+Downloads run concurrently; inference runs sequentially. The worker saves its
+cursor after successful uploads and leaves existing embeddings unchanged
+([worker code](embeddings/worker_api.py)).
 
-- `GET /api/worker/tracks` — a bounded page of pending track metadata;
-- `GET /api/worker/audio` — a server-generated, time-bounded MP3 snippet;
-- `POST /api/worker/embeddings` — a vector batch; rows with existing embeddings
-  are excluded from the update
-  ([upload handler](web/src/routes/api/worker/embeddings/+server.ts)).
-
-The worker uses a bounded thread pool for network downloads while OpenL3
-inference remains sequential. The worker saves its page cursor after an upload
-succeeds ([`worker_api.py`](embeddings/worker_api.py)).
-
-Worker settings:
-
-| Variable | Meaning |
-|---|---|
-| `WORKER_URL` | Base URL of the web worker API |
-| `WORKER_TOKEN` | Bearer token shared with the web service |
-| `EMBEDDING_PREFETCH_WORKERS` | Parallel snippet downloads |
-| `EMBEDDING_PREFETCH_DEPTH` | Download lookahead |
-| `EMBEDDING_INFER_BATCH_SIZE` | One-second windows per OpenL3 predict call |
-| `EMBEDDING_DOWNLOAD_TIMEOUT` | Per-request timeout in seconds |
-| `EMBEDDING_DOWNLOAD_RETRIES` | Retry count for network failures |
-| `EMBEDDING_DOWNLOAD_MAX_BYTES` | Maximum bytes per snippet |
-| `EMBEDDING_STATE_FILE` | Optional local cursor/progress file |
-
-Compose runs API mode beside the web service as the default `worker` service:
-
-```sh
-docker compose up -d worker
-```
-
-For Colab or Jupyter, open **API keys** in the web UI, create a Worker key, and
-copy the worker cell from that page. The cell clones the repository,
-installs `embeddings/requirements.txt`, prompts for the key, and runs the
-API worker with the server's embedding settings. The same notebook is downloadable as
-[`web/static/sole-worker.ipynb`](web/static/sole-worker.ipynb).
-
-The worker URL must be reachable from the notebook. The copied cell uses the
-dependencies in `embeddings/requirements.txt` on Python 3.11, or the compatibility
-installer on Python 3.12+. It
-starts with `--dry-run --limit 1`; remove those flags only when you are ready to
-write embeddings. Its filesystem is temporary; use `EMBEDDING_STATE_FILE` on
-mounted storage if the job must resume there.
+For Colab/Jupyter, copy the cell from **API keys** or download
+[the notebook](web/static/sole-worker.ipynb). The web URL must be reachable.
+The cell starts with `--dry-run --limit 1`; remove those flags to write embeddings.
+Set `EMBEDDING_STATE_FILE` on persistent storage to retain its cursor.
 
 ### Database and diagnostics
 
@@ -376,40 +267,28 @@ For an existing legacy database that predates the Drizzle migration journal,
 run `bun run db:ensure-user-api-keys` after the `user` and `session` tables are
 present.
 
-[`doctor.ts`](scripts/doctor.ts) checks configuration, the database connection,
-pgvector, auth and pipeline tables and columns, and the host audio path.
-
-### Background services
-
-The default Compose stack runs the web process and Python embedding worker.
-The native Rust clustering CLI uses the `clustering` profile; the optional
-PostgreSQL service uses the `database` profile.
-
-The maintenance jobs (favourites sync, library index, cluster assignment) run
-inside the web process on `Bun.cron`. They need `MUSIC_HOST` and `MA_TOKEN`; a
-web-only install without them logs that the schedules are disabled.
-
-Run `bun run clusters:native -- --help` for the clustering options. Benchmark
-mode reads vectors and writes report files; `--record-run` also records metadata
-in the database. Applying assignments requires `--confirm-apply`, and rollback
-requires `--confirm-rollback`
-([CLI implementation](clustering-rs/src/main.rs)).
-
-### Development checks
+If an upgraded worker reports `500` while listing tracks, inspect the settings
+table from the deployed web container:
 
 ```sh
-(cd web && bun install --frozen-lockfile && bun run check && bun run build)
-(cd assets && bun run check)
-cargo test --manifest-path clustering-rs/Cargo.toml --locked
-docker build -t sole-embeddings:ci embeddings
-docker run --rm -v "$PWD/embeddings:/workspace-tests:ro" \
-  --entrypoint python sole-embeddings:ci \
-  -m unittest discover -s /workspace-tests/tests
+docker compose exec web bun -e 'import postgres from "postgres"; const s=postgres(process.env.DATABASE_URL); console.log(JSON.stringify(await s`SELECT to_regclass(${"public.embedding_settings"}) AS settings_table`)); await s.end();'
 ```
 
-CI runs the same web, Rust, Python, fresh-database, Compose, and Docker checks.
-Tagging a commit as `v*` runs `.github/workflows/release.yml`, which publishes
-versioned service images to GHCR and creates a GitHub release.
+A null result means the table is missing. A database with an up-to-date migration
+ledger can use `bun run db:migrate`. If the schema exists but the ledger is empty,
+review [`0017_embedding_settings.sql`](drizzle/0017_embedding_settings.sql) against
+the existing schema. For that missing table, apply just the settings migration in
+a transaction:
+
+```sh
+docker compose exec web bun -e 'import postgres from "postgres"; const s=postgres(process.env.DATABASE_URL); const migration=await Bun.file("drizzle/0017_embedding_settings.sql").text(); await s.begin(async tx => { await tx.unsafe(migration); }); await s.end();'
+```
+
+This does not populate the migration ledger. Replaying all migrations will still
+attempt to recreate existing tables.
+
+[`doctor.ts`](scripts/doctor.ts) checks configuration, the database connection,
+pgvector, auth and pipeline tables and columns, and the host audio path.
 
 ### Configuration notes
 
@@ -423,8 +302,6 @@ versioned service images to GHCR and creates a GitHub release.
 - The repository `deploy.sh` runs from a checkout on the deployment machine; it
   fetches the configured branch and rebuilds the local Compose stack. Use the
   Compose workflow directly for another host.
-- Generated cluster statistics and music-map HTML files are local artifacts and
-  are intentionally ignored.
 
 ### Naming clusters
 
@@ -432,21 +309,12 @@ versioned service images to GHCR and creates a GitHub release.
 most frequent artists. Existing names are left unchanged. On **Vibe → Browse**,
 click a tile to inspect representative tracks and edit the name.
 
-Names live in `cluster_name`, keyed by clustering run and cluster ID. Each row
-records whether the name was automatic or manual. A new generation starts with
-`Cluster N` labels until named; rollback selects the names from the previous
-generation. Overlap matching records suggestions separately in `cluster_run_match`.
-See [`cluster-naming.ts`](web/src/lib/server/cluster-naming.ts) and the
-[name migration](drizzle/0018_cluster_names.sql).
-
-Cover art is fetched from Music Assistant during indexing and stored as an
-imageproxy path on `track.album_image`. The UI requests cover images through
-[`/api/cover`](web/src/routes/api/cover/+server.ts).
+Names are scoped to clustering generations; rollback restores the previous
+generation's names ([naming code](web/src/lib/server/cluster-naming.ts)).
 
 ### Duplicates
 
-Music Assistant can report multiple entries for the same recording. Indexing
-stores each URI, so duplicate entries can contribute multiple vectors to a cluster.
+Duplicate Music Assistant entries can contribute multiple vectors to a cluster.
 
 **Manage → Duplicates** lists groups sharing a normalised track name, first
 artist, and album name. A suffix such as `Live at…` or `Remastered` separates
@@ -459,26 +327,18 @@ embeddings into the keeper. The
 [centering trigger](drizzle/0006_centered_embedding_trigger.sql) recomputes the
 centered vector after the merged embedding is written.
 
-The scan flags potentially different recordings and leaves those groups
-unselected. Matching metadata alone does not establish that the audio is identical.
+I first limited the scan to clustered tracks and missed about two thirds of the
+duplicates. The scan now includes clustered and unclustered tracks. Marking an
+unembedded copy skipped also removes it from the worker's pending tracks.
 
-The scan includes clustered and unclustered tracks. Marking an unembedded copy
-skipped also removes it from the worker's pending tracks.
+The worker, audio endpoint, recommendation queries, and cluster assignment check
+`track.skip`, the maintenance flag. Recommendation queries also check
+`skipped_songs`, the listener's "don't play this" list.
 
-`track.skip` is the maintenance flag. It is honoured by the embedding worker,
-the worker audio endpoint, recommendation and similar-track queries, cluster
-assignment, centroid backfill, and the cluster sample endpoint. The separate
-`skipped_songs` table is the listener's own "don't play this" list, and both are
-respected.
+A skipped track keeps its `cluster_id`. Pruning affects recommendations and future
+clustering; use the Rust CLI to recompute assignments.
 
-A skipped track keeps its existing `cluster_id`. Pruning changes what is
-recommended and what the next clustering run sees; it does not retroactively
-re-assign tracks that were already clustered. To compute a new partition, use
-the native Rust clustering CLI's benchmark and apply workflow.
-
-The scan and cleanup use the same keeper ordering. Indexing updates metadata
-without changing `track.skip`. The page also provides actions to restore skipped
-tracks.
+Indexing preserves `track.skip`. The Duplicates page can restore skipped tracks.
 
 ### Troubleshooting
 
@@ -499,12 +359,6 @@ For provider and audio-path issues, see the
 [troubleshooting reference](docs/reference/troubleshooting.md).
 
 ## Contributing
-
-For issues and pull requests, see [CONTRIBUTING.md](CONTRIBUTING.md) for the
-development checks and reporting instructions.
-
-If you find something that looks like a security problem, do not open a public
-issue. See [SECURITY.md](SECURITY.md).
 
 - [Contributing guidelines](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
