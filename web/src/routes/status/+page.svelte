@@ -1,13 +1,14 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import { post } from '$lib/api';
 
 	let { data } = $props();
-	let status = $state(data);
+	// Polling owns the live value; re-reading `data` would fight it.
+	let status = $state(untrack(() => data));
 	let refreshing = $state(false);
-	let lastUpdated = $state(new Date(data.generatedAt));
+	let lastUpdated = $state(new Date(untrack(() => data.generatedAt)));
 
 	const counts = $derived(status.embedding.counts);
 	const worker = $derived(status.embedding.worker);

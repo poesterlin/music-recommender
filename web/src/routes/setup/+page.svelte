@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { post } from '$lib/api';
 	import { toastStore } from '$lib/client/toast.svelte';
@@ -30,7 +31,7 @@
 
 	// Server-rendered starting point. Deliberately the initial value only: the
 	// live state comes from polling, and re-reading `data` would fight it.
-	const initial: SetupState = data.state;
+	const initial: SetupState = untrack(() => data.state);
 
 	// Named `setup` rather than `state` so it cannot be confused with the
 	// `$state` rune it is declared with.

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { IconWand } from '@tabler/icons-svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
@@ -29,7 +30,7 @@
 		namedIds?: number[];
 	} = $props();
 
-	let names = $state<Record<number, string>>({ ...clusterNames });
+	let names = $state<Record<number, string>>({ ...untrack(() => clusterNames) });
 	let naming = $state<number | null>(null);
 	let title = $state('');
 	let tracks = $state<PreviewTrack[]>([]);

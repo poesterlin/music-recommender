@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import ClusterBrowser from '$lib/components/ClusterBrowser.svelte';
@@ -12,13 +13,14 @@
 	type Tab = 'mix' | 'browse' | 'schedule';
 	let tab = $state<Tab>('mix');
 
-	let vibeSelection = new SvelteSet<number>(data.vibeClusterIds);
-	let schedules = $state<VibeSchedule[]>(data.vibeSchedules);
-	let activeSchedule = $state<VibeSchedule | null>(data.activeSchedule);
+	let vibeSelection = $state(new SvelteSet<number>(untrack(() => data.vibeClusterIds)));
+	let schedules = $state<VibeSchedule[]>(untrack(() => data.vibeSchedules));
+	let activeSchedule = $state<VibeSchedule | null>(untrack(() => data.activeSchedule));
 	let saveStatus = $state('');
 	let filter = $state('');
 
-	const clusterIds = data.availableClusterIds;
+	// Tracks the prop, so a refreshed `data` cannot leave this list stale.
+	const clusterIds = $derived(data.availableClusterIds);
 
 	const TABS: Array<{ id: Tab; label: string }> = [
 		{ id: 'mix', label: 'Mix' },

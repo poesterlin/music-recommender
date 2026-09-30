@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { IconCheck, IconPlayerPlayFilled, IconWand, IconX } from '@tabler/icons-svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { coverUrl } from '$lib/cover-image';
@@ -33,7 +34,7 @@
 	let loading = $state(true);
 	let saving = $state(false);
 	let playing = $state(false);
-	let draft = $state(currentName);
+	let draft = $state(untrack(() => currentName));
 	let named = $state(false);
 	let suggested = $state<string | null>(null);
 

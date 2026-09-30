@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { post } from '$lib/api';
 	import { likeTrack } from '$lib/client/like-track';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
@@ -32,11 +32,12 @@
 		onQueueChange?: (() => void) | null;
 	} = $props();
 
-	let player = $state<State | null>(initial);
+	// `initial` is the server-rendered bootstrap only; the client owns it after.
+	let player = $state<State | null>(untrack(() => initial));
 	let busy = $state<string | null>(null);
 	let liking = $state(false);
-	let volume = $state<number | null>(initial?.volumeLevel ?? null);
-	let lastVolume = $state<number>(initial?.volumeLevel ?? 25);
+	let volume = $state<number | null>(untrack(() => initial?.volumeLevel ?? null));
+	let lastVolume = $state<number>(untrack(() => initial?.volumeLevel ?? 25));
 	let tick = $state(0);
 
 	const playing = $derived(player?.state === 'playing');

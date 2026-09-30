@@ -22,7 +22,7 @@
 	let name = $state('');
 	let startHour = $state(6);
 	let endHour = $state(10);
-	let picked = new SvelteSet<number>();
+	let picked = $state(new SvelteSet<number>());
 
 	function clusterName(id: number): string {
 		return clusterNames[id] ?? `Cluster ${id}`;
