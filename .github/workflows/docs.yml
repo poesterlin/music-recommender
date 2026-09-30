@@ -36,21 +36,22 @@ jobs:
       # and GitHub serves a project site from /<repo>/, so without this every
       # asset 404s. A repository named <owner>.github.io is served from the root.
       #
-      # `github.repository_name` is a context field and is populated for every
-      # event. The event-payload spelling (`github.event.repository_name`) is
-      # not: on a push it is empty, which produced a base of "//" and a site
-      # whose assets pointed at a host called "assets".
+      # Both halves come from GITHUB_REPOSITORY ("owner/repo"), a core variable
+      # set in every run. The expression spellings are not safe here:
+      # `github.event.repository_name` is empty on a push, and
+      # `github.repository_name` is empty on this Actions instance too, which is
+      # what produced a base of "//" and a site whose assets pointed at a host
+      # called "assets".
       - name: Resolve the Pages base path
         id: base
-        env:
-          REPO: ${{ github.repository_name }}
-          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          if [ -z "$REPO" ]; then
-            echo "::error::github.repository_name was empty; cannot resolve the base path"
+          if [ -z "${GITHUB_REPOSITORY:-}" ] || [ "${GITHUB_REPOSITORY#*/}" = "$GITHUB_REPOSITORY" ]; then
+            echo "::error::GITHUB_REPOSITORY is not in owner/repo form: '${GITHUB_REPOSITORY:-}'"
             exit 1
           fi
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY##*/}"
           if [ "$REPO" = "$OWNER.github.io" ]; then
             base="/"
           else
@@ -77,11 +78,10 @@ jobs:
       # "/" -- it asserted nothing and any base passed, and the forbidden check
       # then rejected the correct root-absolute build.
       - name: Check the built HTML matches the base path
-        env:
-          REPO: ${{ github.repository_name }}
-          OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
+          OWNER="${GITHUB_REPOSITORY%%/*}"
+          REPO="${GITHUB_REPOSITORY##*/}"
           if [ "$REPO" = "$OWNER.github.io" ]; then
             expected="/"
           else
