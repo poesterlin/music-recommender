@@ -33,6 +33,7 @@ Set these values before starting containers:
 - `DATABASE_INTERNAL_URL` for containers. Use the `postgres` hostname for the
   optional database service.
 
+Generate each secret with `openssl rand -hex 24`.
 Check the database `ports` entry before exposing the stack.
 Remove it if host access is unnecessary, or bind it to localhost for host migrations.
 
@@ -46,7 +47,7 @@ docker compose up -d --wait
 bun run auth:create-user --username admin
 ```
 
-Follow [Your first playable vibe](/guides/first-play).
+Open your public URL and follow [Your first playable vibe](/guides/first-play).
 For an external database, omit the PostgreSQL startup command.
 Set both database URLs to addresses reachable from their respective callers.
 

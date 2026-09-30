@@ -38,16 +38,28 @@ That excludes startup, downloads, snippet generation, and uploads.
 The [benchmark record](https://github.com/poesterlin/sole/blob/main/embeddings/benchmark-cpu-2026-09-30.json)
 contains the timings and sampling settings.
 
-The clusters are sound groupings, not reliable genre labels.
-I'd appreciate reports from other collections or Music Assistant providers.
+It's an early-stage, single-contributor project. The vibes are automatic sound
+groupings rather than reliable genre labels, and the app is primarily designed
+for a personal library. I'd particularly appreciate feedback from people with
+different collections or Music Assistant providers.
 
 **Source:** https://github.com/poesterlin/sole
 
 **Install/docs:** https://poesterlin.github.io/sole/
+
+## Suggested images
+
+1. Lead with the Vibe cover-art browser.
+2. Show the 2D atlas with a selected track.
+3. Show Worker progress if including a third image.
+
+Capture the current interface. The committed Setup screenshot predates the live
+checklist, so it should not be used as a screenshot of the current release.
 
 ## Before publishing
 
 - Publish container images containing the current changes, and verify a fresh
   installation using those published images. Local deployment builds do not
   publish to GHCR.
+- Make sure the public documentation site includes the latest setup instructions.
 - Replace the older Setup screenshot when presenting the current interface.

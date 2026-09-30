@@ -23,6 +23,8 @@ It uses Music Assistant metadata to index files and request playback.
 
 Recommendations combine audio similarity, likes, artist limits, and a penalty
 for similar picks ([recommendation code](web/src/lib/server/recomendation-engine.ts)).
+Cluster names use the three most frequent artists
+([naming code](web/src/lib/server/cluster-naming.ts)).
 
 ## Requirements and limits
 
@@ -32,8 +34,7 @@ for similar picks ([recommendation code](web/src/lib/server/recomendation-engine
 - Mount the matching audio files into Sole.
   Missing files cause worker audio `404` responses.
 - PostgreSQL needs the `vector` extension. The starter stack includes it.
-- Sole does not analyse streaming-service catalogues or provide a native mobile
-  app. Accounts have no roles.
+- Sole does not analyse streaming-service catalogues. Accounts have no roles.
 - `MAX_USERS=1` is the default. Raise it before creating another account.
   See [Authentication](docs/reference/application.md#authentication).
 - Cluster benchmarks, targeted splits, and assignment rollback use the
@@ -50,6 +51,8 @@ startup, snippet generation, downloads, and uploads.
 **99 minutes per 1,000 tracks** is an extrapolation, not measured library throughput.
 
 ## Quick start
+
+The starter stack runs PostgreSQL, the web app, and the API worker.
 
 ```sh
 mkdir sole && cd sole

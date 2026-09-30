@@ -1,26 +1,30 @@
 # Security
 
-## Report a vulnerability
+## Reporting a vulnerability
 
-Use [GitHub's private vulnerability report](https://github.com/poesterlin/sole/security/advisories/new).
-Include reproduction steps and the expected impact.
+Use GitHub's private reporting: go to
+[Security → Report a vulnerability](https://github.com/poesterlin/sole/security/advisories/new)
+on this repository.
+
 I offer no bug bounty or response-time guarantee.
+Discuss publication timing in the private advisory.
 
-## Audio access
+## Data access
 
-The web app reads audio mounted at `/music`.
-Authenticated workers download bounded snippets through
-[`/api/worker/audio`](web/src/routes/api/worker/audio/+server.ts).
-A remote worker receives those snippets on its machine.
+- **Your audio files.** The web process reads the library path mounted at
+  `/music`. The embedding worker fetches bounded audio snippets over an authenticated endpoint on your
+  deployment. A remote worker receives those snippets on its machine.
+- **Your listening history.** Sole stores liked tracks and play events in PostgreSQL.
 
-## Credentials and exposure
+## Authentication model
 
-See [Authentication](docs/reference/application.md#authentication) and
-[API key scopes](docs/reference/application.md#api-keys).
-`WORKER_TOKEN` also authorises two maintenance POST routes; it is broader than
-a UI-created worker key. Use scoped keys for remote workers.
+See [Authentication and API key scopes](docs/reference/application.md#authentication).
+The [route guard](web/src/hooks.server.ts) restricts bootstrap credentials.
+Use a UI-created `worker` key for a remote worker.
+Unlike `WORKER_TOKEN`, it cannot call the maintenance POST endpoints.
 
-The repository Compose file publishes both web and PostgreSQL ports on every
-interface. The starter stack publishes only web port `3000`.
-Check `ports` entries before public deployment.
-See [Public deployment](docs/getting-started/public-deployment.md).
+## Hardening a public deployment
+
+- Keep PostgreSQL off the public internet. Check the optional Compose database's
+  `ports` entry; an external `DATABASE_URL` should be reachable only from the
+  deployment host and its containers.

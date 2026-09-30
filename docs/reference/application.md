@@ -103,12 +103,13 @@ The Duplicates page can restore skipped tracks.
 Recommendation queries also check `skipped_songs`, the listener's exclusion list.
 That list is separate from the maintenance flag `track.skip`.
 
-## Runtime
+## Runtime and source requirements
 
 The web process serves snippets using `ffmpeg` and a read-only music mount.
-The API worker needs neither a music mount nor a database connection.
 Scheduled maintenance runs in the web process through `Bun.cron`.
 See the [scheduler](https://github.com/poesterlin/sole/blob/main/web/src/lib/server/scheduler.ts).
 Each web replica starts its own scheduler. Run one replica to avoid duplicate jobs.
 
-`deploy.sh` fetches the configured branch and rebuilds the stack on the deployment host.
+The repository `deploy.sh` fetches the configured branch and rebuilds its local stack.
+Use the Compose commands in [Public deployment](/getting-started/public-deployment)
+for a new host.

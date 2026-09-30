@@ -48,17 +48,6 @@ Run the worker if you change it.
 Run schema changes against disposable PostgreSQL with pgvector.
 If you cannot run a check, state that in the pull request and list what you did check.
 
-When you add a test for a bug, confirm it actually fails without the fix:
-
-```sh
-# Keep the regression test in place and temporarily revert only the fix.
-bun test             # the regression test must fail
-# Restore the fix.
-bun test             # the regression test must pass
-```
-
-A regression test that passes without the fix does not demonstrate that bug.
-
 ## Changing the database
 
 Migrations live in `drizzle/` as plain SQL and are applied in order.
@@ -77,8 +66,3 @@ Migrations live in `drizzle/` as plain SQL and are applied in order.
   ```sh
   bun run db:migrate && FRESH_DATABASE=1 bun run test:fresh-db
   ```
-
-## Reporting something you found
-
-If it might be a security issue, do not open a public issue. See
-[SECURITY.md](SECURITY.md).

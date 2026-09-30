@@ -12,7 +12,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Build with `bun run build`; output goes to `.vitepress/dist`.
+Run `bun run build` to generate `.vitepress/dist`.
 To serve it with Nginx:
 
 ```sh

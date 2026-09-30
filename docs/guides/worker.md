@@ -26,7 +26,7 @@ Remove `--dry-run` to upload results. Remove `--limit 10` to process the backlog
 
 Create a **Worker** key under **API keys**.
 You can revoke this key without changing the default Compose worker's token.
-For Colab, use the cell or notebook provided on that page.
+The page provides a Colab/Jupyter cell and notebook download.
 
 For a source checkout with Python dependencies installed, run:
 
@@ -39,7 +39,7 @@ python embeddings/worker.py --source-mode api --dry-run --limit 1
 Use a URL reachable from the worker machine.
 `127.0.0.1` in Colab points to Colab, not your server.
 After the dry run succeeds, remove `--dry-run` and `--limit 1` to upload embeddings.
-Counts change after a batch uploads.
+Open **Worker** to check the last upload. Counts change after a batch uploads.
 
 Set `EMBEDDING_STATE_FILE` on persistent storage to retain the worker cursor.
 The worker saves it after successful pages
