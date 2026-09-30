@@ -1,0 +1,21 @@
+{
+  "recorded": "2026-09-30",
+  "cpu": "AMD Ryzen 7 255 w/ Radeon 780M Graphics",
+  "visible_cpus": 10,
+  "gpu_used": false,
+  "worker": "Python 3.11 / OpenL3 in the deployed Compose worker image",
+  "sample": "All The Years — Beach House",
+  "input": "90-second mono 48 kHz MP3 snippet from /api/worker/audio",
+  "hop_seconds": 0.5,
+  "infer_batch_size": 64,
+  "audio_backend": "fast (soundfile)",
+  "track_total_seconds": [6.794105377979577, 5.851633657002822, 5.912797227036208],
+  "median_seconds": 5.912797227036208,
+  "notes": [
+    "Three sequential passes over the same snippet with a reused model.",
+    "Times include decode, inference, and pooling; exclude process/model startup, snippet generation/download, and database upload.",
+    "No library vectors were written.",
+    "End-to-end API-worker measurement was blocked by a missing embedding_settings table on the existing deployment.",
+    "The 99 minutes per 1000 tracks figure is an extrapolation from this snippet, not measured backlog throughput."
+  ]
+}

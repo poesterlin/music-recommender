@@ -1,23 +1,28 @@
 # Getting started
 
-Music Assistant organises your library: it knows every track's name, artist, album, and where the file lives, and it plays them. What it cannot tell you is what those tracks *sound* like, so it has nothing to build a recommendation from beyond tags and your listening history.
+Sole groups local tracks by sound and recommends tracks from a song you choose.
+Music Assistant supplies track metadata and playback.
 
-Sole adds that missing layer. A worker listens to your songs and turns each one into a vector: a set of numbers that captures the actual sound, so tracks with a similar feel end up near each other. From those vectors the app groups your library into clusters — "vibes" — that you can name, browse, and play.
+The Python worker uses OpenL3 to create an embedding: 512 numbers describing
+each track's audio. PostgreSQL stores these embeddings with the `vector`
+extension. Sole groups them into clusters. The interface calls clusters
+**vibes**.
 
-So the split is:
+## Requirements and limits
 
-- **Music Assistant** — the catalog and playback. Your music stays where it is.
-- **Sole** — the listening and the grouping. It reads the same library and shows you what belongs together.
+- Install Docker Compose v2, `curl`, and `openssl`.
+- Set up Music Assistant with your local audio library first.
+- Mount those audio files into Sole. Missing files cause worker audio `404`
+  responses. See [audio troubleshooting](/reference/troubleshooting).
+- Sole does not analyse streaming-service catalogues.
+- Sole does not train a model on your collection.
 
-It stores those vectors in PostgreSQL with pgvector. The library index is read straight from Music Assistant, which is how a fresh library sync reaches the app.
+## Install
 
-## Choose a path
+Follow [Local install](/getting-started/local), then
+[Your first playable vibe](/guides/first-play).
 
-- [Local install](/getting-started/local): one command on your own machine.
-- [Public deployment](/getting-started/public-deployment): a domain, background jobs, and the full Compose stack.
+## Other ways
 
-Then follow [First playable vibe](/guides/first-play). The app's **Setup** page shows which steps are ready.
-
-::: tip Before you start
-You need Docker, a music folder, and Music Assistant. A fresh database is created for you.
-:::
+For a source checkout behind Traefik, follow
+[Public deployment](/getting-started/public-deployment).

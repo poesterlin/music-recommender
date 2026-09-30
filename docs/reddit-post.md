@@ -29,36 +29,25 @@ What it does:
 **It requires Music Assistant**, which supplies the library metadata and handles
 playback. You also need your own audio files, Docker Compose, and PostgreSQL with
 pgvector (included in the starter stack). This is for people who already have,
-or want to run, that kind of setup—not a streaming-service replacement.
+or want to run, that setup. Sole does not analyse streaming-service catalogues.
 
-I'm running it against roughly **31,500 tracks**. A recent benchmark of the
-recommendation engine returned 30 tracks in about **93 ms median** across ten
-warm runs. That's for one seed on my hardware and excludes HTTP overhead and
-Music Assistant validation; the initial audio analysis is much slower and can
-take hours or days for a large collection.
+I'm running it against roughly **31,500 tracks**.
+On 2026-09-30, one 90-second excerpt took **5.9 seconds median** across three CPU passes.
+The CPU was an **AMD Ryzen 7 255**, with a reused model and inference batch `64`.
+That excludes startup, downloads, snippet generation, and uploads.
+The [benchmark record](https://github.com/poesterlin/sole/blob/main/embeddings/benchmark-cpu-2026-09-30.json)
+contains the timings and sampling settings.
 
-It's an early-stage, single-contributor project. The vibes are automatic sound
-groupings rather than reliable genre labels, and the app is primarily designed
-for a personal library. I'd particularly appreciate feedback from people with
-different collections or Music Assistant providers.
+The clusters are sound groupings, not reliable genre labels.
+I'd appreciate reports from other collections or Music Assistant providers.
 
 **Source:** https://github.com/poesterlin/sole
 
 **Install/docs:** https://poesterlin.github.io/sole/
-
-## Suggested images
-
-1. Lead with the Vibe cover-art browser.
-2. Show the 2D atlas with a selected track.
-3. Show Worker progress if including a third image.
-
-Capture the current interface. The committed Setup screenshot predates the live
-checklist, so it should not be used as a screenshot of the current release.
 
 ## Before publishing
 
 - Publish container images containing the current changes, and verify a fresh
   installation using those published images. Local deployment builds do not
   publish to GHCR.
-- Make sure the public documentation site includes the latest setup instructions.
 - Replace the older Setup screenshot when presenting the current interface.

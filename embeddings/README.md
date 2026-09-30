@@ -1,181 +1,138 @@
 # Python OpenL3 embedding worker
 
-The worker has two source modes:
+The worker computes embeddings from audio. It does not recommend or play tracks.
 
-- **local** (default): reads a mounted audio directory and writes PostgreSQL directly;
-- **api**: asks an authenticated worker API for tracks and bounded audio snippets, then uploads vectors over HTTP.
+- **API mode** downloads snippets from Sole and uploads embeddings over HTTP.
+  It needs no database connection, Music Assistant token, or music mount.
+- **Local mode**, the default, reads audio files and writes directly to PostgreSQL.
 
-The API mode needs no PostgreSQL URL, Music Assistant token, or access to your files. It is suitable for a separate VM, a container, or a Colab runtime.
+## Requirements
 
-Use Python 3.11 for the reference environment. On Python 3.12 or newer, run
-`python embeddings/install_python312.py` first; it verifies the pinned source
-archives and applies a packaging-only compatibility patch for OpenL3 0.4.2
-and resampy 0.2.2. The model code and versions are unchanged.
+Use Python `3.11` with `requirements.txt`, or the Docker image.
+For Python `3.12` or newer, run `python embeddings/install_python312.py` first.
+The installer verifies pinned archives and patches packaging for OpenL3 `0.4.2`
+and resampy `0.2.2`. It does not change model code or versions.
 
-## Safety and recovery
+API mode needs a reachable `WORKER_URL` and an active worker credential.
+Local mode needs `DATABASE_URL` and access to the indexed audio files.
 
-- The cursor lives in the optional state file, and the server's upload endpoint
-  is idempotent and never overwrites, so a re-run is safe.
-- **A track whose audio file no longer exists is recorded, not retried.** The
-  audio endpoint answers 404 when it cannot resolve a track to a file, which is
-  what happens when music is deleted without telling the library. That is
-  permanent, so the worker emits `track_missing_audio`, counts it under
-  `missing_this_run`, and lets the page and cursor advance — one deleted file
-  must not stop every other track on that page from being embedded. Anything
-  else (5xx, timeout, rejected upload) still ends the page without moving the
-  cursor, because it may succeed later. Use **Manage → Duplicates → Prune**, or
-  mark the rows skipped, to stop even asking for them.
-- Audio and model work happens outside database write transactions.
-- Successful vectors are written only when the target embedding is still empty,
-  so a manual or newer writer is never overwritten.
-- A failed page is not advanced in API mode and is retried on the next run.
-- The centered vector is still derived by the database trigger; this worker
-  writes only the raw `embedding` vector.
+## Run API mode
 
-The worker needs no database of its own: it asks the app for tracks and bounded
-audio, and uploads vectors back. `WORKER_URL` must be reachable from wherever
-the worker runs.
-
-## Run
-
-```sh
-python worker.py --source-mode api --duration 60 --batch-size 8
-```
-
-## API worker mode
-
-The web service exposes an authenticated broker for remote workers:
-
-- `GET /api/worker/tracks` returns a bounded page of unembedded tracks;
-- `GET /api/worker/audio` returns a short, server-generated audio snippet;
-- `POST /api/worker/embeddings` accepts an idempotent batch of vectors.
-
-Run it with:
+Follow the [worker guide](../docs/guides/worker.md) for Compose and notebook steps.
+From a source checkout with Python dependencies installed, run:
 
 ```sh
 export WORKER_URL=https://sole.example.com
 export WORKER_TOKEN='a-worker-scoped-key-from-the-web-ui'
-python embeddings/worker.py --source-mode api
+python embeddings/worker.py --source-mode api --dry-run --limit 1
 ```
 
-The worker downloads only the snippet needed for inference. Downloads run in a
-bounded background pool while OpenL3 inference remains single-threaded. Failed
-pages do not advance the saved cursor; successful pages checkpoint a local
-state file when `EMBEDDING_STATE_FILE` is set. The web audio endpoint first uses
-canonical filename matching, then a punctuation-insensitive compact match, and
-finally a conservative fuzzy fallback for truncated titles and close typos;
-artist/album context and a uniqueness margin prevent arbitrary matches.
+Remove `--dry-run` to upload embeddings. Remove `--limit 1` to process the backlog.
+The app's **API keys** page provides a notebook and a Colab/Jupyter cell.
+Both start with a one-track dry run.
 
-Useful API-mode settings are `EMBEDDING_PREFETCH_WORKERS`,
-`EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
-`EMBEDDING_DOWNLOAD_RETRIES`, and `EMBEDDING_DOWNLOAD_MAX_BYTES`.
+## Worker API
 
-Compose runs this mode against `http://web:3000` as the default `worker` service:
+The web app authenticates each endpoint with a worker credential:
 
-```sh
-docker compose up -d worker
-```
+- `GET /api/worker/tracks` returns a page of unembedded tracks.
+- `GET /api/worker/audio` returns a bounded audio snippet.
+- `POST /api/worker/embeddings` writes embeddings only into empty target rows.
 
-The API must be reachable from the worker, and its PostgreSQL/audio services
-must be reachable from the web service. Keep the key out of source files and
-shell history where possible. The web UI's **API keys** page provides a
-Worker-scoped key and a copyable Colab/Jupyter cell. That cell uses a one-track
-`--dry-run --limit 1` canary by default; remove those flags only when you are
-ready to write embeddings. The bootstrap `WORKER_TOKEN` is still accepted for
-unattended Compose jobs.
+See the [upload code](../web/src/routes/api/worker/embeddings/+server.ts)
+for metadata checks, recipe checks, and conditional writes.
+Existing embeddings remain unchanged when an upload is repeated.
+
+Downloads use a bounded background pool. Inference runs sequentially.
+The audio endpoint tries canonical, compact, then fuzzy filename matches.
+It checks artist and album context before selecting a fallback.
+
+## Cursor and recovery
+
+Set `EMBEDDING_STATE_FILE` to persist the API worker cursor.
+Successful pages save the cursor. Failed pages leave it unchanged for the next run.
+See [API worker code](worker_api.py).
+
+- **Audio returns `404`:** the worker emits `track_missing_audio` and advances past
+  that track. Check the web mount and indexed path before marking it skipped.
+  The track remains eligible for a later invocation.
+- **A download times out or returns `5xx`:** the worker leaves the page unfinished.
+  Check server logs and network access, then rerun it.
+- **An upload is rejected:** inspect its error before retrying.
+  A stale recipe or changed metadata can cause rejection.
+
+`--restart` abandons an unfinished checkpoint and starts a new run.
+In local mode, keep unfinished `job_run` rows unless you intend to abandon the run.
+Audio decoding and inference happen outside database write transactions.
+The worker writes raw embeddings. The database derives centered embeddings.
+
+## Settings
+
+API mode fetches the sampling recipe from the server before inference.
+See [Embedding settings](../docs/reference/application.md#embedding-settings).
+Local defaults below do not replace the server recipe.
 
 | Variable | Default | Purpose |
 |---|---:|---|
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `EMBEDDING_DURATION_SECONDS` | `60` | Per-track duration cap |
-| `EMBEDDING_AUDIO_BACKEND` | `fast` | `fast` uses parity-checked soundfile/soxr; `librosa` restores the legacy decoder/resampler path |
-| `EMBEDDING_BATCH_SIZE` | `8` | Keyset page/write batch size |
-| `EMBEDDING_INFER_BATCH_SIZE` | `64` | One-second windows per OpenL3 predict call; raise on a GPU |
-| `EMBEDDING_MAX_ERRORS` | `0` | Stop after N failures; zero continues |
+| `DATABASE_URL` | — | Local-mode database connection |
+| `EMBEDDING_DURATION_SECONDS` | `60` | Local per-track duration cap |
+| `EMBEDDING_AUDIO_BACKEND` | `fast` | soundfile/soxr decoding; `librosa` selects the older path |
+| `EMBEDDING_BATCH_SIZE` | `8` | Track page and write batch size |
+| `EMBEDDING_INFER_BATCH_SIZE` | `64` | Audio windows per prediction call |
+| `EMBEDDING_MAX_ERRORS` | `0` | Stop after this many failures; `0` continues |
 | `EMBEDDING_FAIL_FAST` | `false` | Stop on the first failure |
-| `EMBEDDING_TF_INTRA_THREADS` | `0` | Optional TensorFlow intra-op thread limit |
-| `EMBEDDING_TF_INTER_THREADS` | `0` | Optional TensorFlow inter-op thread limit |
+| `EMBEDDING_TF_INTRA_THREADS` | `0` | TensorFlow threads within an operation |
+| `EMBEDDING_TF_INTER_THREADS` | `0` | TensorFlow threads between operations |
 
-The worker also uses `WORKER_URL`, `WORKER_TOKEN`, `EMBEDDING_PREFETCH_WORKERS`,
-`EMBEDDING_PREFETCH_DEPTH`, `EMBEDDING_DOWNLOAD_TIMEOUT`,
-`EMBEDDING_DOWNLOAD_RETRIES`, `EMBEDDING_DOWNLOAD_MAX_BYTES`, and
-`EMBEDDING_STATE_FILE`.
+API connection and download settings are:
 
-`--dry-run` performs the file lookup, model work, and profiling without writing
-`job_run` or embeddings. A bounded dry-run may exit with status `2` simply
-because unembedded rows remain; that status is intentional and does not imply
-that a write occurred. `--restart` intentionally abandons an unfinished
-checkpoint and starts a new run. `--limit N` is useful for a bounded canary.
+- `WORKER_URL` and `WORKER_TOKEN`
+- `EMBEDDING_PREFETCH_WORKERS` and `EMBEDDING_PREFETCH_DEPTH`
+- `EMBEDDING_DOWNLOAD_TIMEOUT` and `EMBEDDING_DOWNLOAD_RETRIES`
+- `EMBEDDING_DOWNLOAD_MAX_BYTES`
+- `EMBEDDING_STATE_FILE`
 
-If a run ends with missing or failed tracks, it exits non-zero and leaves those
-tracks eligible for the next invocation. Do not delete the unfinished
-`job_run` row unless abandoning the run is intentional.
+`--batch-size` controls track pages and writes.
+The server caps track pages at `32` and upload batches at `16`.
+`--infer-batch-size` controls audio windows per model prediction call.
+Each window contains one second of mono `48 kHz` audio.
+Window count depends on the sampling hop and duration.
 
-### Exit codes
+## Exit codes
+
+`--dry-run` computes embeddings without writing embeddings or `job_run` rows.
+It can exit `2` when unembedded tracks remain.
 
 | Code | Meaning |
 |---:|---|
 | `0` | The run completed and no unembedded tracks remain |
-| `2` | Tracks remain; a bounded or interrupted run, not a failure |
-| `64` | The arguments or environment were rejected; nothing was processed |
+| `2` | Tracks remain after a bounded or interrupted run |
+| `64` | Arguments or environment were rejected before processing |
 
-Status `64` is `EX_USAGE`. The worker deliberately avoids argparse's default
-status `2` for usage errors, because callers such as the Colab notebook treat
-`2` as an expected bounded run and would otherwise report a bad flag or an
-out-of-range environment variable as a healthy dry run that did no work.
-
-Two settings are easy to confuse. `--batch-size` / `EMBEDDING_BATCH_SIZE` is
-the keyset page and write batch, capped at 32 in API mode by the server's page
-limit. `--infer-batch-size` / `EMBEDDING_INFER_BATCH_SIZE` is the OpenL3 predict
-batch. To change inference batching, use the latter.
+Other failures can return non-zero codes. Inspect the error and run summary.
+The worker uses `64` for usage errors so callers can distinguish them from bounded runs.
 
 ## Profiling
 
-Every invocation ends with a `PROFILE` JSON line containing count, total, mean,
-p50, p95, and maximum wall time for stages such as:
+The `PROFILE` JSON line reports count, total, mean, median, 95th percentile,
+and maximum stage time. Per-track events report timings before the batch summary.
+Stage names include:
 
-- `audio_decode`
-- `audio_resample`
-- `model_inference`
-- `openl3_import`
-- `mean_pool`
-- `vector_serialize`
-- `file_lookup`
-- `page_fetch`
-- `database_batch_write`
-- `model_load`
+- `audio_decode`, `audio_resample`, and `file_lookup`
+- `openl3_import`, `model_load`, and `model_inference`
+- `mean_pool` and `vector_serialize`
+- `page_fetch` and `database_batch_write`
 
-Per-track timing events are also printed before the batch summary. These
-measurements make it possible to distinguish decode/resampling bottlenecks
-from OpenL3 inference and database overhead before changing runtime or worker
-concurrency.
+The [2026-09-25 profile](benchmark-profile.json) records a 60-second excerpt.
+It took `0.088s` to decode, `0.021s` to resample, and `41.133s` for inference.
+The record does not identify its hardware. Do not use it to predict another host's throughput.
 
-The default soundfile/soxr fast paths were checked against the librosa path on
-representative MP3, FLAC, and M4A inputs: decoded samples and resampled samples
-were byte-identical, with M4A correctly falling back to librosa/audioread. A
-60-second dry-run profile on the test host showed approximately 0.10s decode,
-0.03s resampling, 0.6s model load, and 38.5s OpenL3 inference. The inference
-stage, rather than audio I/O, is currently the dominant cost.
+The [2026-09-30 CPU benchmark](benchmark-cpu-2026-09-30.json) identifies an
+AMD Ryzen 7 255. Three passes over one 90-second excerpt took `5.9s` median.
+It used a reused model, a `0.5s` hop, and inference batch `64`.
+It excludes startup, snippet generation, downloads, and uploads.
 
-### Inference batch size
-
-Because inference dominates, `EMBEDDING_INFER_BATCH_SIZE` (or
-`--infer-batch-size`) controls how many one-second windows are handed to a
-single `model.predict` call. It is unrelated to `EMBEDDING_BATCH_SIZE`, which
-is the keyset page and write batch. Each window is one second of 48 kHz mono
-audio, so a 60-second track produces roughly 596 windows.
-
-The default of `64` replaces OpenL3's own default of `32` and is safe on CPU
-and on a 16 GB GPU. Raise it (`128`, `256`) when a GPU is the bottleneck;
-lower it if a run reports out-of-memory errors. The effective value is
-reported per track as `timings.infer_batch_size` and in the `run_summary`
-events, so a bounded `--dry-run --limit 20` is enough to compare throughput
-before committing to a full run.
-
-Server-side resampling is already in place: `/api/worker/audio` transcodes each
-snippet to mono 48 kHz, which is OpenL3's target rate, so the worker reports
-`"resampler": "none"` in API mode.
-
-See [`benchmark-profile.json`](./benchmark-profile.json) for the recorded read-only
-60-second profile. The worker intentionally does not generate recommendations
-or playback and does not rewrite existing embeddings.
+Compare inference batch sizes with bounded `--dry-run --limit 20` runs.
+Try `128` or `256` on a GPU. Lower the batch size after an out-of-memory error.
+Check `timings.infer_batch_size` and `run_summary` for the effective setting.
+API snippets already use mono `48 kHz` audio, so resampling can report `none`.

@@ -1,25 +1,46 @@
 # Embedding workers
 
-A worker turns each track into a vector. It talks to the app's API only: it downloads snippets, computes, and uploads the results. It needs no database, no music folder, and no access to your files.
+The API worker downloads audio snippets, computes embeddings, and uploads them.
+It needs no database connection or music mount.
+See the [Python reference](https://github.com/poesterlin/sole/blob/main/embeddings/README.md)
+for local-file mode, dependencies, and command options.
 
-## On this machine
+## Default Compose worker
 
-The worker runs alongside the app by default and authenticates with `WORKER_TOKEN` from your `.env`, which the install steps had you generate. It loops every twelve hours; to make it analyse the library now:
+[Local install](/getting-started/local) starts the worker with `WORKER_TOKEN`.
+The loop waits twelve hours after draining the backlog.
+It waits five minutes if tracks remain, or fifteen minutes after an error.
+See the [starter loop](https://github.com/poesterlin/sole/blob/main/stack.yaml).
+
+`docker compose up -d worker` starts a stopped service.
+It does not wake a worker already sleeping. Run a separate bounded check:
 
 ```sh
-docker compose up -d worker
+docker compose run --rm --entrypoint python worker \
+  worker.py --source-mode api --dry-run --limit 10
 ```
 
-## On another machine or in Colab
+Remove `--dry-run` to upload results. Remove `--limit 10` to process the backlog.
 
-Sign in and open **Manage → API keys**, then create a **Worker** key. This is the better choice off this machine: it is a scoped credential you can revoke on its own, rather than sharing the stack's `WORKER_TOKEN`. The page provides a ready-made Colab/Jupyter cell and a notebook download; the key is shown once.
+## Remote machine or Colab
+
+Create a **Worker** key under **API keys**.
+You can revoke this key without changing the default Compose worker's token.
+For Colab, use the cell or notebook provided on that page.
+
+For a source checkout with Python dependencies installed, run:
 
 ```sh
-export WORKER_URL=https://your-sole.example.com
+export WORKER_URL=https://sole.example.com
 export WORKER_TOKEN='your-worker-scoped-key'
 python embeddings/worker.py --source-mode api --dry-run --limit 1
 ```
 
-Enter a URL reachable **from the worker machine**. `127.0.0.1` in Colab means Colab itself, not your computer, so a remote worker needs the public address or a tunnel.
+Use a URL reachable from the worker machine.
+`127.0.0.1` in Colab points to Colab, not your server.
+After the dry run succeeds, remove `--dry-run` and `--limit 1` to upload embeddings.
+Counts change after a batch uploads.
 
-The copied cell starts with a one-track dry run. When that succeeds, remove `--dry-run` and the limit. Check **Worker** for coverage and the last upload; progress appears once the first batch uploads.
+Set `EMBEDDING_STATE_FILE` on persistent storage to retain the worker cursor.
+The worker saves it after successful pages
+([API worker code](https://github.com/poesterlin/sole/blob/main/embeddings/worker_api.py)).

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Sole
-  text: Your library, in a new light.
-  tagline: Index your music, find the connections, and play a vibe that sounds like you.
+  text: Browse your music by sound
+  tagline: Sole groups local audio files and recommends tracks. Music Assistant supplies the library and playback.
   image:
     src: /logo.png
     alt: Illustrated sole with a music note
@@ -17,10 +17,10 @@ hero:
       link: /getting-started/
 
 features:
-  - title: Bring your own library
+  - title: Local audio files
     details: Music Assistant provides the catalog; the app reads your mounted music folder.
-  - title: Hear the shape of it
-    details: OpenL3 embeddings and pgvector help find tracks with a similar sound.
-  - title: Make it yours
+  - title: Audio similarity
+    details: OpenL3 produces embeddings, lists of numbers used to compare tracks in PostgreSQL.
+  - title: Clusters and playback
     details: Build and name clusters, then use them in mixes and schedules.
 ---

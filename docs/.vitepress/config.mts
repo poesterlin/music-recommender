@@ -37,10 +37,13 @@ export default defineConfig({
       },
       {
         text: 'Reference',
-        items: [{ text: 'Troubleshooting', link: '/reference/troubleshooting' }]
+        items: [
+          { text: 'Authentication and configuration', link: '/reference/application' },
+          { text: 'Troubleshooting', link: '/reference/troubleshooting' }
+        ]
       }
     ],
     search: { provider: 'local' },
-    footer: { message: 'Your library stays yours.', copyright: 'MIT licensed' }
+    footer: { copyright: 'MIT licensed' }
   }
 })

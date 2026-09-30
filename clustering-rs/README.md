@@ -1,6 +1,12 @@
 # Rust clustering benchmark
 
-A standalone benchmark for comparing the current cluster assignments with PCA plus spherical k-means. Benchmark mode is read-only; an explicit, confirmed apply mode can atomically install a recorded artifact and keeps rollback data.
+The CLI compares current clusters with principal component analysis (PCA)
+and spherical k-means. PCA reduces embedding dimensions.
+Spherical k-means groups embeddings by direction.
+
+The default benchmark leaves cluster assignments unchanged.
+`--record-run` writes a report row. Apply and rollback use explicit flags.
+See [database and CLI code](src/main.rs).
 
 It uses the existing `track.embedding_centered` vectors. It does not run OpenL3 or generate recommendations/playback.
 
@@ -25,7 +31,17 @@ cargo run --release -- \
   --output /tmp/music-cluster-benchmark.json
 ```
 
-The command reads `DATABASE_URL` from the environment. It prints timing, training inertia, fixed-space evaluation inertia, mean intra-cluster similarity, an approximate silhouette score, and adjusted Rand index against the current assignments. With multiple runs it also reports pairwise run ARI so local optima are visible. `--evaluation-dim` keeps quality metrics comparable when testing different training dimensions; use `--evaluation-dim 32` (the default) for consistent comparisons. Vectors are decoded from pgvector's `real[]` representation rather than JSON text, and `--sample` is pushed into SQL so quick experiments do not load the entire library.
+The command reads `DATABASE_URL` from the environment and prints these metrics:
+
+- Timing and inertia: the total squared distance to cluster centres.
+- Mean similarity within clusters.
+- Approximate silhouette score: separation from neighbouring clusters.
+- Adjusted Rand index (ARI): agreement with current assignments, adjusted for chance.
+
+Multiple runs also report pairwise ARI to show variation between runs.
+Keep `--evaluation-dim 32` when comparing different training dimensions.
+This measures each result in the same embedding space.
+`--sample` limits rows in SQL, so sampled runs do not load the whole library.
 
 To export the best result without applying it:
 
@@ -60,7 +76,7 @@ Compare several cluster counts by running the command repeatedly with different 
 
 ## Docker batch profile
 
-The one-shot native `clusterer` service handles benchmarks, targeted splits,
+The one-shot native `clusterer` service runs benchmarks, targeted splits,
 artifact validation, apply, and rollback. It does not publish a port.
 
 Benchmark example:
@@ -105,7 +121,13 @@ docker compose --profile clustering run --rm clusterer \
   --confirm-apply
 ```
 
-The transaction requires the artifact to match the recorded run, validates every embedded track and cluster ID, snapshots the previous assignments and centroids in `cluster_run_assignment` and `cluster_centroid_backup`, rebuilds the active centroids, and marks the run `applied`. Unembedded wildcard tracks are left untouched. Rollback is also explicit; validate it first if needed:
+Apply replaces assignments, so review the validation report first.
+The transaction checks that the artifact matches the recorded run.
+It validates embedded tracks and cluster IDs.
+It saves earlier assignments in `cluster_run_assignment` and centres in `cluster_centroid_backup`.
+It then rebuilds active centres and marks the run `applied`.
+Tracks without embeddings remain unchanged.
+Validate rollback before restoring the earlier assignments:
 
 ```sh
 docker compose --profile clustering run --rm clusterer \
@@ -129,7 +151,10 @@ After an apply, generate durable display names by comparing each new cluster wit
 bun run clusters:match -- 4
 ```
 
-Matching uses the dominant track-overlap for each new cluster. It intentionally allows a legacy cluster to map to multiple new clusters because reducing 60 clusters to 50 necessarily creates merges and splits. The stored confidence and related legacy IDs make ambiguous matches visible; the underlying k=50 cluster IDs are never renumbered.
+Matching selects the previous cluster with the largest track overlap.
+A previous cluster can match multiple new clusters.
+Stored confidence and related IDs expose ambiguous matches.
+Matching does not renumber cluster IDs.
 
 A targeted split can create a new generation without renumbering the other clusters:
 
@@ -157,7 +182,8 @@ cluster ID. Overlap matches are suggestions only. Auto-naming fills missing or
 reset names from the three dominant artists and never overwrites an existing
 name. Names from previous generations remain available when rolling back.
 
-The numerical core is in `src/lib.rs`; the database and CLI are kept in `src/main.rs`. The library has no PostgreSQL dependency, and the CLI-only dependencies are behind the `cli` feature.
+The [numerical core](src/lib.rs) has no PostgreSQL dependency.
+The [database and CLI code](src/main.rs) uses dependencies behind the `cli` feature.
 
 From the repository root, `bun run clusters:native -- --help` exposes all native
 options. `bun run clusters:docker -- --help` uses the same CLI in Docker.
@@ -168,4 +194,5 @@ Native parallel assignments are enabled by the default `rayon` feature; use `--t
 cargo test --no-default-features
 ```
 
-The benchmark should be validated for cluster stability, silhouette, cluster-size balance, and manual cluster naming before any production assignment migration is considered.
+Before applying assignments, compare repeated runs and inspect cluster sizes.
+Preview representative tracks and review name suggestions in the app.
