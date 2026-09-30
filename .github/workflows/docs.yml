@@ -1,0 +1,75 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+
+      # VitePress emits root-absolute asset and link URLs unless told otherwise,
+      # and GitHub serves a project site from /<repo>/, so without this every
+      # asset 404s. A repository named <owner>.github.io is served from the root.
+      - name: Resolve the Pages base path
+        id: base
+        run: |
+          if [ "${{ github.event.repository_name }}" = "${{ github.repository_owner }}.github.io" ]; then
+            echo "value=/" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=/${{ github.event.repository_name }}/" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the site
+        env:
+          DOCS_BASE: ${{ steps.base.outputs.value }}
+        run: bun run build
+
+      # Fails the build rather than publishing a site with broken asset paths.
+      - name: Check the base path was applied
+        run: |
+          base="${{ steps.base.outputs.value }}"
+          if [ "$base" != "/" ]; then
+            grep -q "src=\"${base}assets/" .vitepress/dist/index.html \
+              || { echo "::error::assets are not prefixed with ${base}"; exit 1; }
+          fi
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

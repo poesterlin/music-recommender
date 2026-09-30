@@ -3,6 +3,10 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'Sole',
   description: 'From a local library to your first playable vibe.',
+  // GitHub Pages serves a project site from /<repo>/, so every asset and link
+  // needs that prefix. Left unset it builds for the domain root, which is what
+  // `bun run dev` and the nginx container want.
+  base: process.env.DOCS_BASE ?? '/',
   cleanUrls: true,
   srcExclude: ['README.md'],
   head: [['meta', { name: 'theme-color', content: '#f4efe5' }]],
