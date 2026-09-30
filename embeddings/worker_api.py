@@ -326,10 +326,8 @@ def _validate_embedding_item(value: Mapping[str, Any]) -> dict[str, Any]:
 def parse_recipe(value: Any) -> dict[str, Any] | None:
     """Read the recipe the server sent, or None when it did not send one.
 
-    Absent is the normal case for an older server, and is not an error: the
-    worker then falls back to its own flags, which is what it always did. Only a
-    recipe that is present but malformed is rejected, because silently
-    downgrading a broken recipe to a guess is how a mismatch becomes a 409 later.
+    An absent recipe is parsed as None for protocol diagnostics. The run loop
+    refuses to infer without one instead of guessing an unregistered recipe.
     """
 
     if value is None:
@@ -1198,6 +1196,11 @@ def run_api_worker(
                 # means no extra request and no window in which the worker could
                 # be using a hop the server has not registered.
                 server_recipe = parse_recipe(page_info.get("recipe"))
+                if server_recipe is None:
+                    raise WorkerAPIValidationError(
+                        "The server did not provide an embedding recipe. Upgrade "
+                        "the web service and apply its database migrations before running this worker."
+                    )
                 if server_recipe and not recipe_adopted:
                     recipe_adopted = True
                     if adopt_server_recipe:

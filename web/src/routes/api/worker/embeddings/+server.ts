@@ -2,12 +2,14 @@ import { sql } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { recordWorkerProgress } from '$lib/server/job-log';
 import { workerAuthError } from '$lib/server/worker-auth';
+import { finalizeEmbeddingSpace } from '$lib/server/finalize-embedding-space';
 import type { RequestHandler } from './$types';
 
 const MODEL = 'openl3-512';
 const DIMENSIONS = 512;
 const MAX_BATCH = 16;
 const MAX_BODY_BYTES = 512 * 1024;
+class RecipeChangedError extends Error {}
 
 /**
  * The recipe that produced a batch. OpenL3 is frame-based, so the hop changes
@@ -192,11 +194,23 @@ export const POST: RequestHandler = async ({ request }) => {
 	}
 
 	const items = body.embeddings;
+	const recipe = body.recipe;
 	const accepted: Array<{ uri: string; status: 'written' | 'already_embedded' }> = [];
 	const rejected: Array<{ uri: string; reason: string }> = [];
 
 	try {
 		await db.transaction(async (tx) => {
+			// Serialize recipe changes with uploads, then serialize provisional
+			// centering before locking track rows (consistent lock order).
+			const settings = await tx.execute(sql`
+				SELECT id FROM embedding_settings
+				WHERE id = 1 AND hop_seconds = ${recipe.hopSeconds}
+					AND max_sample_seconds = ${recipe.maxSampleSeconds}
+					AND frontend = ${recipe.frontend}
+				FOR SHARE
+			`);
+			if (settings.length === 0) throw new RecipeChangedError('Worker recipe no longer matches the global settings; restart the worker.');
+			await tx.execute(sql`SELECT version FROM embedding_space WHERE version = ${spaceVersion} FOR UPDATE`);
 			for (const item of items) {
 				const rows = (await tx.execute(sql`
 					SELECT
@@ -239,8 +253,10 @@ export const POST: RequestHandler = async ({ request }) => {
 				`);
 				accepted.push({ uri: item.uri, status: 'written' });
 			}
+			await finalizeEmbeddingSpace(tx, spaceVersion!);
 		});
 	} catch (error) {
+		if (error instanceof RecipeChangedError) return errorResponse(error.message, 409);
 		console.error('Worker embedding upload failed:', error);
 		return errorResponse('could not write embeddings', 500);
 	}

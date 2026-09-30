@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { db } from './db';
+import { finalizeEmbeddingSpace } from './finalize-embedding-space';
 
 /**
  * Defaults for the first embedding space.
@@ -31,6 +32,7 @@ export type CenteredSpaceState = {
 	needsBackfill: boolean;
 	/** True when fewer than two embeddings exist, so no mean can be formed. */
 	tooFewEmbeddings: boolean;
+	provisionalNeedsCentering: boolean;
 };
 
 export async function getCenteredSpaceState(): Promise<CenteredSpaceState> {
@@ -40,13 +42,19 @@ export async function getCenteredSpaceState(): Promise<CenteredSpaceState> {
 			(SELECT count(*)::int FROM track WHERE embedding_centered IS NOT NULL) AS centered,
 			(SELECT count(*)::int FROM track WHERE embedding_space_version IS NOT NULL) AS versioned,
 			(SELECT count(*)::int FROM embedding_space) AS spaces,
-			(SELECT version FROM embedding_space ORDER BY version DESC LIMIT 1) AS active
+			(SELECT version FROM embedding_space ORDER BY version DESC LIMIT 1) AS active,
+			EXISTS (
+				SELECT 1 FROM embedding_space s WHERE s.track_count = 0 AND
+				(SELECT count(*) FROM track t WHERE t.embedding_space_version = s.version
+					AND t.embedding IS NOT NULL AND COALESCE(t.skip, FALSE) = FALSE) >= 2
+			) AS provisional
 	`)) as unknown as Array<{
 		raw: number;
 		centered: number;
 		versioned: number;
 		spaces: number;
 		active: number | null;
+		provisional: boolean;
 	}>;
 
 	const raw = Number(row?.raw ?? 0);
@@ -62,7 +70,8 @@ export async function getCenteredSpaceState(): Promise<CenteredSpaceState> {
 		// The failure this exists for: vectors were written, but there is no
 		// mean to centre them against, so the trigger cannot derive anything.
 		needsSpace: raw >= 2 && spaces === 0,
-		needsBackfill: raw > 0 && spaces > 0 && centered < raw,
+		needsBackfill: (raw > 0 && spaces > 0 && centered < raw) || Boolean(row?.provisional),
+		provisionalNeedsCentering: Boolean(row?.provisional),
 		tooFewEmbeddings: raw > 0 && raw < 2
 	};
 }
@@ -127,9 +136,23 @@ export async function repairCenteredSpace(
 			alreadyHealthy: false,
 			spaceCreated: before.needsSpace,
 			spaceVersion: before.activeVersion,
-			rowsCentered: before.rawEmbeddings - before.centered,
+			rowsCentered: before.provisionalNeedsCentering ? before.rawEmbeddings : before.rawEmbeddings - before.centered,
 			skipped: null
 		};
+	}
+
+	if (before.provisionalNeedsCentering) {
+		const rowsCentered = await db.transaction(async (tx) => {
+			await tx.execute(sql`SELECT id FROM embedding_settings WHERE id = 1 FOR SHARE`);
+			const provisional = await tx.execute(sql`
+				SELECT version FROM embedding_space WHERE track_count = 0 ORDER BY version FOR UPDATE
+			`);
+			let centered = 0;
+			for (const space of provisional) centered += await finalizeEmbeddingSpace(tx, Number(space.version));
+			return centered;
+		});
+		return { ok: true, alreadyHealthy: false, spaceCreated: false,
+			spaceVersion: before.activeVersion, rowsCentered, skipped: null };
 	}
 
 	// The mean and the derived columns are written together. The function and

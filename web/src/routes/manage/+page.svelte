@@ -109,7 +109,7 @@
 
 <section class="mb-8 rounded-xl border p-6">
 	<h2 class="font-display text-2xl">Embedding settings</h2>
-	<p>Global recipe for all workers. Existing embeddings keep their recorded recipe.</p>
+	<p>Global recipe for all workers. Choose it before embedding; a populated library keeps its existing recipe.</p>
 	<label>Mode
 		<select bind:value={embeddingMode}>
 			<option value="low">Low · 0.1s hop</option>

@@ -1,9 +1,11 @@
 import importlib.util
+import io
 import json
 import tempfile
 import threading
 import time
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
@@ -282,7 +284,7 @@ class _FakeCore:
 class _FakeWorkerClient:
     def __init__(self):
         self.uploads = []
-        self.server_recipe = None
+        self.server_recipe = worker_api.build_recipe(0.5, 90.0, "kapre")
         self.recipe = None
 
     def get_tracks(self, after=None, limit=None):
@@ -349,12 +351,13 @@ class ApiWorkerHopTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             client = _FakeWorkerClient()
             client.recipe = worker_api.build_recipe(hop, 60.0, "kapre")
+            client.server_recipe = dict(client.recipe)
             core = _FakeCore()
             args = _FakeArgs(
                 hop=hop,
                 state_file=str(Path(tmp) / "state.json"),
             )
-            worker_api.run_api_worker(core, args, client)
+            client.exit_code = worker_api.run_api_worker(core, args, client)
             return core.calls, client
 
     def test_the_configured_hop_reaches_process_audio_file(self):
@@ -399,7 +402,7 @@ class ServerRecipeTests(unittest.TestCase):
                 duration=args_duration,
                 state_file=str(Path(tmp) / "state.json"),
             )
-            worker_api.run_api_worker(core, args, client)
+            client.exit_code = worker_api.run_api_worker(core, args, client)
             return core.calls, client
 
     def test_the_worker_adopts_the_servers_recipe(self):
@@ -427,11 +430,14 @@ class ServerRecipeTests(unittest.TestCase):
         self.assertEqual(calls[0]["hop_seconds"], 0.25)
         self.assertEqual(client.recipe["hopSeconds"], 0.25)
 
-    def test_an_older_server_without_a_recipe_is_not_fatal(self):
-        # Absent is the normal case before this feature existed. The worker falls
-        # back to its own values rather than refusing to run.
-        calls, _ = self._run(args_hop=None, args_duration=None, server_recipe=None)
-        self.assertEqual(calls[0]["hop_seconds"], 0.5)
+    def test_an_older_server_without_a_recipe_does_not_infer_or_upload(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            calls, client = self._run(args_hop=None, args_duration=None, server_recipe=None)
+        self.assertEqual(calls, [])
+        self.assertEqual(client.uploads, [])
+        self.assertEqual(client.exit_code, 1)
+        self.assertIn('Upgrade the web service', output.getvalue())
 
     def test_a_malformed_recipe_is_rejected(self):
         # Silently downgrading a broken recipe to a guess is how a mismatch

@@ -1,4 +1,7 @@
 import postgres from 'postgres';
+import { db } from '../web/src/lib/server/db';
+import { sql as query } from 'drizzle-orm';
+import { finalizeEmbeddingSpace } from '../web/src/lib/server/finalize-embedding-space';
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is not set');
@@ -12,10 +15,12 @@ const uris = ['ci://track/1', 'ci://track/2'];
 const [initial] = await sql`
 	SELECT
 		(SELECT count(*)::int FROM track) AS tracks,
-		(SELECT count(*)::int FROM embedding_space) AS spaces
+		(SELECT count(*)::int FROM embedding_space) AS spaces,
+		(SELECT count(*)::int FROM embedding_space WHERE track_count = 0
+			AND mean_embedding = array_fill(0::real, ARRAY[512])::vector) AS provisional
 `;
 
-if (initial.tracks !== 0 || initial.spaces !== 0) {
+if (initial.tracks !== 0 || initial.spaces > 1 || initial.spaces !== initial.provisional) {
 	await sql.end();
 	throw new Error('Refusing to write: fresh-db smoke requires an empty, migrated database');
 }
@@ -41,6 +46,15 @@ try {
 		stderr: 'inherit'
 	});
 	if (child.exitCode !== 0) throw new Error('centering backfill failed');
+	await db.transaction(async (tx) => {
+		await tx.execute(query`SELECT id FROM embedding_settings WHERE id = 1 FOR SHARE`);
+		await tx.execute(query`SELECT version FROM embedding_space WHERE version = 1 FOR UPDATE`);
+		await finalizeEmbeddingSpace(tx, 1);
+	});
+	const [space] = await sql`SELECT track_count, mean_embedding::text AS mean FROM embedding_space WHERE version = 1`;
+	if (space.track_count !== 2 || JSON.parse(space.mean).every((value: number) => value === 0)) {
+		throw new Error('provisional space did not acquire its corpus mean');
+	}
 
 	const [summary] = await sql`
 		SELECT
@@ -57,4 +71,5 @@ try {
 	await sql`DELETE FROM track WHERE uri LIKE 'ci://track/%'`.catch(() => undefined);
 	await sql`DELETE FROM embedding_space WHERE version = 1`.catch(() => undefined);
 	await sql.end();
+	await (db as unknown as { $client: ReturnType<typeof postgres> }).$client.end();
 }

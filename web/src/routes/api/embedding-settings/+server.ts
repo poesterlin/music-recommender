@@ -1,5 +1,4 @@
 import { getEmbeddingSettings, setEmbeddingSettings, EMBEDDING_MODES } from '$lib/server/embedding-settings';
-import { ensureEmbeddingSpace } from '$lib/server/embedding-spaces';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => Response.json(await getEmbeddingSettings(), {
@@ -15,8 +14,6 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		return Response.json({ error: 'Choose low, medium or high and a sample length between 1 and 120 seconds.' }, { status: 400 });
 	}
 	try {
-		// Register first: a failed registration must not change the worker recipe.
-		await ensureEmbeddingSpace({ mode: body.mode, maxSampleSeconds: body.maxSampleSeconds, frontend: 'kapre' });
 		return Response.json(await setEmbeddingSettings({ mode: body.mode, maxSampleSeconds: body.maxSampleSeconds, frontend: 'kapre' }));
 	} catch (error) {
 		return Response.json({ error: error instanceof Error ? error.message : 'Could not save embedding settings.' }, { status: 409 });

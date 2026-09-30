@@ -85,11 +85,9 @@ export class EmbeddingSettingsError extends Error {}
 /**
  * Store a new recipe.
  *
- * Writing this does not create a space and does not touch existing embeddings.
- * It records the intent so that the next space creation and every worker use
- * these numbers. Registering the recipe as an actual space is still an explicit
- * step, because doing it implicitly would write a corpus mean to every embedded
- * track.
+ * Register and persist the recipe atomically. A populated library cannot change
+ * recipes until an explicit re-embedding transition exists. The settings row is
+ * locked in the same order as uploads so a stale worker cannot race the check.
  */
 export async function setEmbeddingSettings(input: {
 	mode?: string;
@@ -133,7 +131,35 @@ export async function setEmbeddingSettings(input: {
 		throw new EmbeddingSettingsError('frontend must be a non-empty string of at most 64 characters');
 	}
 
-	const rows = (await db.execute(sql`
+	return db.transaction(async (tx) => {
+		const locked = await tx.execute(sql`
+			SELECT id, hop_seconds, max_sample_seconds, frontend
+			FROM embedding_settings WHERE id = 1 FOR UPDATE
+		`);
+		const stored = locked[0];
+		if (!stored) throw new EmbeddingSettingsError('Embedding settings are missing; apply database migrations.');
+		const changed = Number(stored.hop_seconds) !== hopSeconds ||
+			Number(stored.max_sample_seconds) !== maxSampleSeconds || stored.frontend !== frontend;
+		if (changed) {
+			const populated = await tx.execute(sql`SELECT uri FROM track WHERE embedding IS NOT NULL LIMIT 1`);
+			if (populated.length > 0) {
+				throw new EmbeddingSettingsError('The library already has embeddings. Keep its existing recipe until a full re-embedding transition is available.');
+			}
+		}
+		// Registration and persistence are one operation. Empty libraries can
+		// register a provisional zero mean; uploads finalize it once populated.
+		await tx.execute(sql`
+			INSERT INTO embedding_space (version, model, mean_embedding, track_count, hop_seconds, max_sample_seconds, frontend)
+			SELECT COALESCE(max(version), 0) + 1, ${EMBEDDING_MODEL},
+				array_fill(0::real, ARRAY[512])::vector, 0, ${hopSeconds}, ${maxSampleSeconds}, ${frontend}
+			FROM embedding_space
+			HAVING NOT EXISTS (
+				SELECT 1 FROM embedding_space WHERE model = ${EMBEDDING_MODEL}
+					AND hop_seconds = ${hopSeconds} AND max_sample_seconds = ${maxSampleSeconds}
+					AND COALESCE(frontend, 'kapre') = ${frontend}
+			)
+		`);
+		const rows = (await tx.execute(sql`
 		INSERT INTO embedding_settings (id, mode, hop_seconds, max_sample_seconds, frontend, updated_at)
 		VALUES (1, ${mode}, ${hopSeconds}, ${maxSampleSeconds}, ${frontend}, now())
 		ON CONFLICT (id) DO UPDATE SET
@@ -151,15 +177,16 @@ export async function setEmbeddingSettings(input: {
 		updated_at: Date | string;
 	}>;
 
-	const saved = rows[0];
-	return {
-		mode: saved.mode,
-		hopSeconds: Number(saved.hop_seconds),
-		maxSampleSeconds: Number(saved.max_sample_seconds),
-		frontend: saved.frontend,
-		updatedAt: saved.updated_at instanceof Date ? saved.updated_at.toISOString() : saved.updated_at,
-		usingDefaults: false
-	};
+		const saved = rows[0];
+		return {
+			mode: saved.mode,
+			hopSeconds: Number(saved.hop_seconds),
+			maxSampleSeconds: Number(saved.max_sample_seconds),
+			frontend: saved.frontend,
+			updatedAt: saved.updated_at instanceof Date ? saved.updated_at.toISOString() : saved.updated_at,
+			usingDefaults: false
+		};
+	});
 }
 
 /** The recipe handed to a worker: the stored settings, no defaults mixed in. */
