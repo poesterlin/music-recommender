@@ -122,13 +122,25 @@ export async function applyAutoNames(clusterIds: number[]): Promise<number> {
 	// query builder cannot express — so this stays a loop. What it no longer does
 	// is hand-assemble SQL, and it reports rows actually changed rather than
 	// names it intended to write.
+	//
+	// Guarded: a clustering run carries the previous generation's descriptions
+	// forward through `legacy_name`, and those are far better labels than
+	// anything derived from artist frequency — "Dark, Heavy Hip-Hop" says what
+	// the cluster is, "T.I., Dj Khaled, Mustard" only says who is in it. Writing
+	// over one destroyed all 51 of them here, and because the overwrite dropped
+	// the `· old #N` provenance marker, `isHumanNamed` then reported the artist
+	// lists as though a person had chosen them.
 	let changed = 0;
 	for (const [clusterId, name] of wanted) {
 		const updated = await db
 			.update(clusterRunMatchTable)
 			.set({ displayName: name })
 			.where(
-				and(eq(clusterRunMatchTable.runId, runId), eq(clusterRunMatchTable.clusterId, clusterId))
+				and(
+					eq(clusterRunMatchTable.runId, runId),
+					eq(clusterRunMatchTable.clusterId, clusterId),
+					sql`(cluster_run_match.legacy_name IS NULL OR btrim(cluster_run_match.legacy_name) = '')`
+				)
 			)
 			.returning({ clusterId: clusterRunMatchTable.clusterId });
 		changed += updated.length;
