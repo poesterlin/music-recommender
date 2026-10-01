@@ -24,8 +24,9 @@ export const GET: RequestHandler = async () => {
 		clusterIds,
 		names: clusterMetadata.names,
 		schedules,
-		activeSchedule: active
-	});
+		activeSchedule: active,
+		scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+	}, { headers: { 'Cache-Control': 'no-store' } });
 };
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -34,9 +35,16 @@ export const POST: RequestHandler = async ({ request }) => {
 			clusterIds?: number[];
 			useSchedule?: boolean;
 			saveOnly?: boolean;
+			scheduleId?: number;
 		};
 		let clusterIds: number[];
-		if (body.useSchedule) {
+		if (body.scheduleId !== undefined) {
+			const schedule = (await listSchedules()).find((slot) => slot.id === body.scheduleId);
+			if (!schedule || schedule.enabled === false || !schedule.clusterIds.length) {
+				return Response.json({ success: false, error: 'Schedule is unavailable' }, { status: 400 });
+			}
+			clusterIds = [...schedule.clusterIds];
+		} else if (body.useSchedule) {
 			const activeSchedule = await getActiveSchedule();
 			clusterIds = activeSchedule?.clusterIds?.length
 				? [...activeSchedule.clusterIds]
