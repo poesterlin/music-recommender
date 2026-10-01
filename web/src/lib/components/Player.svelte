@@ -5,7 +5,7 @@
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
 	import {
 		IconPlayerSkipBack, IconPlayerSkipForward, IconPlayerPlay, IconPlayerPause,
-		IconPlayerStop, IconArrowsShuffle, IconVolume, IconVolumeOff, IconLoader2
+		IconPlayerStop, IconVolume, IconVolumeOff, IconLoader2
 	} from '@tabler/icons-svelte';
 
 	type Track = {
@@ -118,15 +118,6 @@
 		const target = volume > 0 ? 0 : lastVolume;
 		volume = target;
 		await post('/api/player', { volume: target });
-	}
-
-	async function toggleShuffle() {
-		if (player?.shuffle === null || player?.shuffle === undefined) return;
-		const next = !player.shuffle;
-		player = { ...player, shuffle: next };
-		const { ok, data } = await post<State & { success: boolean }>('/api/player', { shuffle: next });
-		if (ok && data && 'shuffle' in data) player = data;
-		onQueueChange?.();
 	}
 
 	async function seek(e: MouseEvent) {
@@ -292,21 +283,6 @@
 						<IconPlayerStop size={20} aria-hidden="true" />
 					{/if}
 				</button>
-
-				{#if player.shuffle !== null && player.shuffle !== undefined}
-					<button
-						class="flex size-11 shrink-0 items-center justify-center rounded-xl border transition active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40 {player.shuffle
-							? 'border-accent/40 bg-accent/20 text-accent'
-							: 'border-cream/10 bg-cream/5 text-cream/60 hover:bg-cream/15 hover:text-cream'}"
-						disabled={busy !== null}
-						onclick={toggleShuffle}
-						title="Toggle shuffle"
-						aria-label="Shuffle"
-						aria-pressed={player.shuffle}
-					>
-						<IconArrowsShuffle size={20} aria-hidden="true" />
-					</button>
-				{/if}
 
 				{#if volume !== null}
 					<label class="text-cream/60 ml-auto flex items-center gap-2 text-sm font-bold">

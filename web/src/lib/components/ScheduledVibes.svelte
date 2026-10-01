@@ -32,8 +32,8 @@
 	let busy = $state(false);
 	let playingPicks = $state(false);
 	let now = $state(new Date());
-	const actionClass =
-		'inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50';
+	const playButtonClass =
+		'inline-flex min-h-12 items-center justify-center gap-2 rounded-full py-3 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50';
 	const slots = $derived(
 		(live?.schedules ?? schedules)
 			.filter((slot) => slot.enabled !== false && slot.clusterIds.length > 0)
@@ -161,18 +161,18 @@
 			>
 		{/each}
 	</div>
-	<div class="mt-6 flex flex-wrap items-stretch gap-3">
+	<div class="mt-6 flex flex-wrap items-center gap-4">
 		<button
 			onclick={() => play(selected)}
 			disabled={busy || !ids.length}
-			class="{actionClass} bg-accent text-cream hover:bg-accent-deep"
+			class="{playButtonClass} bg-accent text-cream hover:bg-accent-deep px-7"
 		>
 			<IconPlayerPlay size={18} class="shrink-0" />
 			{busy && (!selected || !playingPicks) ? 'Starting…' : `Play ${selected?.name ?? 'my picks'}`}
 		</button>
 		{#if selected}
 			<button
-				class="{actionClass} border-ink/15 text-ink hover:bg-ink/5 border"
+				class="{playButtonClass} border-ink/15 text-ink hover:bg-ink/5 border px-4 text-sm"
 				disabled={busy || !manualIds.length}
 				onclick={() => play(null)}
 			>
@@ -182,12 +182,14 @@
 		{/if}
 		{#if selectedId !== null}
 			<button
-				class="{actionClass} border-ink/15 text-ink hover:bg-ink/5 border"
+				class="text-accent-deep min-h-12 cursor-pointer text-sm font-bold underline underline-offset-4 disabled:opacity-50"
 				disabled={busy}
 				onclick={() => (selectedId = null)}>Follow schedule</button
 			>
 		{/if}
-		<a href="/vibe?tab=browse" class="{actionClass} border-ink/15 text-ink hover:bg-ink/5 border"
+		<a
+			href="/vibe?tab=browse"
+			class="text-accent-deep inline-flex min-h-12 items-center text-sm font-bold underline underline-offset-4"
 			>Browse vibes</a
 		>
 	</div>
