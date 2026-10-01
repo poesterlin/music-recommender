@@ -41,6 +41,7 @@ git pull --ff-only origin "$BRANCH"
 
 echo "==> Ensuring additive centered-embedding schema"
 bun run db:ensure-centered
+bun --env-file=.env scripts/ensure-playback-settings.ts
 
 echo "==> Validating Compose configuration"
 docker compose -f "$COMPOSE_FILE" config --quiet

@@ -349,7 +349,7 @@
 			<div class="animate-marquee flex w-max gap-0 whitespace-nowrap">
 				{#each [0, 1] as copy (copy)}
 					<span class="font-display text-lg font-bold tracking-wide">
-						{#each vibeNames as n (n)}
+						{#each vibeNames as n, index (index)}
 							<span class="mx-4">{n}</span><span class="text-accent">✦</span>
 						{/each}
 					</span>
