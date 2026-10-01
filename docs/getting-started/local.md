@@ -64,16 +64,6 @@ Continue with [Your first playable vibe](/guides/first-play).
 
 ## Reference
 
-The starter stack publishes port `3000` on every network interface.
-To restrict access to this machine, change its `ports` entry:
-
-```yaml
-ports:
-  - '127.0.0.1:3000:3000'
-```
-
-PostgreSQL has no published port in this stack.
-
 After editing `.env`, run `docker compose up -d` to recreate affected services.
 See [Authentication and configuration](/reference/application) for account
 limits, worker settings, and database commands.

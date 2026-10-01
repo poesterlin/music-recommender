@@ -85,9 +85,6 @@ Open `http://127.0.0.1:3000/login` with the printed password.
 Open **Setup** to index tracks, create vibes, and fill missing names.
 Follow [Your first playable vibe](docs/guides/first-play.md) for those steps.
 
-The starter stack publishes web port `3000` on every network interface.
-See [Local install](docs/getting-started/local.md) to restrict it to localhost.
-
 ### Other ways
 
 - [Installer script](docs/getting-started/local.md#other-ways): generates
