@@ -4,6 +4,7 @@
 	import { toastStore } from '$lib/client/toast.svelte';
 	import type { VibeSchedule } from '$lib/server/vibe-store';
 	import { IconPlayerPlay } from '@tabler/icons-svelte';
+	import { coverUrl } from '$lib/cover-image';
 
 	let {
 		schedules,
@@ -11,7 +12,8 @@
 		picks,
 		names,
 		timezone,
-		onPlay
+		onPlay,
+		covers = {}
 	}: {
 		schedules: VibeSchedule[];
 		active: VibeSchedule | null;
@@ -19,6 +21,7 @@
 		names: Record<number, string>;
 		timezone: string;
 		onPlay: () => Promise<void>;
+		covers?: Record<number, { primary: string | null; secondary: string | null }>;
 	} = $props();
 
 	let live = $state<{
@@ -132,99 +135,146 @@
 	});
 </script>
 
-<section class="border-ink/15 bg-cream rounded-3xl border p-6 shadow-sm sm:p-8">
-	<div class="flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<p class="text-accent-deep text-xs font-bold tracking-[0.18em] uppercase">
-				{selected
-					? selected.id === current?.id
-						? 'Current scheduled vibe'
-						: 'Selected vibe'
-					: 'Manual picks'}
-			</p>
-			<h1 class="font-display mt-2 text-4xl font-black sm:text-5xl">
-				{selected?.name ?? 'Your picks'}
-			</h1>
-			<p class="text-ink-soft mt-2 text-sm font-bold">
-				{selected ? hours(selected) : current ? 'Your saved mix' : 'No scheduled vibe right now'}
-			</p>
-		</div>
-		<a
-			href="/vibe?tab=schedule"
-			class="text-accent-deep text-sm font-bold underline underline-offset-4">Edit schedule</a
-		>
-	</div>
-	<div class="mt-5 flex flex-wrap gap-2">
-		{#each ids as id (id)}
-			<span class="bg-ink/5 text-ink-soft rounded-full px-3 py-1.5 text-sm"
-				>{clusterNames[id] ?? `Cluster ${id}`}</span
-			>
-		{/each}
-	</div>
-	<div class="mt-6 flex flex-wrap items-center gap-4">
-		<button
-			onclick={() => play(selected)}
-			disabled={busy || !ids.length}
-			class="{playButtonClass} bg-accent text-cream hover:bg-accent-deep px-7"
-		>
-			<IconPlayerPlay size={18} class="shrink-0" />
-			{busy && (!selected || !playingPicks) ? 'Starting…' : `Play ${selected?.name ?? 'my picks'}`}
-		</button>
-		{#if selected}
-			<button
-				class="{playButtonClass} border-ink/15 text-ink hover:bg-ink/5 border px-4 text-sm"
-				disabled={busy || !manualIds.length}
-				onclick={() => play(null)}
-			>
-				<IconPlayerPlay size={18} class="shrink-0" />
-				{busy && playingPicks ? 'Starting…' : 'Play my picks'}
-			</button>
-		{/if}
-		{#if selectedId !== null}
-			<button
-				class="text-accent-deep min-h-12 cursor-pointer text-sm font-bold underline underline-offset-4 disabled:opacity-50"
-				disabled={busy}
-				onclick={() => (selectedId = null)}>Follow schedule</button
-			>
-		{/if}
-		<a
-			href="/vibe?tab=browse"
-			class="text-accent-deep inline-flex min-h-12 items-center text-sm font-bold underline underline-offset-4"
-			>Browse vibes</a
-		>
-	</div>
-	{#if next}<p class="text-ink-soft mt-3 text-sm">
-			Next: <strong>{next.slot.name}</strong> at {time(next.slot.startHour)}{next.wait +
-				minuteOfDay >=
-			1440
-				? ' tomorrow'
-				: ''}
-		</p>{/if}
-	{#if slots.length}
-		<div class="border-ink/10 mt-6 border-t pt-5">
-			<p class="text-faded mb-3 text-xs font-bold">Day schedule · {zone}</p>
-			<div class="grid gap-2 sm:grid-cols-3">
-				{#each slots as slot (slot.id)}
-					<button
-						onclick={() => (selectedId = slot.id)}
-						aria-pressed={selected?.id === slot.id}
-						class="rounded-2xl border p-4 text-left transition {selected?.id === slot.id
-							? 'border-accent bg-accent/10'
-							: 'border-ink/10 hover:bg-ink/5'}"
-					>
-						<span class="block font-bold"
-							>{slot.name}{slot.id === current?.id ? ' · Current' : ''}</span
+<section
+	id="mix"
+	class="border-ink/10 bg-cream scroll-mt-24 rounded-[2rem] border p-6 shadow-[0_18px_40px_-28px_rgba(29,21,14,0.5)] sm:p-8 lg:p-10"
+	aria-label="Mixes"
+>
+	<div class="grid gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
+		<div class="min-w-0">
+			<div class="flex items-center gap-6">
+				<div class="flex shrink-0 items-center pl-2" aria-hidden="true">
+					{#each ids.slice(0, 3) as id, index (id)}
+						{@const image = coverUrl(covers[id]?.primary ?? null, 256)}
+						<div
+							class="bg-ink ring-cream relative size-20 shrink-0 overflow-hidden rounded-lg shadow-lg ring-4 sm:size-24 {index >
+							0
+								? '-ml-9'
+								: ''}"
+							style="transform: rotate({index % 2 === 0 ? -5 : 4}deg); z-index: {3 - index}"
 						>
-						<span class="text-ink-soft mt-1 block text-sm">{hours(slot)}</span>
-					</button>
+							{#if image}<img src={image} alt="" class="size-full object-cover" />{:else}<div
+									class="vinyl flex size-full items-center justify-center"
+								>
+									<span class="bg-accent border-ink size-6 rounded-full border-8"></span>
+								</div>{/if}
+						</div>
+					{:else}
+						<div class="vinyl size-20 rounded-full shadow-lg sm:size-24"></div>
+					{/each}
+				</div>
+				<div class="min-w-0">
+					<p class="text-accent-deep text-xs font-bold tracking-[0.2em] uppercase">
+						{selected
+							? selected.id === current?.id
+								? 'On the dial now'
+								: 'Selected mix'
+							: 'Manual picks'}
+					</p>
+					<h2
+						class="font-display mt-1.5 text-3xl leading-tight font-black text-balance sm:text-4xl"
+					>
+						{selected?.name ?? 'Your picks'}
+					</h2>
+					<p class="text-ink-soft mt-1 text-sm font-bold">
+						{selected
+							? hours(selected)
+							: current
+								? 'Your saved mix'
+								: 'No scheduled vibe right now'}
+					</p>
+				</div>
+			</div>
+
+			<div class="mt-6 flex flex-wrap gap-2">
+				{#each ids as id (id)}
+					<span class="bg-ink/5 text-ink-soft rounded-full px-3 py-1.5 text-sm"
+						>{clusterNames[id] ?? `Cluster ${id}`}</span
+					>
 				{/each}
 			</div>
+
+			<div class="mt-7 flex flex-wrap items-center gap-3">
+				<button
+					onclick={() => play(selected)}
+					disabled={busy || !ids.length}
+					class="{playButtonClass} bg-ink text-cream hover:bg-accent-deep px-7"
+				>
+					<IconPlayerPlay size={18} class="shrink-0" />
+					{busy && (!selected || !playingPicks)
+						? 'Starting…'
+						: `Play ${selected?.name ?? 'my picks'}`}
+				</button>
+				{#if selected}
+					<button
+						class="{playButtonClass} border-ink/15 text-ink hover:bg-ink/5 border px-5 text-sm"
+						disabled={busy || !manualIds.length}
+						onclick={() => play(null)}
+					>
+						{busy && playingPicks ? 'Starting…' : 'Play my picks'}
+					</button>
+				{/if}
+				{#if selectedId !== null}
+					<button
+						class="text-accent-deep min-h-12 cursor-pointer text-sm font-bold underline underline-offset-4 disabled:opacity-50"
+						disabled={busy}
+						onclick={() => (selectedId = null)}>Follow schedule</button
+					>
+				{/if}
+			</div>
+			{#if next}<p class="text-ink-soft mt-4 text-sm">
+					Next up: <strong>{next.slot.name}</strong> at {time(next.slot.startHour)}{next.wait +
+						minuteOfDay >=
+					1440
+						? ' tomorrow'
+						: ''}
+				</p>{/if}
 		</div>
-	{:else}
-		<p class="text-ink-soft mt-5 text-sm">
-			No enabled schedules. <a class="underline underline-offset-4" href="/vibe?tab=schedule"
-				>Create a schedule</a
-			>
-		</p>
-	{/if}
+
+		<div class="min-w-0">
+			<div class="mb-3 flex items-baseline justify-between gap-3">
+				<p class="text-faded text-xs font-bold tracking-[0.2em] uppercase">Your day · {zone}</p>
+				<a
+					href="/vibe?tab=schedule"
+					class="text-accent-deep text-sm font-bold underline underline-offset-4">Edit schedule</a
+				>
+			</div>
+			{#if slots.length}
+				<ul class="grid gap-2">
+					{#each slots as slot (slot.id)}
+						{@const isNow = slot.id === current?.id}
+						<li>
+							<button
+								onclick={() => (selectedId = slot.id)}
+								aria-pressed={selected?.id === slot.id}
+								class="flex w-full cursor-pointer items-center gap-4 rounded-2xl border px-4 py-3 text-left transition {selected?.id ===
+								slot.id
+									? 'border-ink bg-ink text-cream'
+									: 'border-ink/10 hover:bg-ink/5'}"
+							>
+								<span
+									class="w-24 shrink-0 text-sm font-bold tabular-nums {selected?.id === slot.id
+										? 'text-cream/60'
+										: 'text-faded'}">{hours(slot)}</span
+								>
+								<span class="min-w-0 flex-1 truncate font-bold">{slot.name}</span>
+								{#if isNow}
+									<span
+										class="bg-accent text-cream rounded-full px-2.5 py-0.5 text-[11px] font-bold tracking-wide uppercase"
+										>Now</span
+									>
+								{/if}
+							</button>
+						</li>
+					{/each}
+				</ul>
+			{:else}
+				<p class="text-ink-soft text-sm">
+					No enabled schedules. <a class="underline underline-offset-4" href="/vibe?tab=schedule"
+						>Create a schedule</a
+					>
+				</p>
+			{/if}
+		</div>
+	</div>
 </section>

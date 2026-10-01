@@ -1,4 +1,5 @@
 ---
+
 layout: home
 
 hero:
@@ -24,3 +25,9 @@ features:
   - title: Clusters and playback
     details: Build and name clusters, then use them in mixes and schedules.
 ---
+
+## The listening room
+
+Control playback, choose a scheduled mix, or pick a vibe from your collection.
+
+<img src="/images/listening-room.png" alt="Sole home page showing the player, scheduled Night mix, day schedule, and album-art vibe sleeves" width="432" />

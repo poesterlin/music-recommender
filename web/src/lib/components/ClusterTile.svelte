@@ -10,6 +10,8 @@
 		named = false,
 		selected = false,
 		playing = false,
+		playable = false,
+		disabled = false,
 		onselect,
 		onpreview
 	}: {
@@ -22,6 +24,9 @@
 		selected?: boolean;
 		/** True while a sample from this cluster is playing. */
 		playing?: boolean;
+		/** Home shelf tiles start playback instead of opening the name editor. */
+		playable?: boolean;
+		disabled?: boolean;
 		onselect: (clusterId: number) => void;
 		onpreview?: (clusterId: number) => void;
 	} = $props();
@@ -37,7 +42,9 @@
 	type="button"
 	class="group relative block w-full cursor-pointer text-left [perspective:900px]"
 	onclick={() => onselect(clusterId)}
-	aria-pressed={selected}
+	{disabled}
+	aria-label={playable ? `Play ${name}` : undefined}
+	aria-pressed={playable ? undefined : selected}
 >
 	<!--
 		One object, not two. The cover and the label are a single card with a fold
@@ -189,7 +196,7 @@
 			></div>
 			<div class="relative flex items-baseline gap-1.5">
 				<span class="text-faded font-mono text-[11px]">#{clusterId}</span>
-				{#if !named}
+				{#if !named && !playable}
 					<IconPencil size={11} class="text-faded opacity-0 transition group-hover:opacity-100" />
 				{/if}
 			</div>
@@ -203,7 +210,11 @@
 				{:else}
 					<span></span>
 				{/if}
-				{#if onpreview}
+				{#if playable}
+					<span class="text-accent-deep inline-flex items-center gap-1 text-[11px] font-bold"
+						><IconPlayerPlayFilled size={11} /> {selected ? 'Starting…' : 'Play'}</span
+					>
+				{:else if onpreview}
 					<span
 						role="button"
 						tabindex="0"

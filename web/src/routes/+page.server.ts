@@ -7,6 +7,7 @@ import {
 } from '$lib/server/player';
 import { getActiveSchedule, getVibeClusterIds, listSchedules } from '$lib/server/vibe-store';
 import { getActiveClusterMetadata } from '$lib/server/active-clusters';
+import { getClusterCovers, getClusterTrackCounts } from '$lib/server/cover-image';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -24,7 +25,17 @@ export const load: PageServerLoad = async () => {
 			getActiveClusterMetadata()
 		]);
 
+	const [covers, trackCounts] = await Promise.all([
+		getClusterCovers().catch(
+			() => ({}) as Record<number, { primary: string; secondary: string | null }>
+		),
+		getClusterTrackCounts().catch(() => ({}) as Record<number, number>)
+	]);
+
 	return {
+		covers,
+		trackCounts,
+		availableClusterIds: clusterMetadata.ids,
 		nowPlaying,
 		player,
 		queueState,

@@ -3,6 +3,8 @@
 	import Player from '$lib/components/Player.svelte';
 	import ScheduledVibes from '$lib/components/ScheduledVibes.svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
+	import ClusterTile from '$lib/components/ClusterTile.svelte';
+	import { IconArrowUpRight } from '@tabler/icons-svelte';
 	import { likeTrack } from '$lib/client/like-track';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
@@ -29,6 +31,25 @@
 	);
 	// No clusters means no vibes to play, whatever the stored default list says.
 	const vibesReady = $derived(data.vibeClusterIds.length > 0);
+	let startingVibe = $state<number | null>(null);
+	// Saved picks lead, then whatever else the library has. Six fills one
+	// row at the widest layout; the rest lives behind "Browse all".
+	const allShelfIds = $derived([...new Set([...data.vibeClusterIds, ...data.availableClusterIds])]);
+	const shelfIds = $derived(allShelfIds.slice(0, 6));
+
+	async function playVibe(clusterId: number) {
+		if (startingVibe !== null) return;
+		startingVibe = clusterId;
+		try {
+			const { ok } = await post('/api/play-vibe', { clusterIds: [clusterId] });
+			if (ok) {
+				toastStore.show(`Playing ${data.clusterNames[clusterId] ?? `Cluster ${clusterId}`}`);
+				await Promise.all([refreshQueues(), nowPlayingStore.refresh()]);
+			}
+		} finally {
+			startingVibe = null;
+		}
+	}
 
 	async function refreshQueues() {
 		if (queueRefreshing) return;
@@ -101,7 +122,7 @@
 	});
 </script>
 
-<!-- HERO -->
+<h1 class="sr-only">Listen</h1>
 {#if !vibesReady}
 	<div
 		class="border-accent/30 bg-accent/5 mb-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4"
@@ -117,30 +138,66 @@
 		>
 	</div>
 {/if}
-<div class="grid items-start gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+
+<!-- STAGE — the current song and the play button are the page -->
+<Player initial={data.player} onQueueChange={refreshQueues} />
+
+<div class="mt-6">
 	<ScheduledVibes
 		schedules={data.vibeSchedules}
 		active={data.activeSchedule}
 		picks={data.vibeClusterIds}
 		names={data.clusterNames}
+		covers={data.covers}
 		timezone={data.scheduleTimezone}
 		onPlay={async () => {
 			await Promise.all([refreshQueues(), nowPlayingStore.refresh()]);
 		}}
 	/>
-	<Player initial={data.player} onQueueChange={refreshQueues} />
 </div>
 
+<!-- CRATE — the Browse sleeves, one tap to play -->
+{#if shelfIds.length}
+	<section class="mt-14" aria-labelledby="shelf-title" aria-busy={startingVibe !== null}>
+		<div class="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+			<div>
+				<h2 id="shelf-title" class="font-display text-2xl font-black">Your vibes</h2>
+				<p class="text-ink-soft mt-1 text-sm" aria-live="polite">
+					{startingVibe !== null
+						? `Starting ${data.clusterNames[startingVibe] ?? `Cluster ${startingVibe}`}…`
+						: 'Tap a sleeve to start playing it.'}
+				</p>
+			</div>
+			<a
+				href="/vibe?tab=browse"
+				class="text-ink hover:text-accent-deep inline-flex min-h-11 items-center gap-1.5 text-sm font-bold transition"
+			>
+				{allShelfIds.length > shelfIds.length ? `Browse all ${allShelfIds.length}` : 'Browse vibes'}
+				<IconArrowUpRight size={18} aria-hidden="true" />
+			</a>
+		</div>
+		<div class="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-6">
+			{#each shelfIds as id (id)}
+				<ClusterTile
+					clusterId={id}
+					name={data.clusterNames[id] ?? `Cluster ${id}`}
+					covers={data.covers[id] ?? { primary: null, secondary: null }}
+					trackCount={data.trackCounts[id]}
+					selected={startingVibe === id}
+					playable
+					disabled={startingVibe !== null}
+					onselect={playVibe}
+				/>
+			{/each}
+		</div>
+	</section>
+{/if}
+
 <!-- SETLIST — live Music Assistant queues, grouped by their active queue -->
-<section
-	class="animate-rise border-ink/15 bg-cream mt-6 rounded-3xl border p-6 shadow-sm sm:p-7"
-	style="animation-delay: 300ms"
->
+<section class="border-ink/15 mt-14 border-t pt-8">
 	<div class="mb-5 flex flex-wrap items-start justify-between gap-3">
 		<div>
-			<h2 class="font-display text-3xl font-black">
-				Up next <span class="text-faded font-light italic">— the setlist</span>
-			</h2>
+			<h2 class="font-display text-2xl font-black">Up next</h2>
 			<p class="text-ink-soft mt-1 text-sm">
 				{#if queueState.scope === 'main'}
 					Main device · {queueState.mainPlayer}
@@ -171,76 +228,90 @@
 				: ''}"
 		>
 			{#each queueState.queues as queue (queue.queueId)}
-				<article class="border-ink/10 bg-paper/45 min-w-0 rounded-2xl border p-4 sm:p-5">
-					<div class="flex items-start justify-between gap-3">
-						<div class="min-w-0">
-							<p class="text-faded text-[10px] font-bold tracking-[0.22em] uppercase">
-								{queue.playerNames.length > 1 ? 'Synced group' : 'Device queue'}
-							</p>
-							<h3 class="font-display mt-1 truncate text-xl font-black">
-								{queue.playerNames.join(' + ')}
-							</h3>
-						</div>
-						<span
-							class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize {queue.state ===
-							'playing'
-								? 'bg-moss/15 text-moss'
-								: queue.state === 'paused'
-									? 'bg-gold/20 text-ink-soft'
-									: 'bg-ink/5 text-faded'}"
-						>
-							<span
-								class="size-1.5 rounded-full {queue.state === 'playing' ? 'bg-moss' : 'bg-current'}"
-							></span>
-							{queueStateLabel(queue.state)}
-						</span>
-					</div>
-
-					<div class="bg-ink/[0.045] mt-4 rounded-xl px-3 py-2.5">
-						<p class="text-faded text-[10px] font-bold tracking-[0.2em] uppercase">
-							{queue.state === 'playing' ? 'Now playing' : 'Current track'}
-						</p>
-						{#if queue.currentTrack}
-							<div class="mt-1 flex items-center gap-3">
-								<div class="min-w-0 flex-1">
-									<p class="truncate font-bold">{queue.currentTrack.name}</p>
-									<p class="text-ink-soft truncate text-xs">
-										{queue.currentTrack.artists.join(', ')}
-									</p>
-								</div>
-								{#if queue.currentTrack.uri}
-									<button
-										class="bg-moss/10 text-moss hover:bg-moss hover:text-cream shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition"
-										onclick={() => {
-											const uri = queue.currentTrack?.uri;
-											if (uri) void likeTrack(uri, queue.currentTrack?.name);
-										}}
-										title="Like {queue.currentTrack.name}"
-									>
-										♥ Like
-									</button>
-								{/if}
+				<article
+					class="border-ink/15 bg-cream relative min-w-0 overflow-hidden rounded-xl border shadow-[0_6px_14px_-8px_rgba(29,21,14,0.5)]"
+				>
+					<!-- Same crease the sleeves use between cover and label. -->
+					<div
+						class="pointer-events-none absolute inset-x-0 top-0 h-1 {queue.state === 'playing'
+							? 'bg-accent'
+							: 'bg-ink/10'}"
+					></div>
+					<div class="p-4 pt-5 sm:p-5 sm:pt-6">
+						<div class="flex items-start justify-between gap-3">
+							<div class="min-w-0">
+								<p class="text-faded text-[10px] font-bold tracking-[0.22em] uppercase">
+									{queue.playerNames.length > 1 ? 'Synced group' : 'Device queue'}
+								</p>
+								<h3 class="font-display mt-1 truncate text-xl font-black">
+									{queue.playerNames.join(' + ')}
+								</h3>
 							</div>
-						{:else}
-							<p class="text-faded mt-1 text-sm">Nothing is playing on this device.</p>
+							<span
+								class="flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold capitalize {queue.state ===
+								'playing'
+									? 'bg-moss/15 text-moss'
+									: queue.state === 'paused'
+										? 'bg-gold/20 text-ink-soft'
+										: 'bg-ink/5 text-faded'}"
+							>
+								<span
+									class="size-1.5 rounded-full {queue.state === 'playing'
+										? 'bg-moss'
+										: 'bg-current'}"
+								></span>
+								{queueStateLabel(queue.state)}
+							</span>
+						</div>
+
+						<div class="bg-ink/[0.045] mt-4 rounded-xl px-3 py-2.5">
+							<p class="text-faded text-[10px] font-bold tracking-[0.2em] uppercase">
+								{queue.state === 'playing' ? 'Now playing' : 'Current track'}
+							</p>
+							{#if queue.currentTrack}
+								<div class="mt-1 flex items-center gap-3">
+									<div class="min-w-0 flex-1">
+										<p class="truncate font-bold">{queue.currentTrack.name}</p>
+										<p class="text-ink-soft truncate text-xs">
+											{queue.currentTrack.artists.join(', ')}
+										</p>
+									</div>
+									{#if queue.currentTrack.uri}
+										<button
+											class="bg-moss/10 text-moss hover:bg-moss hover:text-cream shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition"
+											onclick={() => {
+												const uri = queue.currentTrack?.uri;
+												if (uri) void likeTrack(uri, queue.currentTrack?.name);
+											}}
+											title="Like {queue.currentTrack.name}"
+										>
+											♥ Like
+										</button>
+									{/if}
+								</div>
+							{:else}
+								<p class="text-faded mt-1 text-sm">Nothing is playing on this device.</p>
+							{/if}
+						</div>
+
+						<div class="mt-5 mb-1 flex items-baseline justify-between gap-3">
+							<h4 class="text-faded text-[11px] font-bold tracking-[0.22em] uppercase">
+								Then play
+							</h4>
+							<p class="text-faded text-xs font-bold">
+								{queue.tracks.length}{queue.hasMore ? '+' : ''} tracks
+							</p>
+						</div>
+						<TrackList
+							tracks={queue.tracks}
+							onLike={likeTrackFromQueue}
+							onJump={(track) => playQueuedTrack(queue.queueId, track)}
+							emptyText="Nothing is lined up after this track."
+						/>
+						{#if queue.hasMore}
+							<p class="text-faded mt-3 text-xs">More tracks are waiting in Music Assistant.</p>
 						{/if}
 					</div>
-
-					<div class="mt-5 mb-1 flex items-baseline justify-between gap-3">
-						<h4 class="text-faded text-[11px] font-bold tracking-[0.22em] uppercase">Then play</h4>
-						<p class="text-faded text-xs font-bold">
-							{queue.tracks.length}{queue.hasMore ? '+' : ''} tracks
-						</p>
-					</div>
-					<TrackList
-						tracks={queue.tracks}
-						onLike={likeTrackFromQueue}
-						onJump={(track) => playQueuedTrack(queue.queueId, track)}
-						emptyText="Nothing is lined up after this track."
-					/>
-					{#if queue.hasMore}
-						<p class="text-faded mt-3 text-xs">More tracks are waiting in Music Assistant.</p>
-					{/if}
 				</article>
 			{/each}
 		</div>

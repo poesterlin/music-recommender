@@ -96,7 +96,8 @@
 					/>
 					<span class="font-display text-2xl font-black tracking-tight"> Sole </span>
 				</a>
-				{#if shown}
+				<!-- The home page already is the now-playing view. -->
+				{#if shown && page.url.pathname !== '/'}
 					<div class="flex max-w-full items-center gap-3 text-sm">
 						<span class="relative flex size-2 shrink-0">
 							<span
