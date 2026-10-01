@@ -22,11 +22,6 @@ It revokes that account's sessions
 Self-registration is disabled by default. Set `ALLOW_REGISTRATION=true` to
 allow sign-ups within that limit. Restart the web service after changing it.
 
-Login allows five attempts per client address per minute. Excess attempts receive
-a 429 action failure and `Retry-After`. The throttle is in-memory, resets on restart,
-and is independent for each web process. Behind a proxy, clients share a limit
-unless SvelteKit's trusted client-address forwarding is configured.
-
 ## API keys
 
 Create scoped keys under **API keys**. Secrets appear once and are stored hashed.

@@ -52,11 +52,11 @@ Cluster names use the three most frequent artists
 
 ## Quick start
 
-The starter stack uses matching v0.1.2 images for web and the opt-in API worker.
+The starter stack uses matching v0.1.1 images for web and the opt-in API worker.
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.2/stack.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.1/stack.yaml -o compose.yaml
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 WORKER_TOKEN=$(openssl rand -hex 24)

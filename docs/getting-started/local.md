@@ -7,11 +7,11 @@ Read [requirements and limits](/getting-started/) before starting.
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.2/stack.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.1/stack.yaml -o compose.yaml
 ```
 
 The [starter stack](https://github.com/poesterlin/sole/blob/main/stack.yaml)
-uses the matching v0.1.2 web and worker images. PostgreSQL and web start by
+uses the matching v0.1.1 web and worker images. PostgreSQL and web start by
 default; the API worker is enabled explicitly after setup.
 Only the web app mounts your music folder. The mount is read-only.
 
@@ -108,8 +108,8 @@ limits, worker settings, and database commands.
 Keep `.env` and the database volume. Set both image versions in `.env`:
 
 ```dotenv
-WEB_IMAGE=ghcr.io/poesterlin/sole-web:v0.1.2
-EMBEDDINGS_IMAGE=ghcr.io/poesterlin/sole-embeddings:v0.1.2
+WEB_IMAGE=ghcr.io/poesterlin/sole-web:v0.1.1
+EMBEDDINGS_IMAGE=ghcr.io/poesterlin/sole-embeddings:v0.1.1
 ```
 
 Then stop application services, migrate using the new web image, and restart:
@@ -125,7 +125,7 @@ docker compose up -d --wait web
 
 Restart the worker explicitly if you use it. Existing embedded libraries inherit
 their recorded recipe; fresh libraries default to medium mode and 90-second
-samples. Upgrade web and worker together: current workers require the server to
+samples. Upgrade web and worker together: v0.1.1 workers require the server to
 provide a recipe. Do not recreate your admin account unless you intend to reset
 its password.
 
@@ -135,7 +135,7 @@ The [installer script](https://github.com/poesterlin/sole/blob/main/setup.sh)
 automates the main install path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.2/setup.sh -o setup.sh
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.1/setup.sh -o setup.sh
 bash setup.sh "$HOME/Music"
 ```
 
