@@ -7,7 +7,6 @@ import {
 } from '$lib/server/player';
 import { getActiveSchedule, getVibeClusterIds, listSchedules } from '$lib/server/vibe-store';
 import { getActiveClusterMetadata } from '$lib/server/active-clusters';
-import { getClusterCovers, getClusterTrackCounts } from '$lib/server/cover-image';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -25,13 +24,6 @@ export const load: PageServerLoad = async () => {
 			getActiveClusterMetadata()
 		]);
 
-	const [trackCounts, covers] = await Promise.all([
-		getClusterTrackCounts().catch(() => ({}) as Record<number, number>),
-		getClusterCovers().catch(
-			() => ({}) as Record<number, { primary: string; secondary: string | null }>
-		)
-	]);
-
 	return {
 		nowPlaying,
 		player,
@@ -40,10 +32,6 @@ export const load: PageServerLoad = async () => {
 		vibeSchedules: schedules,
 		activeSchedule,
 		clusterNames: clusterMetadata.names,
-		namedClusterIds: clusterMetadata.manualNameIds,
-		availableClusterIds: clusterMetadata.ids,
-		trackCounts,
-		covers,
 		scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		// Drives the empty-state banner. "Configured" is not the same as
 		// "reachable"; the queues panel reports that separately.
