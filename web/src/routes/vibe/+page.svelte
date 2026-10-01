@@ -62,12 +62,6 @@
 		tab = 'mix';
 	}
 
-	function useSlot(slot: VibeSchedule) {
-		vibeSelection = new SvelteSet(slot.clusterIds);
-		tab = 'mix';
-		toastStore.show(`Loaded ${slot.name}`);
-	}
-
 	const selection = $derived([...vibeSelection].sort((a, b) => a - b));
 
 	async function save() {
@@ -211,6 +205,5 @@
 		bind:activeSchedule
 		{clusterIds}
 		clusterNames={data.clusterNames}
-		onUseSlot={useSlot}
 	/>
 {/if}

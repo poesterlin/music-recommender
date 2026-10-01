@@ -29,7 +29,6 @@ BLANKED=(
   "MUSIC_HOST"
   "MA_TOKEN"
   "PLAYBACK_API_KEY"
-  "LIDARR_API_KEY"
 )
 
 die() {

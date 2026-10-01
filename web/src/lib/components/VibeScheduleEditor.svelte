@@ -8,14 +8,12 @@
 		schedules = $bindable(),
 		activeSchedule = $bindable(),
 		clusterIds,
-		clusterNames,
-		onUseSlot
+		clusterNames
 	}: {
 		schedules: VibeSchedule[];
 		activeSchedule: VibeSchedule | null;
 		clusterIds: number[];
 		clusterNames: Record<number, string>;
-		onUseSlot?: (slot: VibeSchedule) => void;
 	} = $props();
 
 	let editingId = $state<number | null>(null);
@@ -134,14 +132,6 @@
 						<p class="text-sm text-gray-500">{s.startHour}–{s.endHour}h</p>
 						<p class="mt-1 text-xs text-gray-500">{s.clusterIds.map(clusterLabel).join(', ')}</p>
 					</div>
-					{#if onUseSlot}
-						<button
-							class="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-semibold text-gray-700 hover:bg-gray-200"
-							onclick={() => onUseSlot(s)}
-						>
-							Use
-						</button>
-					{/if}
 					<label class="flex items-center gap-2 text-sm text-gray-500">
 						<input
 							type="checkbox"

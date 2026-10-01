@@ -1,10 +1,16 @@
 import { getLastRuns, relativeTime, type JobSource, type LastRun } from '$lib/server/job-log';
 import type { PageServerLoad } from './$types';
 import { getEmbeddingSettings } from '$lib/server/embedding-settings';
+import { db } from '$lib/server/db';
+import { sql } from 'drizzle-orm';
 
 export const load: PageServerLoad = async () => {
 	const lastRuns = await getLastRuns().catch(() => ({}) as Record<string, LastRun | null>);
+	const [library] = await db.execute(
+		sql`SELECT EXISTS (SELECT 1 FROM track WHERE embedding IS NOT NULL) AS populated`
+	);
 	return {
+		embeddingSettingsLocked: Boolean(library.populated),
 		embeddingSettings: await getEmbeddingSettings(),
 		// Every one of these jobs reads Music Assistant, so they cannot run
 		// without it. Configured is not the same as reachable; a failed run
