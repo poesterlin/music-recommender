@@ -134,6 +134,13 @@
       "when": 1790793600000,
       "tag": "0018_cluster_names",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790876400000,
+      "tag": "0019_playback_settings",
+      "breakpoints": true
     }
   ]
 }

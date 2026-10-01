@@ -36,6 +36,10 @@ See the [key code](https://github.com/poesterlin/sole/blob/main/web/src/lib/serv
 The [route guard](https://github.com/poesterlin/sole/blob/main/web/src/hooks.server.ts)
 limits service credentials to those routes.
 
+See the [Playback API](/reference/playback-api) for mix selection, schedules, and
+device overrides, or [Home Assistant buttons](/guides/home-assistant) for a complete
+dashboard configuration.
+
 ```sh
 curl -X POST https://sole.example.com/api/play-vibe \
   -H "Authorization: Bearer $PLAYBACK_API_KEY" \

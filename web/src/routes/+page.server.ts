@@ -7,24 +7,30 @@ import {
 } from '$lib/server/player';
 import { getActiveSchedule, getVibeClusterIds, listSchedules } from '$lib/server/vibe-store';
 import { getActiveClusterMetadata } from '$lib/server/active-clusters';
+import { getClusterCovers, getClusterTrackCounts } from '$lib/server/cover-image';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
-	const [nowPlaying, player, queueState, clusterIds, schedules, activeSchedule, clusterMetadata] = await Promise.all(
-		[
+	const [nowPlaying, player, queueState, clusterIds, schedules, activeSchedule, clusterMetadata] =
+		await Promise.all([
 			getCurrentTrack().catch(() => null),
 			getPlayerState().catch(() => null),
-			getQueues().catch((): QueueSnapshot => ({
-				scope: preferredPlayerName() ? 'main' : 'all',
-				mainPlayer: preferredPlayerName(),
-				queues: []
-			})),
+			getQueues().catch(async (): Promise<QueueSnapshot> => {
+				const mainPlayer = await preferredPlayerName().catch(() => null);
+				return { scope: mainPlayer ? 'main' : 'all', mainPlayer, queues: [] };
+			}),
 			getVibeClusterIds().catch(() => [] as number[]),
 			listSchedules().catch(() => []),
 			getActiveSchedule().catch(() => null),
 			getActiveClusterMetadata()
-		]
-	);
+		]);
+
+	const [trackCounts, covers] = await Promise.all([
+		getClusterTrackCounts().catch(() => ({}) as Record<number, number>),
+		getClusterCovers().catch(
+			() => ({}) as Record<number, { primary: string; secondary: string | null }>
+		)
+	]);
 
 	return {
 		nowPlaying,
@@ -34,6 +40,10 @@ export const load: PageServerLoad = async () => {
 		vibeSchedules: schedules,
 		activeSchedule,
 		clusterNames: clusterMetadata.names,
+		namedClusterIds: clusterMetadata.manualNameIds,
+		availableClusterIds: clusterMetadata.ids,
+		trackCounts,
+		covers,
 		scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
 		// Drives the empty-state banner. "Configured" is not the same as
 		// "reachable"; the queues panel reports that separately.

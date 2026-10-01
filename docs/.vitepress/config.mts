@@ -32,13 +32,15 @@ export default defineConfig({
         text: 'Guides',
         items: [
           { text: 'First playable vibe', link: '/guides/first-play' },
-          { text: 'Embedding workers', link: '/guides/worker' }
+          { text: 'Embedding workers', link: '/guides/worker' },
+          { text: 'Home Assistant buttons', link: '/guides/home-assistant' }
         ]
       },
       {
         text: 'Reference',
         items: [
           { text: 'Authentication and configuration', link: '/reference/application' },
+          { text: 'Playback API', link: '/reference/playback-api' },
           { text: 'Troubleshooting', link: '/reference/troubleshooting' }
         ]
       }

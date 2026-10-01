@@ -29,10 +29,10 @@ function logQueueError(message: string, details?: string) {
 	lastQueueErrorLogAt = now;
 }
 
-export async function playSongs(ids: string[]) {
+export async function playSongs(ids: string[], playerId?: string) {
 	// Direct Music Assistant playback over the native WebSocket API.
 	const { playUris } = await import('./player');
-	await playUris(ids);
+	await playUris(ids, { playerId });
 	console.log(`Playing ${ids.length} songs via Music Assistant`);
 }
 
@@ -63,7 +63,7 @@ async function enrichWithCluster(track: Omit<CurrentTrack, 'clusterId'>): Promis
 
 /** Now-playing straight from Music Assistant (players/all -> current_media). */
 async function getCurrentTrackFromMA(): Promise<CurrentTrack | null> {
-	const preferred = preferredPlayerName();
+	const preferred = await preferredPlayerName();
 	return withMa(async (call) => {
 		const players: any[] = await call('players/all');
 		const withMedia = players.filter((p) => p?.current_media?.uri);

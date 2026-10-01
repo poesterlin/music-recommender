@@ -12,6 +12,38 @@
 	} from '@tabler/icons-svelte';
 
 	let { data } = $props();
+	let playbackPlayerId = $state('');
+	let savedPlaybackPlayerId = $state('');
+	let savingPlayback = $state(false);
+	let playbackMessage = $state('');
+	let playbackError = $state(false);
+	$effect(() => {
+		playbackPlayerId = data.playbackPlayerId ?? '';
+		savedPlaybackPlayerId = data.playbackPlayerId ?? '';
+	});
+	async function savePlaybackDevice() {
+		if (savingPlayback || playbackPlayerId === savedPlaybackPlayerId) return;
+		savingPlayback = true;
+		playbackMessage = '';
+		playbackError = false;
+		const selected = playbackPlayerId;
+		try {
+			const response = await fetch('/api/playback-settings', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ playerId: selected || null })
+			});
+			const result = await response.json();
+			if (!response.ok) throw new Error(result.error ?? 'Could not save the playback device.');
+			savedPlaybackPlayerId = selected;
+			playbackMessage = 'Saved. Playback and player controls now use this selection.';
+		} catch (error) {
+			playbackError = true;
+			playbackMessage = error instanceof Error ? error.message : 'Could not save. Try again.';
+		} finally {
+			savingPlayback = false;
+		}
+	}
 	let embeddingMode = $state('medium');
 	let sampleSeconds = $state(90);
 	let settingsMessage = $state('');
@@ -200,6 +232,64 @@
 		<span class="text-ink-soft mt-3 block text-sm">Follow your library’s progress.</span>
 	</a>
 </div>
+
+<section
+	class="border-ink/10 mb-6 rounded-2xl border bg-white/80 p-5 shadow-sm sm:p-6"
+	aria-labelledby="playback-device-title"
+>
+	<h2 id="playback-device-title" class="font-display text-xl font-bold">Playback device</h2>
+	<p class="text-ink-soft mt-1 text-sm">
+		Choose the speaker or sync group used for playback, player controls, and the main queue.
+	</p>
+	{#if !data.musicAssistant}<p class="text-ink-soft mt-3 text-sm">
+			Connect Music Assistant to choose a device.
+		</p>
+	{:else if data.playbackUnavailable}<p class="text-accent-deep mt-3 text-sm">
+			Music Assistant is unavailable. Reload this page to try again.
+		</p>{/if}
+	<form
+		class="mt-5"
+		onsubmit={(event) => {
+			event.preventDefault();
+			void savePlaybackDevice();
+		}}
+	>
+		<label for="playback-device" class="mb-2 block text-sm font-bold">Default device</label>
+		<div class="flex flex-col gap-3 sm:flex-row">
+			<select
+				id="playback-device"
+				bind:value={playbackPlayerId}
+				disabled={savingPlayback}
+				class="border-ink/20 bg-paper focus:border-accent min-w-0 flex-1 rounded-lg border px-3 py-2 text-sm outline-none disabled:opacity-50"
+			>
+				<option value="">Automatic · follow active playback</option>
+				{#if data.playbackPlayerId && !data.playbackPlayers.some((player) => player.id === data.playbackPlayerId)}
+					<option value={data.playbackPlayerId}
+						>{data.playbackPlayerId} · not currently listed</option
+					>
+				{/if}
+				{#each data.playbackPlayers as player (player.id)}<option value={player.id}
+						>{player.name}{player.available ? '' : ' · offline'}</option
+					>{/each}
+			</select>
+			<button
+				type="submit"
+				disabled={savingPlayback || playbackPlayerId === savedPlaybackPlayerId}
+				class="bg-ink text-cream hover:bg-ink-soft cursor-pointer rounded-lg px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
+				>{savingPlayback ? 'Saving…' : 'Save device'}</button
+			>
+		</div>
+		<p class="text-ink-soft mt-2 text-xs">
+			Automatic shows all device queues. A saved selection applies across restarts.
+		</p>
+		{#if playbackMessage}<p
+				role={playbackError ? 'alert' : 'status'}
+				class="mt-3 text-sm {playbackError ? 'text-accent-deep' : 'text-moss'}"
+			>
+				{playbackMessage}
+			</p>{/if}
+	</form>
+</section>
 
 <section
 	class="border-ink/10 mb-6 rounded-2xl border bg-white/80 p-5 shadow-sm sm:p-6"

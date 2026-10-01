@@ -14,6 +14,12 @@ import {
 
 const authCascade = { onDelete: 'cascade', onUpdate: 'cascade' } as const;
 
+export const playbackSettingsTable = pgTable('playback_settings', {
+	id: integer('id').primaryKey().default(1),
+	playerId: text('player_id'),
+	updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull()
+});
+
 export const userTable = pgTable('user', {
 	id: text('id').primaryKey(),
 	createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow().notNull(),

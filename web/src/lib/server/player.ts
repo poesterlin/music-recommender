@@ -8,6 +8,7 @@
  */
 
 import { withMa } from './ma-client';
+import { getPlaybackPlayer } from './playback-settings';
 
 export type PlayerTrack = {
 	uri: string;
@@ -32,9 +33,35 @@ export type PlayerState = {
 	track: PlayerTrack | null;
 };
 
-export function preferredPlayerName(): string | null {
-	const configured = process.env.MA_PLAYER_NAME?.trim();
-	return configured || null;
+export async function preferredPlayerName(): Promise<string | null> {
+	return getPlaybackPlayer();
+}
+
+export class InvalidPlaybackPlayerError extends Error {}
+
+export async function listPlaybackPlayers(): Promise<
+	Array<{ id: string; name: string; available: boolean }>
+> {
+	return withMa(async (call) => {
+		const players: any[] = await call('players/all');
+		return players
+			.filter((player) => player?.player_id)
+			.map((player) => ({
+				id: String(player.player_id),
+				name: String(player.name || player.player_id),
+				available: player.available !== false
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name));
+	});
+}
+
+export async function validatePlaybackPlayer(playerId: string): Promise<string> {
+	if (!playerId.trim() || playerId.length > 256)
+		throw new InvalidPlaybackPlayerError('Choose a valid playback player.');
+	const player = (await listPlaybackPlayers()).find((player) => player.id === playerId);
+	if (!player)
+		throw new InvalidPlaybackPlayerError('Playback player was not found in Music Assistant.');
+	return player.id;
 }
 
 function isConfiguredPlayer(player: any, preferred: string): boolean {
@@ -100,9 +127,10 @@ async function resolvePlayerTarget(
 
 /** Resolve the player used by playback controls and now-playing. */
 async function resolveTarget(
-	call: (command: string, args?: Record<string, unknown>) => Promise<any>
+	call: (command: string, args?: Record<string, unknown>) => Promise<any>,
+	playerId?: string
 ): Promise<QueueTarget> {
-	const preferred = preferredPlayerName();
+	const preferred = playerId ?? (await preferredPlayerName());
 	const players: any[] = await call('players/all');
 	const player = pickPlayer(players, preferred);
 	if (!player) throw new Error('No MA players found');
@@ -229,7 +257,7 @@ async function loadPlayerQueue(
 /** Live queues for the configured main player, or every player when unset. */
 export async function getQueues(limit = 30): Promise<QueueSnapshot> {
 	const itemLimit = Math.max(1, Math.min(100, Math.round(limit)));
-	const mainPlayer = preferredPlayerName();
+	const mainPlayer = await preferredPlayerName();
 
 	return withMa(async (call) => {
 		const players: any[] = await call('players/all');
@@ -263,7 +291,11 @@ export async function getQueues(limit = 30): Promise<QueueSnapshot> {
 				a.playerNames.join(', ').localeCompare(b.playerNames.join(', '))
 		);
 
-		return { scope: mainPlayer ? 'main' : 'all', mainPlayer, queues };
+		return {
+			scope: mainPlayer ? 'main' : 'all',
+			mainPlayer: mainPlayer ? String(targets[0].player.name || targets[0].player.player_id) : null,
+			queues
+		};
 	});
 }
 
@@ -323,10 +355,13 @@ export async function setVolume(level: number): Promise<void> {
  * Replace the active queue with the given track URIs and start playback.
  * This is the native-MA replacement for the old HA webhook playSongs path.
  */
-export async function playUris(uris: string[], opts: { shuffle?: boolean } = {}): Promise<void> {
+export async function playUris(
+	uris: string[],
+	opts: { shuffle?: boolean; playerId?: string } = {}
+): Promise<void> {
 	if (!uris.length) return;
 	return withMa(async (call) => {
-		const { queueId } = await resolveTarget(call);
+		const { queueId } = await resolveTarget(call, opts.playerId);
 		await call('player_queues/play_media', {
 			queue_id: queueId,
 			media: uris,

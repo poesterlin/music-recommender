@@ -11,6 +11,7 @@ import {
 	setVibeClusterIds
 } from '$lib/server/vibe-store';
 import { playSongs } from '$lib/server/webhook';
+import { InvalidPlaybackPlayerError, validatePlaybackPlayer } from '$lib/server/player';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async () => {
@@ -33,8 +34,11 @@ export const GET: RequestHandler = async () => {
 	);
 };
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, url }) => {
 	try {
+		const overrides = url.searchParams.getAll('playerId');
+		if (overrides.length > 1) throw new InvalidPlaybackPlayerError('Provide only one playerId.');
+		const playerId = overrides.length ? await validatePlaybackPlayer(overrides[0]) : undefined;
 		const body = (await request.json().catch(() => ({}))) as {
 			clusterIds?: number[];
 			useSchedule?: boolean;
@@ -94,7 +98,10 @@ export const POST: RequestHandler = async ({ request }) => {
 					{ status: 500 }
 				);
 			}
-			await playSongs(tracks.map((t) => t.uri));
+			await playSongs(
+				tracks.map((t) => t.uri),
+				playerId
+			);
 			return Response.json({ success: true, tracks });
 		} else {
 			return Response.json(
@@ -103,6 +110,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			);
 		}
 	} catch (error) {
+		if (error instanceof InvalidPlaybackPlayerError)
+			return Response.json({ success: false, error: error.message }, { status: 400 });
 		console.error('Vibe playback failed:', error);
 		return Response.json({ success: false, error: String(error) }, { status: 500 });
 	}
