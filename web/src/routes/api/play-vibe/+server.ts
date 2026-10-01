@@ -34,9 +34,9 @@ export const GET: RequestHandler = async () => {
 	);
 };
 
-export const POST: RequestHandler = async ({ request, url }) => {
+export const POST: RequestHandler = async ({ request }) => {
 	try {
-		const overrides = url.searchParams.getAll('playerId');
+		const overrides = new URL(request.url).searchParams.getAll('playerId');
 		if (overrides.length > 1) throw new InvalidPlaybackPlayerError('Provide only one playerId.');
 		const playerId = overrides.length ? await validatePlaybackPlayer(overrides[0]) : undefined;
 		const body = (await request.json().catch(() => ({}))) as {
