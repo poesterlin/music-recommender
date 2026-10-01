@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { IconPlayerPlayFilled, IconSearch, IconX } from '@tabler/icons-svelte';
+	import { IconPlayerPlayFilled, IconSearch, IconX, IconPlaylistAdd, IconCheck } from '@tabler/icons-svelte';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
@@ -17,6 +17,9 @@
 	let tracks = $state<ResultTrack[]>([]);
 	let loading = $state(false);
 	let playing = $state(false);
+	let playlistName = $state('');
+	let saving = $state(false);
+	let savedPlaylist = $state<string | null>(null);
 
 	const LIMITS = [10, 20, 30, 50, 100];
 
@@ -72,6 +75,7 @@
 		loading = true;
 		playing = false;
 		tracks = [];
+		savedPlaylist = null;
 		title = '';
 		// Use the picked suggestion when there is one; otherwise fall back to
 		// the top search hit so Enter still works.
@@ -95,6 +99,7 @@
 		});
 		if (rec.ok) {
 			tracks = rec.data.tracks;
+			playlistName = `Sole · ${chosen.name}`.slice(0, 200);
 			title = `Because you picked ${chosen.name}`;
 		}
 		loading = false;
@@ -111,6 +116,21 @@
 	async function playOne(uri: string) {
 		const { ok } = await post('/api/player', { uris: [uri] });
 		if (ok) toastStore.show('Playing on the booth');
+	}
+
+	async function saveAsPlaylist() {
+		if (saving || savedPlaylist || !tracks.length || !playlistName.trim()) return;
+		const results = tracks;
+		saving = true;
+		try {
+			const { ok, data } = await post<{ playlist: { name: string } }>('/api/playlists', {
+				name: playlistName.trim(), uris: results.map((track) => track.uri)
+			});
+			if (ok) {
+				if (tracks === results) savedPlaylist = data.playlist.name;
+				toastStore.show(`Playlist “${data.playlist.name}” created in Music Assistant`);
+			}
+		} finally { saving = false; }
 	}
 </script>
 
@@ -242,6 +262,27 @@
 				onPlay={playOne}
 				emptyText="No recommendations came back. Try a different track."
 			/>
+			{#if tracks.length > 0}
+				<form class="border-ink/10 bg-cream/70 mt-6 rounded-2xl border p-5 sm:p-6"
+					onsubmit={(event) => { event.preventDefault(); void saveAsPlaylist(); }}>
+					<h3 class="font-display text-xl font-black">Save as playlist</h3>
+					<p class="text-ink-soft mt-1 text-sm">Save these {tracks.length} tracks to Music Assistant.</p>
+					<div class="mt-4 flex flex-wrap items-end gap-3">
+						<div class="min-w-48 flex-1">
+							<label for="playlist-name" class="mb-2 block text-xs font-bold tracking-wide uppercase">Playlist name</label>
+							<input id="playlist-name" bind:value={playlistName} required maxlength="200"
+								disabled={saving || savedPlaylist !== null}
+								class="border-ink/20 bg-paper focus:border-accent w-full rounded-xl border px-4 py-3 outline-none disabled:opacity-60" />
+						</div>
+						<button type="submit" disabled={saving || savedPlaylist !== null || !playlistName.trim()}
+							class="bg-ink text-cream hover:bg-ink-soft inline-flex items-center gap-2 rounded-xl px-5 py-3 font-bold transition disabled:opacity-50">
+							{#if savedPlaylist}<IconCheck size={18} />{:else}<IconPlaylistAdd size={18} />{/if}
+							{saving ? 'Saving…' : savedPlaylist ? 'Saved' : 'Save playlist'}
+						</button>
+					</div>
+					{#if savedPlaylist}<p class="text-moss mt-3 text-sm" role="status">“{savedPlaylist}” created in Music Assistant.</p>{/if}
+				</form>
+			{/if}
 		{/if}
 	</section>
 {/if}

@@ -173,11 +173,6 @@
 			<p class="text-accent-deep text-xs font-bold tracking-[0.24em] uppercase">01 · Embeddings</p>
 			<h2 class="font-display mt-1 text-3xl font-black">Coverage</h2>
 		</div>
-		{#if status.embedding.space}
-			<span class="bg-ink text-cream rounded-full px-3 py-1 text-xs font-bold">
-				space v{status.embedding.space.version} · {status.embedding.space.model}
-			</span>
-		{/if}
 	</div>
 
 	{#if spaceBroken || spaceIncomplete}

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { IconWand } from '@tabler/icons-svelte';
 	import TrackList from '$lib/components/TrackList.svelte';
 	import ClusterAtlas from '$lib/components/ClusterAtlas.svelte';
@@ -12,7 +11,7 @@
 
 	let {
 		clusters,
-		clusterNames,
+		clusterNames = $bindable(),
 		covers = {},
 		trackCounts = {},
 		namedIds = []
@@ -30,7 +29,6 @@
 		namedIds?: number[];
 	} = $props();
 
-	let names = $state<Record<number, string>>({ ...untrack(() => clusterNames) });
 	let naming = $state<number | null>(null);
 	let title = $state('');
 	let tracks = $state<PreviewTrack[]>([]);
@@ -44,7 +42,7 @@
 	const named = $derived(new Set(namedIds));
 
 	function clusterName(clusterId: number): string {
-		return names[clusterId] ?? `Cluster ${clusterId}`;
+		return clusterNames[clusterId] ?? `Cluster ${clusterId}`;
 	}
 
 	/** Preview a random sample without leaving the grid. */
@@ -70,7 +68,7 @@
 	}
 
 	function applyName(clusterId: number, name: string) {
-		names = { ...names, [clusterId]: name.trim() || `Cluster ${clusterId}` };
+		clusterNames = { ...clusterNames, [clusterId]: name.trim() || `Cluster ${clusterId}` };
 	}
 
 	/**
@@ -87,14 +85,12 @@
 		working = false;
 		if (ok) {
 			const { data: fresh } = await api<{
-				suggestions: Array<{ clusterId: number; name: string }>;
-			}>('/api/clusters/names');
+				names: Record<number, string>;
+			}>('/api/play-vibe');
 			if (fresh) {
-				const next = { ...names };
-				for (const s of fresh.suggestions) next[s.clusterId] = s.name;
-				names = next;
+				clusterNames = fresh.names;
 			}
-			toastStore.show(`Named ${data.named ?? 0} clusters`);
+			toastStore.show(data.named ? `Named ${data.named} clusters` : 'No names changed');
 		} else {
 			toastStore.show(data.error ?? 'Could not name the clusters');
 		}

@@ -3,6 +3,10 @@
 	import { post } from '$lib/api';
 	import { likeTrack } from '$lib/client/like-track';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
+	import {
+		IconPlayerSkipBack, IconPlayerSkipForward, IconPlayerPlay, IconPlayerPause,
+		IconPlayerStop, IconArrowsShuffle, IconVolume, IconVolumeOff, IconLoader2
+	} from '@tabler/icons-svelte';
 
 	type Track = {
 		uri: string;
@@ -176,7 +180,7 @@
 					class="relative inline-flex size-2 rounded-full {playing ? 'bg-accent' : 'bg-cream/40'}"
 				></span>
 			</span>
-			Now spinning{#if player}
+			{playing ? 'Now playing' : player?.state === 'paused' ? 'Paused' : player?.state === 'buffering' ? 'Buffering' : player ? 'Player idle' : 'Player unavailable'}{#if player}
 				<span class="normal-case">· {player.playerName}</span>{/if}
 		</h2>
 
@@ -241,69 +245,78 @@
 			</div>
 
 			<!-- transport -->
-			<div class="mt-4 flex flex-wrap items-center gap-2">
+			<div class="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-cream/10 bg-black/15 p-2.5">
 				<button
-					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
+					class="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cream/10 bg-cream/5 text-cream/80 transition hover:border-cream/25 hover:bg-cream/15 hover:text-cream active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action('previous')}
 					title="Previous track"
+					aria-label="Previous track"
 				>
-					⏮
+					<IconPlayerSkipBack size={20} aria-hidden="true" />
 				</button>
 				<button
-					class="bg-accent text-cream shadow-accent/30 hover:bg-accent-deep rounded-full px-7 py-2.5 font-bold shadow-lg transition disabled:opacity-40"
+					class="flex h-12 min-w-28 items-center justify-center gap-2 rounded-xl bg-accent px-5 font-bold text-cream shadow-lg shadow-accent/20 transition hover:bg-accent-deep active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action(playing ? 'pause' : 'play')}
 					title={playing ? 'Pause' : 'Play'}
 				>
-					{busy ? '…' : playing ? '⏸ Pause' : '▶ Play'}
+					{#if busy === 'play' || busy === 'pause'}
+						<IconLoader2 size={20} class="animate-spin" aria-hidden="true" />
+					{:else if playing}
+						<IconPlayerPause size={20} aria-hidden="true" />
+					{:else}
+						<IconPlayerPlay size={20} aria-hidden="true" />
+					{/if}
+					{playing ? 'Pause' : 'Play'}
 				</button>
 				<button
-					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
+					class="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cream/10 bg-cream/5 text-cream/80 transition hover:border-cream/25 hover:bg-cream/15 hover:text-cream active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={() => action('next')}
 					title="Next track"
+					aria-label="Next track"
 				>
-					⏭
+					<IconPlayerSkipForward size={20} aria-hidden="true" />
 				</button>
 				<button
-					class="bg-cream/10 text-cream hover:bg-cream/20 rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40"
-					disabled={busy !== null}
-					onclick={() => action('stop')}
-					title="Stop"
-				>
-					⏹
-				</button>
-				<button
-					class="border-cream/15 text-cream/65 hover:border-cream/35 hover:bg-cream/10 hover:text-cream rounded-full border px-4 py-2.5 font-bold transition disabled:opacity-40"
+					class="flex size-11 shrink-0 items-center justify-center rounded-xl border border-cream/10 bg-cream/5 text-cream/65 transition hover:border-accent/50 hover:bg-accent/15 hover:text-cream active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40"
 					disabled={busy !== null}
 					onclick={clearQueue}
-					title="Clear the entire queue"
+					title="Stop and clear queue"
+					aria-label="Stop and clear queue"
 				>
-					{busy === 'clear' ? '…' : '🗑 Clear queue'}
+					{#if busy === 'clear'}
+						<IconLoader2 size={20} class="animate-spin" aria-hidden="true" />
+					{:else}
+						<IconPlayerStop size={20} aria-hidden="true" />
+					{/if}
 				</button>
 
 				{#if player.shuffle !== null && player.shuffle !== undefined}
 					<button
-						class="rounded-full px-4 py-2.5 font-bold transition disabled:opacity-40 {player.shuffle
-							? 'bg-accent/25 text-accent'
-							: 'bg-cream/10 text-cream/60 hover:bg-cream/20'}"
+						class="flex size-11 shrink-0 items-center justify-center rounded-xl border transition active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream disabled:opacity-40 {player.shuffle
+							? 'border-accent/40 bg-accent/20 text-accent'
+							: 'border-cream/10 bg-cream/5 text-cream/60 hover:bg-cream/15 hover:text-cream'}"
 						disabled={busy !== null}
 						onclick={toggleShuffle}
 						title="Toggle shuffle"
+						aria-label="Shuffle"
+						aria-pressed={player.shuffle}
 					>
-						🔀
+						<IconArrowsShuffle size={20} aria-hidden="true" />
 					</button>
 				{/if}
 
 				{#if volume !== null}
 					<label class="text-cream/60 ml-auto flex items-center gap-2 text-sm font-bold">
 						<button
-							class="hover:text-cream transition"
+							class="flex size-11 items-center justify-center rounded-xl transition hover:bg-cream/10 hover:text-cream focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cream"
 							onclick={toggleMute}
 							title={volume > 0 ? 'Mute' : 'Unmute'}
+							aria-label={volume > 0 ? 'Mute' : 'Unmute'}
 						>
-							{volume > 0 ? '🔈' : '🔇'}
+							{#if volume > 0}<IconVolume size={20} aria-hidden="true" />{:else}<IconVolumeOff size={20} aria-hidden="true" />{/if}
 						</button>
 						<input
 							type="range"
@@ -313,6 +326,7 @@
 							bind:value={volume}
 							oninput={onVolume}
 							class="w-28 accent-[#e8490f]"
+							aria-label="Volume"
 						/>
 						<span class="w-8 text-right tabular-nums">{volume}</span>
 					</label>
@@ -328,8 +342,8 @@
 					</div>
 				</div>
 				<div>
-					<p class="font-display text-2xl font-black">The deck is quiet.</p>
-					<p class="text-cream/60 mt-1 text-sm">Drop a vibe below and the room wakes up.</p>
+					<p class="font-display text-2xl font-black">{playing ? 'Playback is active' : player?.state === 'buffering' ? 'Loading audio…' : player ? 'Nothing playing' : 'Player unavailable'}</p>
+					<p class="text-cream/60 mt-1 text-sm">{playing ? 'Track details are not available yet.' : player ? 'Choose a vibe above to start listening.' : 'Check the Music Assistant connection.'}</p>
 				</div>
 			</div>
 		{/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { page } from '$app/state';
 	import PageHeader from '$lib/components/PageHeader.svelte';
 	import ClusterBrowser from '$lib/components/ClusterBrowser.svelte';
 	import VibeScheduleEditor from '$lib/components/VibeScheduleEditor.svelte';
@@ -11,13 +12,18 @@
 	let { data } = $props();
 
 	type Tab = 'mix' | 'browse' | 'schedule';
-	let tab = $state<Tab>('mix');
+	let tab = $state<Tab>(untrack(() => {
+		const requested = page.url.searchParams.get('tab');
+		return requested === 'browse' || requested === 'schedule' ? requested : 'mix';
+	}));
 
 	let vibeSelection = $state(new SvelteSet<number>(untrack(() => data.vibeClusterIds)));
 	let schedules = $state<VibeSchedule[]>(untrack(() => data.vibeSchedules));
 	let activeSchedule = $state<VibeSchedule | null>(untrack(() => data.activeSchedule));
 	let saveStatus = $state('');
 	let filter = $state('');
+	let clusterNames = $state<Record<number, string>>(untrack(() => data.clusterNames));
+	$effect(() => { clusterNames = data.clusterNames; });
 
 	// Tracks the prop, so a refreshed `data` cannot leave this list stale.
 	const clusterIds = $derived(data.availableClusterIds);
@@ -29,7 +35,7 @@
 	];
 
 	function clusterName(id: number): string {
-		return data.clusterNames[id] ?? `Cluster ${id}`;
+		return clusterNames[id] ?? `Cluster ${id}`;
 	}
 
 	function clusterLabel(id: number): string {
@@ -88,14 +94,6 @@
 		if (ok) toastStore.show(`Playing ${(json.tracks ?? []).length} tracks`);
 	}
 
-	async function playScheduled() {
-		if (!activeSchedule) {
-			toastStore.show('No slot matches the current hour');
-			return;
-		}
-		const { ok } = await post('/api/play-vibe', { useSchedule: true });
-		if (ok) toastStore.show(`Playing ${activeSchedule.name}`);
-	}
 </script>
 
 <PageHeader
@@ -183,18 +181,12 @@
 			class="rounded-xl bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700"
 			onclick={play}>Play selection</button
 		>
-		{#if activeSchedule}
-			<button
-				class="rounded-xl bg-cyan-600 px-5 py-2.5 font-semibold text-white hover:bg-cyan-700"
-				onclick={playScheduled}>Play {activeSchedule.name}</button
-			>
-		{/if}
 		{#if saveStatus}<span class="text-sm text-gray-500">{saveStatus}</span>{/if}
 	</div>
 {:else if tab === 'browse'}
 	<ClusterBrowser
 		clusters={data.clusters}
-		clusterNames={data.clusterNames}
+		bind:clusterNames
 		covers={data.covers}
 		trackCounts={data.trackCounts}
 		namedIds={data.namedIds}
@@ -204,6 +196,6 @@
 		bind:schedules
 		bind:activeSchedule
 		{clusterIds}
-		clusterNames={data.clusterNames}
+		{clusterNames}
 	/>
 {/if}
