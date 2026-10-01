@@ -6,6 +6,7 @@
 	import ClusterNamePanel from '$lib/components/ClusterNamePanel.svelte';
 	import { toastStore } from '$lib/client/toast.svelte';
 	import { api, post } from '$lib/api';
+	import { resolve } from '$app/paths';
 
 	type PreviewTrack = { uri: string; name: string; artists: string[]; album: string };
 
@@ -127,7 +128,9 @@
 		/>
 	{:else}
 		<p class="text-faded col-span-full py-8 text-center text-sm">
-			No clusters yet. Run the full tidy-up from Manage.
+			No vibes yet. <a class="underline" href={resolve('/setup')}
+				>Create your first vibes in Setup.</a
+			>
 		</p>
 	{/each}
 </div>

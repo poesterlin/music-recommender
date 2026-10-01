@@ -174,7 +174,7 @@ const index: SetupStep = {
 			const result = await indexLibrary();
 			const parts = [`${result.added.toLocaleString()} new`];
 			if (result.failed) parts.push(`${result.failed} failed`);
-			return { status: 'done', detail: parts.join(' · ') };
+			return { status: result.failed ? 'failed' : 'done', detail: parts.join(' · ') };
 		} catch (error) {
 			return { status: 'failed', detail: `Indexing failed: ${String(error).slice(0, 140)}` };
 		}

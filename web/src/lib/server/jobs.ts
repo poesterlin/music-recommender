@@ -15,8 +15,7 @@ import { recordJobRun, type JobSource } from './job-log';
 import { syncFavorites } from './sync-favourites';
 
 export type JobResult<T> =
-	| { ok: true; data: T; detail: string }
-	| { ok: false; error: string; detail: string };
+	{ ok: true; data: T; detail: string } | { ok: false; error: string; detail: string };
 
 /**
  * The recorded source for a request: a service token means something triggered
@@ -39,11 +38,15 @@ export async function runIndexLibrary(source: JobSource): Promise<JobResult<Inde
 		const result = await indexLibrary();
 		// Report what actually changed rather than the library size, so a
 		// routine run is distinguishable from a real import.
-		const detail =
+		const summary =
 			result.added > 0
 				? `${result.added} new`
 				: `no new tracks, ${result.existing} already indexed`;
+		const detail = result.failed
+			? `${summary}, ${result.failed} tracks failed to import; retry indexing`
+			: summary;
 		await recordJobRun('index-library', result.failed === 0, detail, source);
+		if (result.failed) return { ok: false, error: detail, detail };
 		return { ok: true, data: result, detail };
 	} catch (error) {
 		return failure('index-library', error, source);
@@ -83,7 +86,13 @@ export async function runAnalyze(
 			console.warn('[analyze] MA_TOKEN not set, skipping MA library sync');
 		}
 		// 1. Pull new tracks from Music Assistant (no embeddings yet)
-		const { added } = await indexLibrary();
+		const { added, failed } = await indexLibrary();
+		if (failed)
+			return failure(
+				'analyze',
+				new Error(`${added} new tracks indexed, ${failed} tracks failed to import; retry indexing`),
+				source
+			);
 		// 2. Assign embedded-but-unclustered tracks to frozen centroids.
 		// Audio embedding generation itself runs in the embeddings container.
 		const { assignNewTracksToClusters } = await import('./clustering');

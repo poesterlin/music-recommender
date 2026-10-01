@@ -5,6 +5,13 @@ import { vibeScheduleTable, vibeStateTable } from './schema';
 export const DEFAULT_VIBE_CLUSTERS = [2, 4, 31, 38, 42, 3, 37, 41, 30, 46, 47];
 const VIBE_IDS_KEY = 'vibe_cluster_ids';
 
+async function availableClusterIds(): Promise<number[]> {
+	const rows = await db.execute(
+		sql`SELECT DISTINCT cluster_id FROM track WHERE cluster_id >= 0 AND skip = false`
+	);
+	return rows.map((row) => Number(row.cluster_id));
+}
+
 export type VibeSchedule = {
 	id: number;
 	name: string;
@@ -14,7 +21,7 @@ export type VibeSchedule = {
 	enabled: boolean | null;
 };
 
-function sanitizeIds(ids: unknown): number[] {
+export function sanitizeIds(ids: unknown): number[] {
 	if (!Array.isArray(ids)) return [];
 	return ids.map(Number).filter((n) => Number.isInteger(n) && n >= -1 && n <= 999);
 }
@@ -27,10 +34,7 @@ function sanitizeHour(h: unknown): number | null {
 
 export async function getVibeClusterIds(): Promise<number[]> {
 	try {
-		const available = await db.execute(
-			sql`SELECT DISTINCT cluster_id FROM track WHERE cluster_id >= 0`
-		);
-		const active = new Set(available.map((row) => Number(row.cluster_id)));
+		const active = new Set(await availableClusterIds());
 		if (!active.size) return [];
 		const [row] = await db
 			.select()
@@ -41,6 +45,7 @@ export async function getVibeClusterIds(): Promise<number[]> {
 			if (ids.length) return ids.filter((id) => active.has(id));
 			return DEFAULT_VIBE_CLUSTERS.filter((id) => active.has(id));
 		}
+		return DEFAULT_VIBE_CLUSTERS.filter((id) => active.has(id));
 	} catch (e) {
 		console.warn('[vibe] read state failed, using default:', String(e));
 	}
@@ -51,14 +56,10 @@ export async function setVibeClusterIds(ids: number[]): Promise<number[]> {
 	const clean = sanitizeIds(ids);
 	if (!clean.length) throw new Error('clusterIds must be a non-empty array');
 	const value = JSON.stringify([...new Set(clean)].sort((a, b) => a - b));
-	try {
-		await db
-			.insert(vibeStateTable)
-			.values({ key: VIBE_IDS_KEY, value })
-			.onConflictDoUpdate({ target: vibeStateTable.key, set: { value } });
-	} catch (e) {
-		console.warn('[vibe] persist state failed:', String(e));
-	}
+	await db
+		.insert(vibeStateTable)
+		.values({ key: VIBE_IDS_KEY, value })
+		.onConflictDoUpdate({ target: vibeStateTable.key, set: { value } });
 	return JSON.parse(value);
 }
 
@@ -78,7 +79,7 @@ export function hourMatches(s: { startHour: number; endHour: number }, hour: num
 }
 
 export async function getActiveSchedule(now = new Date()): Promise<VibeSchedule | null> {
-	const active = new Set(await getVibeClusterIds());
+	const active = new Set(await availableClusterIds());
 	if (!active.size) return null;
 	const schedules = await listSchedules();
 	const hour = now.getHours();
@@ -155,7 +156,7 @@ export async function deleteSchedule(id: number): Promise<void> {
 	await db.delete(vibeScheduleTable).where(eq(vibeScheduleTable.id, id));
 }
 
-// Seed defaults on first run: manual picks + 3 hour-range slots.
+// Initialize manual picks only. An empty schedule list is a deliberate choice.
 export async function ensureVibeSeeded(): Promise<void> {
 	try {
 		const active = await getVibeClusterIds();
@@ -167,24 +168,8 @@ export async function ensureVibeSeeded(): Promise<void> {
 		if (!existing) {
 			await db
 				.insert(vibeStateTable)
-				.values({ key: VIBE_IDS_KEY, value: JSON.stringify(DEFAULT_VIBE_CLUSTERS) });
-		}
-		const schedules = await db
-			.select({ id: vibeScheduleTable.id })
-			.from(vibeScheduleTable)
-			.limit(1);
-		if (!schedules.length) {
-			await db.insert(vibeScheduleTable).values([
-				{
-					name: 'Morning',
-					startHour: 6,
-					endHour: 10,
-					clusterIds: [2, 10, 16, 26, 38, 54],
-					enabled: true
-				},
-				{ name: 'Evening', startHour: 18, endHour: 22, clusterIds: [2, 20, 18, 47], enabled: true },
-				{ name: 'Night', startHour: 22, endHour: 6, clusterIds: [41, 46, 50, 56], enabled: true }
-			]);
+				.values({ key: VIBE_IDS_KEY, value: JSON.stringify(active) })
+				.onConflictDoNothing();
 		}
 	} catch (e) {
 		console.warn('[vibe] seed failed (tables may not exist yet):', String(e));

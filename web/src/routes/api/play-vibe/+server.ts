@@ -7,6 +7,7 @@ import {
 	getActiveSchedule,
 	getVibeClusterIds,
 	listSchedules,
+	sanitizeIds,
 	setVibeClusterIds
 } from '$lib/server/vibe-store';
 import { playSongs } from '$lib/server/webhook';
@@ -19,14 +20,17 @@ export const GET: RequestHandler = async () => {
 		getActiveSchedule(),
 		getActiveClusterMetadata()
 	]);
-	return Response.json({
-		success: true,
-		clusterIds,
-		names: clusterMetadata.names,
-		schedules,
-		activeSchedule: active,
-		scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
-	}, { headers: { 'Cache-Control': 'no-store' } });
+	return Response.json(
+		{
+			success: true,
+			clusterIds,
+			names: clusterMetadata.names,
+			schedules,
+			activeSchedule: active,
+			scheduleTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+		},
+		{ headers: { 'Cache-Control': 'no-store' } }
+	);
 };
 
 export const POST: RequestHandler = async ({ request }) => {
@@ -50,11 +54,18 @@ export const POST: RequestHandler = async ({ request }) => {
 				? [...activeSchedule.clusterIds]
 				: await getVibeClusterIds();
 		} else if (Array.isArray(body.clusterIds) && body.clusterIds.length > 0) {
-			clusterIds = await setVibeClusterIds(body.clusterIds);
+			clusterIds = sanitizeIds(body.clusterIds);
+			if (!clusterIds.length) {
+				return Response.json(
+					{ success: false, error: 'clusterIds must contain valid IDs' },
+					{ status: 400 }
+				);
+			}
 		} else {
 			clusterIds = await getVibeClusterIds();
 		}
 		if (body.saveOnly) {
+			clusterIds = await setVibeClusterIds(clusterIds);
 			return Response.json({ success: true, clusterIds, saved: true });
 		}
 

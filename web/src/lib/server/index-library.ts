@@ -19,7 +19,7 @@ export type IndexResult = {
 	added: number;
 	/** URIs already present. Metadata may or may not have changed. */
 	existing: number;
-	/** Chunks that failed to write. */
+	/** Tracks in chunks that failed to write. */
 	failed: number;
 };
 
@@ -100,8 +100,6 @@ export async function indexLibrary(): Promise<IndexResult> {
 			const chunk = staged.slice(i, i + CHUNK_SIZE);
 			try {
 				const known = await countExisting(chunk);
-				result.existing += known;
-				result.added += chunk.length - known;
 				await db
 					.insert(trackTable)
 					.values(chunk)
@@ -124,6 +122,8 @@ export async function indexLibrary(): Promise<IndexResult> {
 							OR track.album_image IS DISTINCT FROM EXCLUDED.album_image
 						`
 					});
+				result.existing += known;
+				result.added += chunk.length - known;
 			} catch (error) {
 				// Record the failure and keep going so one bad chunk does not
 				// abandon the rest of the library, but report it honestly.
