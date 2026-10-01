@@ -7,7 +7,7 @@
 Sole browses a local music collection and recommends tracks by sound.
 [Music Assistant](https://www.music-assistant.io/) supplies metadata and playback.
 The Python worker analyses audio with pretrained
-[OpenL3](https://github.com/miraglab/OpenL3).
+[OpenL3](https://github.com/marl/openl3).
 
 Each analysed track gets an embedding: 512 numbers stored in PostgreSQL.
 Sole compares embeddings and groups tracks into clusters. The interface calls
@@ -15,9 +15,12 @@ these groups **vibes**.
 
 ![Vibe view showing named clusters as cover-art tiles](docs/public/images/first-play/vibes.jpg)
 
-## Why I built it
+## Why I made it
 
-I wanted to explore my collection beyond artist names, genres, and playlists.
+I wanted background music that fits the time of day.
+I wanted a way to curate my song library.
+I also wanted Spotify-like song recommendations from a self-hosted app using
+my own music.
 Sole needs no listening history or model training on your collection.
 It uses Music Assistant metadata to index files and request playback.
 
@@ -43,12 +46,9 @@ Cluster names use the three most frequent artists
   For provider issues, report the provider, error, and whether Music Assistant
   can play the affected track.
 
-**CPU benchmark, 2026-09-30:** a 90-second excerpt took **5.9 seconds median**
-across three passes on an **AMD Ryzen 7 255**.
-The model was reused, with a 0.5-second hop and inference batch size `64`.
-The [recorded benchmark](embeddings/benchmark-cpu-2026-09-30.json) excludes
-startup, snippet generation, downloads, and uploads.
-**99 minutes per 1,000 tracks** is an extrapolation, not measured library throughput.
+**CPU benchmark, 2026-09-30:** **5.9 seconds median** per 90-second excerpt on an
+**AMD Ryzen 7 255**. Estimated **99 minutes per 1,000 tracks** for audio analysis.
+[Benchmark details](embeddings/benchmark-cpu-2026-09-30.json).
 
 ## Quick start
 
@@ -104,3 +104,7 @@ See [Local install](docs/getting-started/local.md) to restrict it to localhost.
 - [Rust clustering CLI](clustering-rs/README.md)
 - [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), and
   [Code of conduct](CODE_OF_CONDUCT.md)
+
+## AI use
+
+I used AI heavily to develop Sole and write its documentation.
