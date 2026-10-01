@@ -25,7 +25,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:v0.1.1}
+    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:v0.1.2}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -72,7 +72,7 @@ services:
   # 12h, and a failure retries in 15m rather than hiding for 12h.
   worker:
     profiles: ['embedding']
-    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:v0.1.1}
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:v0.1.2}
     entrypoint: >
       sh -c "while true; do
         echo \"[worker] $$(date): embedding...\";

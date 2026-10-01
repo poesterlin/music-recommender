@@ -13,6 +13,7 @@ import {
 } from '$lib/server/auth';
 import { userTable } from '$lib/server/schema';
 import { registrationAvailable } from '$lib/server/registration';
+import { consumeLoginAttempt } from '$lib/server/login-throttle';
 import type { Actions, PageServerLoad } from './$types';
 
 const loginSchema = z.object({
@@ -28,6 +29,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 export const actions: Actions = {
 	login: async (event) => {
+		const retryAfter = consumeLoginAttempt(event.getClientAddress());
+		if (retryAfter > 0) {
+			event.setHeaders({ 'Retry-After': String(retryAfter) });
+			return fail(429, { message: `Too many login attempts. Try again in ${retryAfter} seconds.` });
+		}
 		const form = Object.fromEntries(await event.request.formData());
 		const parsed = loginSchema.safeParse(form);
 		if (!parsed.success) return fail(400, { message: 'Enter a username and password.' });

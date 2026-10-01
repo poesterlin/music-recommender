@@ -16,7 +16,7 @@
 set -euo pipefail
 
 REPO="${SOLE_REPO:-poesterlin/sole}"
-RAW="https://raw.githubusercontent.com/${REPO}/${SOLE_VERSION:-v0.1.1}"
+RAW="https://raw.githubusercontent.com/${REPO}/${SOLE_VERSION:-v0.1.2}"
 STACK_FILE="stack.yaml"
 COMPOSE_FILE="compose.yaml"
 EXAMPLE_FILE=".env.example"
