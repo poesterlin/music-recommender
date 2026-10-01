@@ -16,7 +16,7 @@
 set -euo pipefail
 
 REPO="${SOLE_REPO:-poesterlin/sole}"
-RAW="https://raw.githubusercontent.com/${REPO}/main"
+RAW="https://raw.githubusercontent.com/${REPO}/${SOLE_VERSION:-v0.1.1}"
 STACK_FILE="stack.yaml"
 COMPOSE_FILE="compose.yaml"
 EXAMPLE_FILE=".env.example"
@@ -77,7 +77,7 @@ note "Sole setup. Press Enter to accept each default."
 if [ -e "$ENV_FILE" ]; then
   printf '\nAn %s already exists, so this is not a first run.\n\n' "$ENV_FILE"
    printf 'To start or update:\n\n  docker compose -f stack.yaml up -d\n\n'
-  printf 'To change the music folder or service details, edit %s and rerun.\n' "$ENV_FILE"
+   printf 'See the local-install guide for changing the music volume or enabling the worker.\n'
   exit 0
 fi
 
@@ -171,8 +171,8 @@ note "Your music folder is mounted read-only into the app."
 compose=(docker compose -f "$STACK_FILE" --env-file "$ENV_FILE")
 
 note ""
-note "Starting PostgreSQL and the app ..."
-"${compose[@]}" up -d --wait ||
+note "Starting PostgreSQL ..."
+"${compose[@]}" up -d --wait postgres ||
   die "Startup failed. Check the output above, then rerun \`docker compose -f stack.yaml up -d\`."
 
 note ""
@@ -186,6 +186,9 @@ note "Creating the admin account ..."
 "${compose[@]}" run --rm --entrypoint bun web \
   web/scripts/create-user.ts --username admin --password "$admin_password" >/dev/null ||
   die "Could not create the account. Run: docker compose -f stack.yaml run --rm --entrypoint bun web web/scripts/create-user.ts --username admin"
+
+note "Starting the app ..."
+"${compose[@]}" up -d --wait web || die "App startup failed. Check docker compose -f stack.yaml logs web."
 
 cat <<EOF
 
@@ -201,5 +204,8 @@ Ready.
 Add your Music Assistant details to ${ENV_FILE}, then run:
   docker compose -f stack.yaml up -d
 
-Change the music folder or ports? Edit ${ENV_FILE} and run \`docker compose -f stack.yaml up -d\` again.
+Enable automatic embedding after indexing your library:
+  docker compose -f stack.yaml --profile embedding up -d worker
+
+See the local-install guide for changing ports or the music volume.
 EOF

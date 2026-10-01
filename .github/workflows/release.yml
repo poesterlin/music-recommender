@@ -46,6 +46,7 @@ jobs:
           repository="$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "prefix=ghcr.io/${repository}" >> "$GITHUB_OUTPUT"
           echo "version=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "created=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
       - name: Build and publish
         uses: docker/build-push-action@v6
         with:
@@ -53,6 +54,14 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           platforms: linux/amd64
+          labels: |
+            org.opencontainers.image.title=Sole ${{ matrix.name }}
+            org.opencontainers.image.description=Sole music discovery — ${{ matrix.name }} service
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.created=${{ steps.image.outputs.created }}
           tags: |
             ${{ steps.image.outputs.prefix }}-${{ matrix.name }}:${{ steps.image.outputs.version }}
             ${{ steps.image.outputs.prefix }}-${{ matrix.name }}:latest

@@ -56,6 +56,10 @@ function isExternalPlaybackRequest(event: Parameters<Handle>[0]['event']): boole
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Unmatched API requests must not reach the HTML fallback page.
+	if (!building && event.url.pathname.startsWith('/api/') && event.route.id === null) {
+		return Response.json({ error: 'not found' }, { status: 404 });
+	}
 	// Worker endpoints have their own WORKER_TOKEN auth and must not be
 	// intercepted by the browser-session guard.
 	if (

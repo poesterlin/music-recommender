@@ -25,7 +25,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
 
   web:
-    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:latest}
+    image: ${WEB_IMAGE:-ghcr.io/poesterlin/sole-web:v0.1.1}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -35,9 +35,9 @@ services:
       DATABASE_URL: postgres://sole:${POSTGRES_PASSWORD}@postgres:5432/sole
       # SvelteKit rejects a login whose Origin does not match the app's own
       # host. Set ORIGIN in .env when serving through a domain or proxy.
-      ORIGIN: ${ORIGIN:-http://127.0.0.1:3000}
+      ORIGIN: ${ORIGIN:-http://127.0.0.1:${WEB_PORT:-3000}}
     ports:
-      - '3000:3000'
+      - '${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-3000}:3000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,7 +71,8 @@ services:
   # was asleep with nothing to do. Pending resumes in 5m, drained backs off to
   # 12h, and a failure retries in 15m rather than hiding for 12h.
   worker:
-    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:latest}
+    profiles: ['embedding']
+    image: ${EMBEDDINGS_IMAGE:-ghcr.io/poesterlin/sole-embeddings:v0.1.1}
     entrypoint: >
       sh -c "while true; do
         echo \"[worker] $$(date): embedding...\";

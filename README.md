@@ -52,11 +52,11 @@ Cluster names use the three most frequent artists
 
 ## Quick start
 
-The starter stack runs PostgreSQL, the web app, and the API worker.
+The starter stack uses matching v0.1.1 images for web and the opt-in API worker.
 
 ```sh
 mkdir sole && cd sole
-curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/main/stack.yaml -o compose.yaml
+curl -fsSL https://raw.githubusercontent.com/poesterlin/sole/v0.1.1/stack.yaml -o compose.yaml
 cat > .env <<EOF
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 WORKER_TOKEN=$(openssl rand -hex 24)
@@ -70,20 +70,26 @@ ${EDITOR:-vi} .env
 
 Set `MUSIC_HOST` to your Music Assistant URL and `MA_TOKEN` to its access token.
 Set `MUSIC_LIBRARY_PATH` to your existing music folder.
-For another device, add `ORIGIN=http://your-server:3000` using your browser's address.
+For another device, add `WEB_BIND_ADDRESS=0.0.0.0` and
+`ORIGIN=http://your-server:3000` using your browser's address.
 
 ```sh
 grep -q CHANGE_ME .env && { echo 'Replace CHANGE_ME values in .env first'; exit 1; }
-docker compose up -d --wait
+docker compose up -d --wait postgres
 docker compose run --rm --entrypoint sh web \
   -c 'bun scripts/ensure-pgvector.ts && bunx drizzle-kit migrate'
 docker compose run --rm --entrypoint bun web \
   web/scripts/create-user.ts --username admin
+docker compose up -d --wait web
 ```
 
 Open `http://127.0.0.1:3000/login` with the printed password.
 Open **Setup** to index tracks, create vibes, and fill missing names.
 Follow [Your first playable vibe](docs/guides/first-play.md) for those steps.
+After indexing, enable automatic embedding with
+`docker compose --profile embedding up -d worker`. Choose the recipe on Manage
+before embedding. See [Local install](docs/getting-started/local.md) for an
+empty-library trial, changing ports, and replacing the music mount.
 
 ### Other ways
 
