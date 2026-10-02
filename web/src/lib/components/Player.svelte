@@ -3,6 +3,7 @@
 	import { post } from '$lib/api';
 	import { likeTrack } from '$lib/client/like-track';
 	import { nowPlayingStore } from '$lib/client/now-playing.svelte';
+	import { toastStore } from '$lib/client/toast.svelte';
 	import { fade } from 'svelte/transition';
 	import {
 		IconPlayerSkipBackFilled,
@@ -14,6 +15,9 @@
 		IconVolumeOff,
 		IconLoader2,
 		IconHeart,
+		IconDeviceSpeaker,
+		IconHeartFilled,
+		IconArrowsShuffle,
 		IconMusic
 	} from '@tabler/icons-svelte';
 
@@ -49,6 +53,23 @@
 	let player = $state<State | null>(untrack(() => initial));
 	let busy = $state<string | null>(null);
 	let liking = $state(false);
+	let liked = $state(false);
+	let likeLoaded = $state(false);
+	$effect(() => {
+		const uri = player?.track?.uri;
+		liked = false;
+		likeLoaded = false;
+		let cancelled = false;
+		if (uri) {
+			void fetch(`/track/like?uri=${encodeURIComponent(uri)}`, { cache: 'no-store' })
+				.then(async (response) => {
+					if (!response.ok) return;
+					const result = await response.json();
+					if (!cancelled) { liked = result.liked; likeLoaded = true; }
+				}).catch(() => {});
+		}
+		return () => { cancelled = true; };
+	});
 	let volume = $state<number | null>(untrack(() => initial?.volumeLevel ?? null));
 	let lastVolume = $state<number>(untrack(() => initial?.volumeLevel ?? 25));
 	let tick = $state(0);
@@ -56,7 +77,24 @@
 	const playing = $derived(player?.state === 'playing');
 	const elapsed = $derived((player?.elapsed ?? 0) + tick);
 	const duration = $derived(player?.track?.duration ?? null);
-	const image = $derived(player?.track?.image ?? null);
+	const coverSource = $derived(player?.track?.image ?? null);
+	let image = $state<string | null>(null);
+	$effect(() => {
+		const source = coverSource;
+		let cancelled = false;
+		if (!source) {
+			image = null;
+		} else {
+			const preload = new Image();
+			preload.src = source;
+			void preload.decode().then(() => {
+				if (!cancelled) image = source;
+			}).catch(() => {
+				if (!cancelled) image = null;
+			});
+		}
+		return () => { cancelled = true; };
+	});
 
 	function fmt(s: number | null): string {
 		if (s === null || s === undefined || !isFinite(s)) return '--:--';
@@ -98,18 +136,55 @@
 
 	async function likeCurrentTrack() {
 		const track = player?.track;
-		if (!track || liking) return;
+		if (!track || liking || !likeLoaded) return;
 		liking = true;
 		try {
-			await likeTrack(track.uri, track.title);
+			if (liked) {
+				const response = await fetch('/track/like', {
+					method: 'DELETE',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ uri: track.uri })
+				});
+				if (response.ok && player?.track?.uri === track.uri) liked = false;
+			} else {
+				const ok = await likeTrack(track.uri, track.title);
+				if (ok && player?.track?.uri === track.uri) liked = true;
+			}
 		} finally {
 			liking = false;
 		}
 	}
 
-	async function clearQueue() {
-		if (!player || !confirm(`Clear the entire queue for ${player.playerName}?`)) return;
-		await action('clear');
+	async function toggleShuffle() {
+		if (!player || busy !== null) return;
+		busy = 'shuffle';
+		try {
+			const { ok } = await post('/api/player', { shuffle: !player.shuffle });
+			if (ok) {
+				await refresh();
+				onQueueChange?.();
+			}
+		} finally {
+			busy = null;
+		}
+	}
+
+	async function startMix() {
+		if (busy !== null) return;
+		busy = 'mix';
+		try {
+			const { ok, data } = await post<{ error?: string }>('/api/play-vibe', {
+				useSchedule: true
+			});
+			if (ok) {
+				await refresh();
+				onQueueChange?.();
+			} else {
+				toastStore.show(data.error ?? 'Could not start playback. Try again.');
+			}
+		} finally {
+			busy = null;
+		}
 	}
 
 	let volumeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -185,36 +260,20 @@
 		<p
 			class="text-cream/70 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs font-bold tracking-[0.28em] uppercase lg:justify-start"
 		>
-			<span class="relative flex size-2">
-				{#if playing}
-					<span
-						class="bg-accent absolute inline-flex h-full w-full animate-ping rounded-full opacity-70 motion-reduce:animate-none"
-					></span>
-				{/if}
-				<span
-					class="relative inline-flex size-2 rounded-full {playing ? 'bg-accent' : 'bg-cream/40'}"
-				></span>
-			</span>
-			{playing
-				? 'Now playing'
-				: player?.state === 'paused'
-					? 'Paused'
-					: player?.state === 'buffering'
-						? 'Buffering'
-						: player
-							? 'Player idle'
-							: 'Player unavailable'}
-			{#if player}<span class="text-cream/45 normal-case">· {player.playerName}</span>{/if}
+			{#if player}
+				<IconDeviceSpeaker size={15} class="text-cream/45" aria-hidden="true" />
+				<span class="text-cream/45 normal-case">{player.playerName}</span>
+			{/if}
 		</p>
 
 		<div class="mt-8 grid items-center gap-10 lg:grid-cols-[auto_1fr] lg:gap-16">
 			<!-- Sleeve and record. The record slides out of the sleeve when it plays. -->
-			<div class="flex justify-center lg:justify-start">
-				<div class="relative mr-16 size-52 sm:mr-24 sm:size-72 lg:size-80">
+			<div class="flex justify-center lg:justify-start transition-transform duration-1000 ease-in-out motion-reduce:transition-none {player?.track ? '' : 'lg:translate-x-[65%]'}">
+				<div class="relative size-52 sm:size-72 lg:size-80 transition-[margin] duration-1000 motion-reduce:transition-none {player?.track ? 'mr-16 sm:mr-24' : ''}">
 					<div
-						class="absolute inset-0 transition-transform duration-1000 ease-out motion-reduce:transition-none {playing
+						class="absolute inset-0 transition-transform duration-1000 ease-out motion-reduce:transition-none {playing && player?.track
 							? 'translate-x-[30%]'
-							: 'translate-x-[7%]'}"
+							: player?.track ? 'translate-x-[7%]' : 'translate-x-0'}"
 					>
 						<div
 							class="vinyl animate-vinyl-idle size-full rounded-full shadow-2xl ring-1 ring-black/60 motion-reduce:animate-none"
@@ -237,8 +296,9 @@
 						></div>
 					</div>
 
+					{#if player?.track && (image || !coverSource)}
 					{#key image}
-						<div class="absolute inset-0 z-10" in:fade={{ duration: 500 }}>
+						<div class="absolute inset-0 z-10" in:fade={{ duration: 1200 }} out:fade={{ delay: 1200, duration: 0 }}>
 							{#if image}
 								<img
 									src={image}
@@ -260,11 +320,33 @@
 							{/if}
 						</div>
 					{/key}
+					{:else if player && !player.track}
+						<button
+							onclick={startMix}
+							disabled={busy !== null}
+							aria-label={busy === 'mix' ? 'Starting playback' : 'Play'}
+							class="idle-play vinyl-label text-cream focus-visible:outline-cream absolute top-1/2 left-1/2 z-20 flex size-[38%] -translate-x-1/2 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full shadow-xl transition duration-200 hover:scale-110 hover:brightness-110 focus-visible:scale-110 focus-visible:outline-2 focus-visible:outline-offset-4 active:scale-95 disabled:cursor-wait disabled:opacity-70 motion-reduce:transition-none"
+						>
+							{#if busy === 'mix'}<IconLoader2 size={40} class="animate-spin" aria-hidden="true" />{:else}<IconPlayerPlayFilled size={40} class="translate-x-0.5" aria-hidden="true" />{/if}
+						</button>
+					{/if}
+					{#if player?.track}
+						<button
+							class="bg-ink/70 text-cream hover:bg-moss focus-visible:outline-cream absolute right-3 bottom-3 z-20 flex size-11 items-center justify-center rounded-full shadow-lg backdrop-blur-md transition focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 disabled:cursor-wait disabled:opacity-50"
+							disabled={liking || !likeLoaded}
+							onclick={likeCurrentTrack}
+							title="{liked ? 'Unlike' : 'Like'} {player.track.title}"
+							aria-label="{liked ? 'Unlike' : 'Like'} {player.track.title}"
+							aria-pressed={liked}
+						>
+							{#if liked}<IconHeartFilled size={24} aria-hidden="true" />{:else}<IconHeart size={24} aria-hidden="true" />{/if}
+						</button>
+					{/if}
 				</div>
 			</div>
 
 			{#if player?.track}
-				<div class="min-w-0 text-center lg:text-left">
+				<div class="min-w-0 text-center lg:text-left" in:fade={{ duration: 900, delay: 200 }}>
 					<h2
 						class="font-display line-clamp-3 text-4xl leading-[1.02] font-black text-balance sm:text-5xl lg:text-6xl"
 					>
@@ -333,15 +415,6 @@
 						>
 							<IconPlayerSkipForwardFilled size={26} aria-hidden="true" />
 						</button>
-						<button
-							class="text-cream/75 hover:text-cream hover:bg-moss/60 focus-visible:outline-cream ml-2 flex size-12 shrink-0 items-center justify-center rounded-full transition focus-visible:outline-2 focus-visible:outline-offset-2 active:scale-95 disabled:cursor-wait disabled:opacity-50"
-							disabled={liking}
-							onclick={likeCurrentTrack}
-							title="Like {player.track.title}"
-							aria-label="Like {player.track.title}"
-						>
-							<IconHeart size={24} aria-hidden="true" />
-						</button>
 					</div>
 
 					<div
@@ -376,19 +449,29 @@
 						<button
 							class="hover:text-cream hover:bg-cream/10 focus-visible:outline-cream inline-flex min-h-10 items-center gap-2 rounded-full px-3 transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
 							disabled={busy !== null}
-							onclick={clearQueue}
+							onclick={() => action('clear')}
 						>
 							{#if busy === 'clear'}
 								<IconLoader2 size={18} class="animate-spin" aria-hidden="true" />
 							{:else}
 								<IconPlayerStop size={18} aria-hidden="true" />
 							{/if}
-							Stop and clear queue
+							Stop
+						</button>
+						<button
+							class="hover:bg-cream/10 focus-visible:outline-cream inline-flex min-h-10 items-center gap-2 rounded-full px-3 transition focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 {player.shuffle ? 'text-accent' : 'text-cream/60'}"
+							disabled={busy !== null}
+							onclick={toggleShuffle}
+							aria-pressed={player.shuffle ?? false}
+						>
+							<IconArrowsShuffle size={18} aria-hidden="true" />
+							Shuffle
 						</button>
 					</div>
 				</div>
 			{:else}
 				<div class="min-w-0 text-center lg:text-left">
+					{#if playing || player?.state === 'buffering' || !player}
 					<h2 class="font-display text-4xl leading-[1.05] font-black text-balance sm:text-5xl">
 						{playing
 							? 'Playback is active'
@@ -398,23 +481,36 @@
 									? 'Nothing playing'
 									: 'Player unavailable'}
 					</h2>
-					<p class="text-cream/65 mt-4 text-lg">
-						{playing
-							? 'Track details are not available yet.'
-							: player
-								? 'Pick a mix and the record starts turning.'
-								: 'Check the Music Assistant connection.'}
-					</p>
-					{#if player && !playing}
-						<a
-							href="#mix"
-							class="bg-cream text-ink hover:bg-accent hover:text-cream focus-visible:outline-cream mt-8 inline-flex min-h-12 items-center gap-2 rounded-full px-6 font-bold transition focus-visible:outline-2 focus-visible:outline-offset-4"
-						>
-							Choose what to play
-						</a>
+					{/if}
+					{#if playing || !player}
+						<p class="text-cream/65 mt-4 text-lg">
+							{playing ? 'Track details are not available yet.' : 'Check the Music Assistant connection.'}
+						</p>
 					{/if}
 				</div>
 			{/if}
 		</div>
 	</div>
 </section>
+
+<style>
+	.idle-play:not(:disabled)::before {
+		content: '';
+		position: absolute;
+		inset: -7px;
+		border: 1px solid rgb(255 253 245 / 35%);
+		border-radius: 50%;
+		pointer-events: none;
+		animation: play-invitation 3s ease-out infinite;
+	}
+
+	@keyframes play-invitation {
+		0% { transform: scale(0.94); opacity: 0; }
+		20% { opacity: 0.65; }
+		75%, 100% { transform: scale(1.25); opacity: 0; }
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.idle-play::before { animation: none; }
+	}
+</style>

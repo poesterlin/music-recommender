@@ -157,6 +157,7 @@
 </div>
 
 <!-- CRATE — the Browse sleeves, one tap to play -->
+{#snippet vibeShortcuts()}
 {#if shelfIds.length}
 	<section class="mt-14" aria-labelledby="shelf-title" aria-busy={startingVibe !== null}>
 		<div class="mb-5 flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
@@ -192,6 +193,7 @@
 		</div>
 	</section>
 {/if}
+{/snippet}
 
 <!-- SETLIST — live Music Assistant queues, grouped by their active queue -->
 <section class="border-ink/15 mt-14 border-t pt-8">
@@ -333,3 +335,4 @@
 		</div>
 	{/if}
 </section>
+{@render vibeShortcuts()}
